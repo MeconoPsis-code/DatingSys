@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Date System Frontend Showcase</title>
+    <style>
+      :root {
+        --bg: #eef2f6;
+        --panel: #ffffff;
+        --panel-soft: #f7f9fc;
+        --ink: #152033;
+        --muted: #657084;
+        --line: #dce3ed;
+        --blue: #2f6fed;
+        --green: #139a63;
+        --amber: #b7791f;
+        --red: #c2413f;
+        --violet: #6d5bd0;
+        --radius: 8px;
+        --shadow: 0 20px 60px rgba(25, 38, 64, 0.16);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #dfe7f0;
+        color: var(--ink);
+        font-family:
+          Inter, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC",
+          Arial, sans-serif;
+      }
+
+      .frame {
+        width: 1440px;
+        height: 960px;
+        padding: 42px;
+        background:
+          linear-gradient(135deg, rgba(47, 111, 237, 0.14), transparent 34%),
+          linear-gradient(315deg, rgba(19, 154, 99, 0.12), transparent 38%),
+          var(--bg);
+      }
+
+      .app {
+        height: 100%;
+        display: grid;
+        grid-template-columns: 248px 1fr;
+        overflow: hidden;
+        border: 1px solid rgba(123, 139, 164, 0.28);
+        border-radius: 18px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid var(--line);
+        background: #fbfcfe;
+      }
+
+      .brand {
+        padding: 26px 24px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .logo {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--blue);
+        color: #fff;
+        font-size: 19px;
+        font-weight: 800;
+      }
+
+      .brand-name {
+        font-size: 19px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .brand-sub {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .nav {
+        padding: 18px 14px;
+        display: grid;
+        gap: 6px;
+      }
+
+      .nav-item {
+        height: 42px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 12px;
+        border-radius: 8px;
+        color: #3c4658;
+        font-size: 14px;
+      }
+
+      .nav-item.active {
+        background: #eaf1ff;
+        color: var(--blue);
+        font-weight: 700;
+      }
+
+      .nav-icon {
+        width: 22px;
+        text-align: center;
+        font-size: 16px;
+      }
+
+      .sidebar-card {
+        margin: auto 16px 18px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .sidebar-card .label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .sidebar-card .value {
+        margin-top: 8px;
+        font-size: 18px;
+        font-weight: 800;
+      }
+
+      .sidebar-card .hint {
+        margin-top: 10px;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+
+      .topbar {
+        height: 82px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 30px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 5px 0 0;
+        font-size: 27px;
+        line-height: 1.15;
+        letter-spacing: 0;
+      }
+
+      .profile-pill {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px 8px 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+      }
+
+      .avatar {
+        width: 36px;
+        height: 36px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #dbeafe;
+        color: var(--blue);
+        font-weight: 800;
+      }
+
+      .profile-name {
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .profile-status {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .content {
+        flex: 1;
+        min-height: 0;
+        padding: 26px 30px 30px;
+        background: var(--panel-soft);
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .metric {
+        min-height: 100px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .metric-label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric-value {
+        margin-top: 10px;
+        font-size: 29px;
+        line-height: 1;
+        font-weight: 850;
+      }
+
+      .metric-note {
+        margin-top: 12px;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .metric-note.warn {
+        color: var(--amber);
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1.42fr) minmax(330px, 0.78fr);
+        gap: 18px;
+        height: calc(100% - 118px);
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        min-width: 0;
+      }
+
+      .panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 18px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-title {
+        font-size: 16px;
+        font-weight: 850;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 8px;
+      }
+
+      .tab {
+        min-width: 88px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .tab.active {
+        border-color: #b8ccff;
+        background: #eaf1ff;
+        color: var(--blue);
+      }
+
+      .match-list {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+      }
+
+      .match-card {
+        display: grid;
+        grid-template-columns: 56px 1fr auto;
+        gap: 14px;
+        align-items: center;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .match-avatar {
+        width: 56px;
+        height: 56px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        font-size: 18px;
+        font-weight: 850;
+      }
+
+      .match-avatar.blue {
+        background: #2f6fed;
+      }
+
+      .match-avatar.green {
+        background: #139a63;
+      }
+
+      .match-avatar.violet {
+        background: #6d5bd0;
+      }
+
+      .match-name {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 15px;
+        font-weight: 850;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        height: 24px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: #eef3fa;
+        color: #536174;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .tag.success {
+        background: #e8f7ef;
+        color: var(--green);
+      }
+
+      .tag.score {
+        background: #f2edff;
+        color: var(--violet);
+      }
+
+      .match-meta {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .btn {
+        height: 38px;
+        padding: 0 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .btn.primary {
+        border-color: var(--blue);
+        background: var(--blue);
+        color: #fff;
+      }
+
+      .side-stack {
+        display: grid;
+        grid-template-rows: auto auto 1fr;
+        gap: 18px;
+        min-height: 0;
+      }
+
+      .form-preview {
+        padding: 16px;
+      }
+
+      .field-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+
+      .field {
+        min-height: 62px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .field-label {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .field-value {
+        margin-top: 6px;
+        font-size: 14px;
+        font-weight: 850;
+      }
+
+      .rating-box {
+        padding: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .rating-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .score-circle {
+        width: 72px;
+        height: 72px;
+        display: grid;
+        place-items: center;
+        border: 8px solid #d9ccff;
+        border-top-color: var(--violet);
+        border-radius: 50%;
+        color: var(--violet);
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      .rating-copy {
+        flex: 1;
+      }
+
+      .rating-title {
+        font-size: 15px;
+        font-weight: 850;
+      }
+
+      .rating-text {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 48px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .switch {
+        width: 46px;
+        height: 26px;
+        padding: 3px;
+        border-radius: 999px;
+        background: var(--blue);
+      }
+
+      .knob {
+        width: 20px;
+        height: 20px;
+        margin-left: auto;
+        border-radius: 50%;
+        background: #fff;
+      }
+
+      .admin-list {
+        padding: 14px 16px 16px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .admin-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 44px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .admin-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--blue);
+      }
+
+      .dot.amber {
+        background: var(--amber);
+      }
+
+      .dot.red {
+        background: var(--red);
+      }
+
+      .status {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="app">
+        <aside class="sidebar">
+          <div class="brand">
+            <div class="brand-row">
+              <div class="logo">D</div>
+              <div>
+                <div class="brand-name">Date System</div>
+                <div class="brand-sub">QQ群成员专用匹配系统</div>
+              </div>
+            </div>
+          </div>
+
+          <nav class="nav">
+            <div class="nav-item active"><span class="nav-icon">⌘</span>匹配总览</div>
+            <div class="nav-item"><span class="nav-icon">◎</span>双向匹配</div>
+            <div class="nav-item"><span class="nav-icon">↗</span>单项申请</div>
+            <div class="nav-item"><span class="nav-icon">◇</span>我的资料</div>
+            <div class="nav-item"><span class="nav-icon">★</span>评分任务</div>
+            <div class="nav-item"><span class="nav-icon">!</span>举报处理</div>
+            <div class="nav-item"><span class="nav-icon">⚙</span>系统管理</div>
+          </nav>
+
+          <div class="sidebar-card">
+            <div class="label">当前认证状态</div>
+            <div class="value">已认证</div>
+            <div class="hint">30 天后复核</div>
+          </div>
+        </aside>
+
+        <main class="main">
+          <header class="topbar">
+            <div>
+              <div class="eyebrow">V1 PRODUCT PREVIEW</div>
+              <h1>匹配结果与资料管理工作台</h1>
+            </div>
+            <div class="profile-pill">
+              <div class="avatar">Q</div>
+              <div>
+                <div class="profile-name">QQ 用户 8274</div>
+                <div class="profile-status">评分池 · 已完成评分</div>
+              </div>
+            </div>
+          </header>
+
+          <section class="content">
+            <div class="metric-grid">
+              <div class="metric">
+                <div class="metric-label">双向匹配</div>
+                <div class="metric-value">18</div>
+                <div class="metric-note">可直接查看资料</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">单项匹配</div>
+                <div class="metric-value">42</div>
+                <div class="metric-note warn">需申请查看权限</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">颜值评分</div>
+                <div class="metric-value">7.6</div>
+                <div class="metric-note">仅 7 分及以上</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">待处理申请</div>
+                <div class="metric-value">5</div>
+                <div class="metric-note warn">2 条即将过期</div>
+              </div>
+            </div>
+
+            <div class="workspace">
+              <section class="panel">
+                <div class="panel-header">
+                  <div class="panel-title">匹配结果</div>
+                  <div class="tabs">
+                    <div class="tab active">双向匹配</div>
+                    <div class="tab">单项匹配</div>
+                  </div>
+                </div>
+
+                <div class="match-list">
+                  <article class="match-card">
+                    <div class="match-avatar blue">A</div>
+                    <div>
+                      <div class="match-name">
+                        星河
+                        <span class="tag success">双向匹配</span>
+                        <span class="tag score">7.8 分</span>
+                      </div>
+                      <div class="match-meta">
+                        <span>25 岁</span>
+                        <span>178cm</span>
+                        <span>62kg</span>
+                        <span>上海市</span>
+                        <span>属性 1</span>
+                        <span>QQ 28***916</span>
+                      </div>
+                    </div>
+                    <button class="btn primary">查看资料</button>
+                  </article>
+
+                  <article class="match-card">
+                    <div class="match-avatar green">B</div>
+                    <div>
+                      <div class="match-name">
+                        南风
+                        <span class="tag success">双向匹配</span>
+                        <span class="tag score">7.2 分</span>
+                      </div>
+                      <div class="match-meta">
+                        <span>23 岁</span>
+                        <span>171cm</span>
+                        <span>55kg</span>
+                        <span>杭州市</span>
+                        <span>偏0</span>
+                        <span>QQ 64***210</span>
+                      </div>
+                    </div>
+                    <button class="btn primary">查看资料</button>
+                  </article>
+
+                  <article class="match-card">
+                    <div class="match-avatar violet">C</div>
+                    <div>
+                      <div class="match-name">
+                        云野
+                        <span class="tag">单项候选</span>
+                        <span class="tag score">7 分及以上</span>
+                      </div>
+                      <div class="match-meta">
+                        <span>年龄 24-26</span>
+                        <span>身高 175-180cm</span>
+                        <span>广东省内</span>
+                        <span>side</span>
+                        <span>资料已脱敏</span>
+                      </div>
+                    </div>
+                    <button class="btn">申请查看</button>
+                  </article>
+                </div>
+              </section>
+
+              <aside class="side-stack">
+                <section class="panel">
+                  <div class="panel-header">
+                    <div class="panel-title">我的资料</div>
+                    <button class="btn">修改</button>
+                  </div>
+                  <div class="form-preview">
+                    <div class="field-grid">
+                      <div class="field">
+                        <div class="field-label">年龄</div>
+                        <div class="field-value">24 岁</div>
+                      </div>
+                      <div class="field">
+                        <div class="field-label">所在地</div>
+                        <div class="field-value">上海市</div>
+                      </div>
+                      <div class="field">
+                        <div class="field-label">身高</div>
+                        <div class="field-value">176cm</div>
+                      </div>
+                      <div class="field">
+                        <div class="field-label">属性</div>
+                        <div class="field-value">偏1</div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-header">
+                    <div class="panel-title">评分池状态</div>
+                    <span class="tag success">已完成</span>
+                  </div>
+                  <div class="rating-box">
+                    <div class="rating-row">
+                      <div class="score-circle">7.6</div>
+                      <div class="rating-copy">
+                        <div class="rating-title">评分组匿名完成</div>
+                        <div class="rating-text">
+                          照片仅评分组可见，匹配详情与排行榜不展示真实照片。
+                        </div>
+                      </div>
+                    </div>
+                    <div class="toggle-row">
+                      <strong>评分匹配范围：仅 7 分及以上</strong>
+                      <div class="switch"><div class="knob"></div></div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-header">
+                    <div class="panel-title">管理提醒</div>
+                    <span class="status">今日</span>
+                  </div>
+                  <div class="admin-list">
+                    <div class="admin-item">
+                      <div class="admin-left"><span class="dot"></span>邀请码待使用</div>
+                      <span class="status">12</span>
+                    </div>
+                    <div class="admin-item">
+                      <div class="admin-left"><span class="dot amber"></span>评分中用户</div>
+                      <span class="status">8</span>
+                    </div>
+                    <div class="admin-item">
+                      <div class="admin-left"><span class="dot red"></span>举报待核实</div>
+                      <span class="status">3</span>
+                    </div>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
