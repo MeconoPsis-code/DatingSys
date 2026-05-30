@@ -1,0 +1,434 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────
+
+enum UserStatus {
+  ACTIVE
+  FROZEN
+  BANNED
+  DELETED
+}
+
+enum UserRole {
+  USER
+  SCORER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum MembershipStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  REJECTED
+  REVOKED
+}
+
+enum InviteCodeStatus {
+  UNUSED
+  USED
+  EXPIRED
+  REVOKED
+}
+
+enum ProfileStatus {
+  DRAFT
+  ACTIVE
+  HIDDEN
+  CLEARED
+  FROZEN
+}
+
+enum PoolType {
+  NORMAL
+  RATED
+}
+
+enum Attribute {
+  ONE
+  ZERO
+  LEAN_ONE
+  LEAN_ZERO
+  SIDE
+  OTHER
+}
+
+enum LocationScope {
+  CITY
+  PROVINCE
+  ANY
+}
+
+enum RatingStatus {
+  NOT_SUBMITTED
+  PENDING
+  SCORING
+  COMPLETED
+  NEEDS_RESCORE
+  WITHDRAWN
+}
+
+enum ScoreThresholdPref {
+  ANY
+  GTE_7
+}
+
+enum RatingTaskStatus {
+  PENDING
+  SCORING
+  COMPLETED
+  NEEDS_RESCORE
+}
+
+enum ViewRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum ReportType {
+  FAKE_INFO
+  STOLEN_PHOTO
+  IMPERSONATION
+  HARASSMENT
+  SCAM
+  MALICIOUS
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  ACCEPTED
+  REJECTED
+}
+
+enum PenaltyType {
+  WARNING
+  PROFILE_FROZEN
+  ACCOUNT_BANNED
+}
+
+// ─── Models ───────────────────────────────────────────
+
+/// Core user account — every person in the system has exactly one User record
+model User {
+  id          String     @id @default(cuid())
+  status      UserStatus @default(ACTIVE)
+  role        UserRole   @default(USER)
+  lastLoginAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  authIdentities    AuthIdentity[]
+  groupMembership   GroupMembership?
+  profile           Profile?
+  preference        Preference?
+  ratingProfile     RatingProfile?
+
+  // Invite codes created by this user (admin)
+  createdInviteCodes InviteCode[] @relation("InviteCodeCreator")
+  usedInviteCode     InviteCode?  @relation("InviteCodeUser")
+
+  // Membership verifications performed by this user (admin)
+  verifiedMemberships GroupMembership[] @relation("MembershipVerifier")
+  revokedMemberships  GroupMembership[] @relation("MembershipRevoker")
+
+  // Rating
+  ratingTasks        RatingTask[]  @relation("RatedUser")
+  ratingScores       RatingScore[] @relation("Scorer")
+
+  // Matching & Requests
+  matchesAsUser      MatchSnapshot[] @relation("MatchUser")
+  matchesAsTarget    MatchSnapshot[] @relation("MatchTarget")
+  sentViewRequests   ViewRequest[]   @relation("ViewRequester")
+  receivedViewRequests ViewRequest[] @relation("ViewTarget")
+
+  // Reports & Penalties
+  filedReports       Report[]  @relation("Reporter")
+  receivedReports    Report[]  @relation("ReportTarget")
+  handledReports     Report[]  @relation("ReportHandler")
+  penalties          Penalty[] @relation("PenaltyTarget")
+  issuedPenalties    Penalty[] @relation("PenaltyIssuer")
+
+  // Audit
+  auditLogs          AuditLog[]
+
+  @@map("users")
+}
+
+/// OAuth identity from QQ or other providers
+model AuthIdentity {
+  id                    String   @id @default(cuid())
+  userId                String
+  provider              String   // e.g. "qq", "qq_connect"
+  providerUserId        String   // raw ID from provider
+  openid                String
+  unionid               String?
+  nickname              String?
+  avatarUrl             String?
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, openid])
+  @@map("auth_identities")
+}
+
+/// Group membership verification status
+model GroupMembership {
+  id         String           @id @default(cuid())
+  userId     String           @unique
+  qqNumber   String
+  groupId    String           @default("default")
+  status     MembershipStatus @default(PENDING)
+  verifiedAt DateTime?
+  expiresAt  DateTime?
+  verifiedBy String?
+  revokedAt  DateTime?
+  revokedBy  String?
+  remark     String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verifier User? @relation("MembershipVerifier", fields: [verifiedBy], references: [id])
+  revoker  User? @relation("MembershipRevoker", fields: [revokedBy], references: [id])
+
+  @@index([qqNumber])
+  @@index([status])
+  @@map("group_memberships")
+}
+
+/// One-time invite codes for group membership verification
+model InviteCode {
+  id        String           @id @default(cuid())
+  codeHash  String           @unique
+  qqNumber  String?
+  status    InviteCodeStatus @default(UNUSED)
+  expiresAt DateTime
+  createdBy String
+  usedBy    String?          @unique
+  usedAt    DateTime?
+  remark    String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  creator User  @relation("InviteCodeCreator", fields: [createdBy], references: [id])
+  usedByUser  User? @relation("InviteCodeUser", fields: [usedBy], references: [id])
+
+  @@index([status])
+  @@map("invite_codes")
+}
+
+/// User profile with personal information
+model Profile {
+  id                       String        @id @default(cuid())
+  userId                   String        @unique
+  poolType                 PoolType      @default(NORMAL)
+  birthDate                DateTime
+  heightCm                 Int
+  weightKg                 Int
+  provinceCode             String
+  cityCode                 String
+  attribute                Attribute
+  selfIntro                String?
+  consentProfileVisibility Boolean       @default(false)
+  status                   ProfileStatus @default(DRAFT)
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([poolType, status])
+  @@index([status])
+  @@map("profiles")
+}
+
+/// User preference / expected conditions for matching
+model Preference {
+  id                   String       @id @default(cuid())
+  userId               String       @unique
+  ageMin               Int
+  ageMax               Int
+  heightMinCm          Int
+  heightMaxCm          Int
+  weightMinKg          Int
+  weightMaxKg          Int
+  locationScope        LocationScope @default(ANY)
+  expectedProvinceCode String?
+  expectedCityCode     String?
+  expectedAttributes   Json         // Array of Attribute enum values
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("preferences")
+}
+
+/// Rating pool extended profile (photo, score, preferences)
+model RatingProfile {
+  id                       String             @id @default(cuid())
+  userId                   String             @unique
+  photoObjectKey           String?
+  photoStatus              String?            // upload status tracking
+  ratingStatus             RatingStatus       @default(NOT_SUBMITTED)
+  finalScore               Float?
+  scoreCompletedAt         DateTime?
+  scoreThresholdPreference ScoreThresholdPref @default(ANY)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("rating_profiles")
+}
+
+/// A rating task assigned to all scorers for one user's photo
+model RatingTask {
+  id              String          @id @default(cuid())
+  ratedUserId     String
+  photoObjectKey  String
+  status          RatingTaskStatus @default(PENDING)
+  scorerSnapshot  Json            // Array of scorer user IDs at task creation
+  completedAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  ratedUser User          @relation("RatedUser", fields: [ratedUserId], references: [id])
+  scores    RatingScore[]
+
+  @@index([status])
+  @@map("rating_tasks")
+}
+
+/// Individual score from one scorer for one rating task
+model RatingScore {
+  id            String   @id @default(cuid())
+  ratingTaskId  String
+  scorerUserId  String
+  score         Int      // 1-10 integer
+  createdAt     DateTime @default(now())
+
+  ratingTask RatingTask @relation(fields: [ratingTaskId], references: [id], onDelete: Cascade)
+  scorer     User       @relation("Scorer", fields: [scorerUserId], references: [id])
+
+  @@unique([ratingTaskId, scorerUserId])
+  @@map("rating_scores")
+}
+
+/// Cached match result (optional for MVP — can compute in real-time)
+model MatchSnapshot {
+  id           String   @id @default(cuid())
+  userId       String
+  targetUserId String
+  matchType    String   // "mutual" | "one_way"
+  direction    String   // "i_like_target" | "target_likes_me" | "mutual"
+  score        Float?   // relevance score for sorting
+  computedAt   DateTime @default(now())
+
+  user   User @relation("MatchUser", fields: [userId], references: [id])
+  target User @relation("MatchTarget", fields: [targetUserId], references: [id])
+
+  @@unique([userId, targetUserId])
+  @@index([userId, matchType])
+  @@map("match_snapshots")
+}
+
+/// Request to view a one-way match's full profile
+model ViewRequest {
+  id           String            @id @default(cuid())
+  requesterId  String
+  targetUserId String
+  status       ViewRequestStatus @default(PENDING)
+  message      String?
+  respondedAt  DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  requester User @relation("ViewRequester", fields: [requesterId], references: [id])
+  target    User @relation("ViewTarget", fields: [targetUserId], references: [id])
+
+  @@index([requesterId, status])
+  @@index([targetUserId, status])
+  @@map("view_requests")
+}
+
+/// User report against another user
+model Report {
+  id                 String       @id @default(cuid())
+  reporterId         String
+  targetUserId       String
+  type               ReportType
+  description        String
+  evidenceObjectKeys Json?        // Array of S3 keys for evidence screenshots
+  status             ReportStatus @default(PENDING)
+  resolution         String?
+  handledBy          String?
+  handledAt          DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  reporter User  @relation("Reporter", fields: [reporterId], references: [id])
+  target   User  @relation("ReportTarget", fields: [targetUserId], references: [id])
+  handler  User? @relation("ReportHandler", fields: [handledBy], references: [id])
+
+  @@index([status])
+  @@index([targetUserId])
+  @@map("reports")
+}
+
+/// Penalty record (warning, freeze, ban)
+model Penalty {
+  id        String      @id @default(cuid())
+  userId    String
+  type      PenaltyType
+  reason    String
+  createdBy String
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime    @default(now())
+
+  user    User @relation("PenaltyTarget", fields: [userId], references: [id])
+  creator User @relation("PenaltyIssuer", fields: [createdBy], references: [id])
+
+  @@index([userId])
+  @@map("penalties")
+}
+
+/// Immutable audit log of all system actions
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  action      String   // e.g. "LOGIN", "PROFILE_UPDATE", "PENALTY_CREATE"
+  targetType  String?  // e.g. "User", "Profile", "InviteCode"
+  targetId    String?
+  metadata    Json?    // Additional context
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

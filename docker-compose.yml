@@ -1,0 +1,46 @@
+# c:\Users\46343\Documents\date-system\docker-compose.yml
+
+services:
+  # ── PostgreSQL 16 ─────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: date-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: date_admin
+      POSTGRES_PASSWORD: date_dev_password
+      POSTGRES_DB: date_system
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # ── Redis 7 ───────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: date-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/var/lib/redis/data
+
+  # ── MinIO (S3-compatible storage) ─────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: date-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # Web console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

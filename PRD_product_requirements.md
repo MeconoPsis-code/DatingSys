@@ -34,29 +34,50 @@
 
 ## 2. User Roles & Permissions
 
-### 2.1 Role Matrix
+### 2.1 Role Hierarchy
+
+Roles are **cumulative** — each higher role inherits **all** capabilities of the roles below it:
+
+```
+Regular User → Scorer → Admin → Super Admin
+```
+
+### 2.2 Role Matrix
+
+✅ = directly granted at this role level · ⬆ = inherited from a lower role
 
 | Capability | Regular User | Scorer | Admin | Super Admin |
 |---|:---:|:---:|:---:|:---:|
-| QQ OAuth login | ✅ | ✅ | ✅ | ✅ |
-| Submit / edit / clear own profile | ✅ | — | — | — |
-| View mutual match full profiles | ✅ | — | — | — |
-| Send / respond to view requests | ✅ | — | — | — |
-| Report other users | ✅ | — | — | — |
-| Score photos anonymously | — | ✅ | — | — |
-| View scorer task queue | — | ✅ | — | — |
-| Generate invite codes | — | — | ✅ | ✅ |
-| Manage group memberships | — | — | ✅ | ✅ |
-| Handle reports & penalties | — | — | ✅ | ✅ |
+| **Regular User capabilities** | | | | |
+| QQ OAuth login | ✅ | ⬆ | ⬆ | ⬆ |
+| Submit / edit / clear own profile | ✅ | ⬆ | ⬆ | ⬆ |
+| View mutual match full profiles | ✅ | ⬆ | ⬆ | ⬆ |
+| Send / respond to view requests | ✅ | ⬆ | ⬆ | ⬆ |
+| Report other users | ✅ | ⬆ | ⬆ | ⬆ |
+| View own account status | ✅ | ⬆ | ⬆ | ⬆ |
+| **Scorer capabilities** | | | | |
+| Score photos anonymously | — | ✅ | ⬆ | ⬆ |
+| View scorer task queue | — | ✅ | ⬆ | ⬆ |
+| **Admin capabilities** | | | | |
+| Generate invite codes | — | — | ✅ | ⬆ |
+| Manage group memberships | — | — | ✅ | ⬆ |
+| Handle reports & penalties | — | — | ✅ | ⬆ |
+| View audit logs | — | — | ✅ (read-only) | ⬆ |
+| **Super Admin capabilities** | | | | |
 | Manage system config & roles | — | — | — | ✅ |
 | Manage scorer panel members | — | — | — | ✅ |
 | Trigger re-scoring | — | — | — | ✅ |
-| View full audit logs | — | — | Read-only | ✅ |
+| Full audit log access (write/delete) | — | — | — | ✅ |
 
-### 2.2 Scorer Anonymity Constraints
+> [!NOTE]
+> **Example**: An Admin can do everything a Regular User and Scorer can (fill profile, participate in matching, score photos) **plus** admin-specific actions (invite codes, report handling). A Super Admin inherits all of the above plus system-level configuration.
+
+### 2.3 Scorer Anonymity Constraints
 
 > [!IMPORTANT]
-> Scorers can **only** see the photo. They must **never** see: user ID, nickname, QQ number, age, location, attributes, preferences, or any other profile data. Rating task IDs must not be reverse-mappable to users.
+> When performing scoring duties, scorers can **only** see the photo. They must **never** see: user ID, nickname, QQ number, age, location, attributes, preferences, or any other profile data. Rating task IDs must not be reverse-mappable to users.
+>
+> This constraint applies to the **scoring interface only** — it does not restrict the scorer's inherited regular-user capabilities (e.g., viewing their own match results on the user-facing pages).
 
 ---
 
