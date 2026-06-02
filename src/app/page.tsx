@@ -1,4 +1,13 @@
-export default function LandingPage() {
+import { redirect } from "next/navigation";
+import { getSessionPayload } from "@/lib/session";
+
+export default async function LandingPage() {
+  // Auth-aware redirect
+  const session = await getSessionPayload();
+  if (session) {
+    redirect("/profile");
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4">
       {/* Glow effect */}
@@ -28,16 +37,15 @@ export default function LandingPage() {
         </p>
 
         {/* Login Button */}
-        <button className="mt-4 inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-8 text-base font-semibold text-white shadow-lg shadow-[hsl(262,83%,58%)/0.25] transition-all hover:scale-105 hover:shadow-xl hover:shadow-[hsl(262,83%,58%)/0.35] active:scale-[0.98]">
-          <svg
-            className="h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
+        <a
+          href="/login"
+          className="mt-4 inline-flex h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-8 text-base font-semibold text-white shadow-lg shadow-[hsl(262,83%,58%)/0.25] transition-all hover:scale-105 hover:shadow-xl hover:shadow-[hsl(262,83%,58%)/0.35] active:scale-[0.98]"
+        >
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
           </svg>
-          QQ 登录
-        </button>
+          进入登录
+        </a>
 
         {/* Footer hint */}
         <p className="mt-8 text-xs text-[hsl(var(--muted-foreground))] opacity-60">
