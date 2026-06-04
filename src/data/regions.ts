@@ -1,0 +1,339 @@
+/**
+ * China administrative regions — provinces and cities.
+ * Province codes follow GB/T 2260 (first 2 digits).
+ */
+
+export interface Province {
+  code: string;
+  name: string;
+}
+
+export interface City {
+  code: string;
+  name: string;
+}
+
+export const PROVINCES: Province[] = [
+  { code: "110000", name: "北京市" },
+  { code: "120000", name: "天津市" },
+  { code: "130000", name: "河北省" },
+  { code: "140000", name: "山西省" },
+  { code: "150000", name: "内蒙古自治区" },
+  { code: "210000", name: "辽宁省" },
+  { code: "220000", name: "吉林省" },
+  { code: "230000", name: "黑龙江省" },
+  { code: "310000", name: "上海市" },
+  { code: "320000", name: "江苏省" },
+  { code: "330000", name: "浙江省" },
+  { code: "340000", name: "安徽省" },
+  { code: "350000", name: "福建省" },
+  { code: "360000", name: "江西省" },
+  { code: "370000", name: "山东省" },
+  { code: "410000", name: "河南省" },
+  { code: "420000", name: "湖北省" },
+  { code: "430000", name: "湖南省" },
+  { code: "440000", name: "广东省" },
+  { code: "450000", name: "广西壮族自治区" },
+  { code: "460000", name: "海南省" },
+  { code: "500000", name: "重庆市" },
+  { code: "510000", name: "四川省" },
+  { code: "520000", name: "贵州省" },
+  { code: "530000", name: "云南省" },
+  { code: "540000", name: "西藏自治区" },
+  { code: "610000", name: "陕西省" },
+  { code: "620000", name: "甘肃省" },
+  { code: "630000", name: "青海省" },
+  { code: "640000", name: "宁夏回族自治区" },
+  { code: "650000", name: "新疆维吾尔自治区" },
+  { code: "710000", name: "台湾省" },
+  { code: "810000", name: "香港特别行政区" },
+  { code: "820000", name: "澳门特别行政区" },
+];
+
+export const CITIES: Record<string, City[]> = {
+  "110000": [
+    { code: "110100", name: "北京市" },
+  ],
+  "120000": [
+    { code: "120100", name: "天津市" },
+  ],
+  "130000": [
+    { code: "130100", name: "石家庄市" },
+    { code: "130200", name: "唐山市" },
+    { code: "130300", name: "秦皇岛市" },
+    { code: "130400", name: "邯郸市" },
+    { code: "130500", name: "邢台市" },
+    { code: "130600", name: "保定市" },
+    { code: "130700", name: "张家口市" },
+    { code: "130800", name: "承德市" },
+    { code: "130900", name: "沧州市" },
+    { code: "131000", name: "廊坊市" },
+    { code: "131100", name: "衡水市" },
+  ],
+  "140000": [
+    { code: "140100", name: "太原市" },
+    { code: "140200", name: "大同市" },
+    { code: "140300", name: "阳泉市" },
+    { code: "140400", name: "长治市" },
+    { code: "140500", name: "晋城市" },
+    { code: "140600", name: "朔州市" },
+    { code: "140700", name: "晋中市" },
+    { code: "140800", name: "运城市" },
+    { code: "140900", name: "忻州市" },
+    { code: "141000", name: "临汾市" },
+    { code: "141100", name: "吕梁市" },
+  ],
+  "150000": [
+    { code: "150100", name: "呼和浩特市" },
+    { code: "150200", name: "包头市" },
+    { code: "150300", name: "乌海市" },
+    { code: "150400", name: "赤峰市" },
+    { code: "150500", name: "通辽市" },
+    { code: "150600", name: "鄂尔多斯市" },
+    { code: "150700", name: "呼伦贝尔市" },
+  ],
+  "210000": [
+    { code: "210100", name: "沈阳市" },
+    { code: "210200", name: "大连市" },
+    { code: "210300", name: "鞍山市" },
+    { code: "210400", name: "抚顺市" },
+    { code: "210500", name: "本溪市" },
+    { code: "210600", name: "丹东市" },
+    { code: "210700", name: "锦州市" },
+    { code: "210800", name: "营口市" },
+  ],
+  "220000": [
+    { code: "220100", name: "长春市" },
+    { code: "220200", name: "吉林市" },
+    { code: "220300", name: "四平市" },
+    { code: "220400", name: "辽源市" },
+    { code: "220500", name: "通化市" },
+  ],
+  "230000": [
+    { code: "230100", name: "哈尔滨市" },
+    { code: "230200", name: "齐齐哈尔市" },
+    { code: "230300", name: "鸡西市" },
+    { code: "230400", name: "鹤岗市" },
+    { code: "230600", name: "大庆市" },
+    { code: "230900", name: "七台河市" },
+  ],
+  "310000": [
+    { code: "310100", name: "上海市" },
+  ],
+  "320000": [
+    { code: "320100", name: "南京市" },
+    { code: "320200", name: "无锡市" },
+    { code: "320300", name: "徐州市" },
+    { code: "320400", name: "常州市" },
+    { code: "320500", name: "苏州市" },
+    { code: "320600", name: "南通市" },
+    { code: "320700", name: "连云港市" },
+    { code: "320800", name: "淮安市" },
+    { code: "320900", name: "盐城市" },
+    { code: "321000", name: "扬州市" },
+    { code: "321100", name: "镇江市" },
+    { code: "321200", name: "泰州市" },
+    { code: "321300", name: "宿迁市" },
+  ],
+  "330000": [
+    { code: "330100", name: "杭州市" },
+    { code: "330200", name: "宁波市" },
+    { code: "330300", name: "温州市" },
+    { code: "330400", name: "嘉兴市" },
+    { code: "330500", name: "湖州市" },
+    { code: "330600", name: "绍兴市" },
+    { code: "330700", name: "金华市" },
+    { code: "330800", name: "衢州市" },
+    { code: "330900", name: "舟山市" },
+    { code: "331000", name: "台州市" },
+    { code: "331100", name: "丽水市" },
+  ],
+  "340000": [
+    { code: "340100", name: "合肥市" },
+    { code: "340200", name: "芜湖市" },
+    { code: "340300", name: "蚌埠市" },
+    { code: "340400", name: "淮南市" },
+    { code: "340500", name: "马鞍山市" },
+    { code: "340600", name: "淮北市" },
+    { code: "340700", name: "铜陵市" },
+    { code: "340800", name: "安庆市" },
+  ],
+  "350000": [
+    { code: "350100", name: "福州市" },
+    { code: "350200", name: "厦门市" },
+    { code: "350300", name: "莆田市" },
+    { code: "350400", name: "三明市" },
+    { code: "350500", name: "泉州市" },
+    { code: "350600", name: "漳州市" },
+    { code: "350700", name: "南平市" },
+    { code: "350900", name: "宁德市" },
+  ],
+  "360000": [
+    { code: "360100", name: "南昌市" },
+    { code: "360200", name: "景德镇市" },
+    { code: "360300", name: "萍乡市" },
+    { code: "360400", name: "九江市" },
+  ],
+  "370000": [
+    { code: "370100", name: "济南市" },
+    { code: "370200", name: "青岛市" },
+    { code: "370300", name: "淄博市" },
+    { code: "370400", name: "枣庄市" },
+    { code: "370500", name: "东营市" },
+    { code: "370600", name: "烟台市" },
+    { code: "370700", name: "潍坊市" },
+    { code: "370800", name: "济宁市" },
+    { code: "370900", name: "泰安市" },
+    { code: "371000", name: "威海市" },
+    { code: "371300", name: "临沂市" },
+    { code: "371500", name: "聊城市" },
+  ],
+  "410000": [
+    { code: "410100", name: "郑州市" },
+    { code: "410200", name: "开封市" },
+    { code: "410300", name: "洛阳市" },
+    { code: "410500", name: "安阳市" },
+    { code: "410800", name: "焦作市" },
+    { code: "411300", name: "南阳市" },
+  ],
+  "420000": [
+    { code: "420100", name: "武汉市" },
+    { code: "420200", name: "黄石市" },
+    { code: "420300", name: "十堰市" },
+    { code: "420500", name: "宜昌市" },
+    { code: "420600", name: "襄阳市" },
+    { code: "420900", name: "孝感市" },
+    { code: "421000", name: "荆州市" },
+  ],
+  "430000": [
+    { code: "430100", name: "长沙市" },
+    { code: "430200", name: "株洲市" },
+    { code: "430300", name: "湘潭市" },
+    { code: "430400", name: "衡阳市" },
+    { code: "430500", name: "邵阳市" },
+    { code: "430600", name: "岳阳市" },
+    { code: "430700", name: "常德市" },
+  ],
+  "440000": [
+    { code: "440100", name: "广州市" },
+    { code: "440200", name: "韶关市" },
+    { code: "440300", name: "深圳市" },
+    { code: "440400", name: "珠海市" },
+    { code: "440500", name: "汕头市" },
+    { code: "440600", name: "佛山市" },
+    { code: "440700", name: "江门市" },
+    { code: "440800", name: "湛江市" },
+    { code: "440900", name: "茂名市" },
+    { code: "441200", name: "肇庆市" },
+    { code: "441300", name: "惠州市" },
+    { code: "441400", name: "梅州市" },
+    { code: "441500", name: "汕尾市" },
+    { code: "441600", name: "河源市" },
+    { code: "441700", name: "阳江市" },
+    { code: "441800", name: "清远市" },
+    { code: "441900", name: "东莞市" },
+    { code: "442000", name: "中山市" },
+  ],
+  "450000": [
+    { code: "450100", name: "南宁市" },
+    { code: "450200", name: "柳州市" },
+    { code: "450300", name: "桂林市" },
+    { code: "450400", name: "梧州市" },
+    { code: "450500", name: "北海市" },
+  ],
+  "460000": [
+    { code: "460100", name: "海口市" },
+    { code: "460200", name: "三亚市" },
+    { code: "460300", name: "三沙市" },
+    { code: "460400", name: "儋州市" },
+  ],
+  "500000": [
+    { code: "500100", name: "重庆市" },
+  ],
+  "510000": [
+    { code: "510100", name: "成都市" },
+    { code: "510300", name: "自贡市" },
+    { code: "510400", name: "攀枝花市" },
+    { code: "510500", name: "泸州市" },
+    { code: "510600", name: "德阳市" },
+    { code: "510700", name: "绵阳市" },
+    { code: "510900", name: "遂宁市" },
+    { code: "511100", name: "乐山市" },
+    { code: "511300", name: "南充市" },
+    { code: "511500", name: "宜宾市" },
+  ],
+  "520000": [
+    { code: "520100", name: "贵阳市" },
+    { code: "520200", name: "六盘水市" },
+    { code: "520300", name: "遵义市" },
+  ],
+  "530000": [
+    { code: "530100", name: "昆明市" },
+    { code: "530300", name: "曲靖市" },
+    { code: "530400", name: "玉溪市" },
+    { code: "530500", name: "保山市" },
+    { code: "532500", name: "红河哈尼族彝族自治州" },
+    { code: "532900", name: "大理白族自治州" },
+  ],
+  "540000": [
+    { code: "540100", name: "拉萨市" },
+    { code: "540200", name: "日喀则市" },
+  ],
+  "610000": [
+    { code: "610100", name: "西安市" },
+    { code: "610200", name: "铜川市" },
+    { code: "610300", name: "宝鸡市" },
+    { code: "610400", name: "咸阳市" },
+    { code: "610700", name: "汉中市" },
+  ],
+  "620000": [
+    { code: "620100", name: "兰州市" },
+    { code: "620300", name: "金昌市" },
+    { code: "620400", name: "白银市" },
+    { code: "620500", name: "天水市" },
+  ],
+  "630000": [
+    { code: "630100", name: "西宁市" },
+    { code: "630200", name: "海东市" },
+  ],
+  "640000": [
+    { code: "640100", name: "银川市" },
+    { code: "640200", name: "石嘴山市" },
+    { code: "640300", name: "吴忠市" },
+  ],
+  "650000": [
+    { code: "650100", name: "乌鲁木齐市" },
+    { code: "650200", name: "克拉玛依市" },
+    { code: "650400", name: "吐鲁番市" },
+    { code: "650500", name: "哈密市" },
+  ],
+  "710000": [
+    { code: "710100", name: "台北市" },
+    { code: "710200", name: "高雄市" },
+    { code: "710300", name: "台中市" },
+  ],
+  "810000": [
+    { code: "810100", name: "香港" },
+  ],
+  "820000": [
+    { code: "820100", name: "澳门" },
+  ],
+};
+
+// ── Lookup helpers ──────────────────────────────────────
+
+const provinceMap = new Map(PROVINCES.map((p) => [p.code, p.name]));
+
+export function getProvinceName(code: string): string {
+  return provinceMap.get(code) ?? code;
+}
+
+export function getCities(provinceCode: string): City[] {
+  return CITIES[provinceCode] ?? [];
+}
+
+export function getCityName(provinceCode: string, cityCode: string): string {
+  const cities = CITIES[provinceCode];
+  if (!cities) return cityCode;
+  return cities.find((c) => c.code === cityCode)?.name ?? cityCode;
+}

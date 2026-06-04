@@ -2,16 +2,50 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 
-const tabs = [
+const userTabs = [
   { label: "资料", href: "/profile", icon: "👤" },
   { label: "匹配", href: "/matches/mutual", icon: "💕" },
   { label: "申请", href: "/requests", icon: "📨" },
   { label: "我的", href: "/me", icon: "👋" },
 ];
 
+const scorerTab = { label: "评分", href: "/scoring", icon: "🎯" };
+const adminTab = { label: "管理", href: "/dashboard", icon: "⚙️" };
+
+type UserRole = "USER" | "SCORER" | "ADMIN" | "SUPER_ADMIN";
+
+const ROLE_WEIGHT: Record<UserRole, number> = {
+  USER: 0,
+  SCORER: 1,
+  ADMIN: 2,
+  SUPER_ADMIN: 3,
+};
+
 export function MainNav() {
   const pathname = usePathname();
+  const [role, setRole] = useState<UserRole>("USER");
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.data?.role) {
+          setRole(data.data.role);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Build tabs based on role
+  const tabs = [...userTabs];
+  if (ROLE_WEIGHT[role] >= ROLE_WEIGHT.SCORER) {
+    tabs.push(scorerTab);
+  }
+  if (ROLE_WEIGHT[role] >= ROLE_WEIGHT.ADMIN) {
+    tabs.push(adminTab);
+  }
 
   const isActive = (href: string) => {
     if (href === "/matches/mutual") {

@@ -1,37 +1,64 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
 const SEED_USERS = [
   { id: "seed-super-admin", label: "超级管理员", role: "SUPER_ADMIN" },
   { id: "seed-admin", label: "管理员小明", role: "ADMIN" },
   { id: "seed-scorer-1", label: "评分官1号", role: "SCORER" },
-  { id: "seed-scorer-2", label: "评分官2号", role: "SCORER" },
   { id: "seed-user-1", label: "用户小红", role: "USER" },
   { id: "seed-user-2", label: "用户小蓝", role: "USER" },
-  { id: "seed-user-3", label: "用户小绿", role: "USER" },
-  { id: "seed-user-4", label: "用户小紫", role: "USER" },
-  { id: "seed-user-5", label: "用户小橙", role: "USER" },
 ];
 
 const ERROR_MESSAGES: Record<string, string> = {
-  expired: "登录链接已过期，请重新在 QQ 群中获取",
-  missing_token: "链接无效，请重新获取登录链接",
-  server_error: "服务器错误，请稍后重试",
+  expired: "登录已过期，请重新登录",
 };
 
 function LoginContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const error = searchParams.get("error");
-  const from = searchParams.get("from");
+
+  const [qqNumber, setQqNumber] = useState("");
+  const [passcode, setPasscode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setFormError(null);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qqNumber, passcode }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setFormError(data.error?.message || "登录失败");
+        return;
+      }
+
+      router.push("/profile");
+    } catch {
+      setFormError("网络错误，请稍后重试");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
       {/* Error alert */}
-      {error && (
+      {(error || formError) && (
         <div className="rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.1)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
-          {ERROR_MESSAGES[error] || "登录失败，请重试"}
+          {formError || ERROR_MESSAGES[error!] || "操作失败"}
         </div>
       )}
 
@@ -49,59 +76,79 @@ function LoginContent() {
           </p>
         </div>
 
-        {/* Badge */}
-        <div className="mb-6 flex justify-center">
-          <span className="inline-flex items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-4 py-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))]">
-            仅限指定 QQ 群认证成员
-          </span>
-        </div>
+        {/* Login form */}
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label
+              htmlFor="qqNumber"
+              className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]"
+            >
+              QQ 号
+            </label>
+            <input
+              id="qqNumber"
+              type="text"
+              inputMode="numeric"
+              value={qqNumber}
+              onChange={(e) => setQqNumber(e.target.value)}
+              placeholder="请输入你的 QQ 号"
+              required
+              className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+            />
+          </div>
 
-        {/* Instructions */}
-        <div className="rounded-xl bg-[hsl(var(--secondary))] p-5">
-          <h2 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">
-            📱 登录方式
-          </h2>
-          <ol className="space-y-2 text-sm text-[hsl(var(--muted-foreground))]">
-            <li className="flex gap-2">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--accent))] text-[10px] font-bold text-[hsl(var(--accent-foreground))]">
-                1
-              </span>
-              <span>打开 QQ 群聊天窗口</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--accent))] text-[10px] font-bold text-[hsl(var(--accent-foreground))]">
-                2
-              </span>
-              <span>
-                发送指令{" "}
-                <code className="rounded bg-[hsl(var(--muted))] px-1.5 py-0.5 font-mono text-xs text-[hsl(var(--foreground))]">
-                  /登录
-                </code>
-              </span>
-            </li>
-            <li className="flex gap-2">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--accent))] text-[10px] font-bold text-[hsl(var(--accent-foreground))]">
-                3
-              </span>
-              <span>机器人会私聊发送登录链接</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--accent))] text-[10px] font-bold text-[hsl(var(--accent-foreground))]">
-                4
-              </span>
-              <span>点击链接即可自动登录</span>
-            </li>
-          </ol>
-        </div>
+          <div>
+            <label
+              htmlFor="passcode"
+              className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]"
+            >
+              密码
+            </label>
+            <input
+              id="passcode"
+              type="password"
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value)}
+              placeholder="请输入密码"
+              required
+              className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+            />
+          </div>
 
-        {/* Alternative */}
-        <div className="mt-4 text-center">
-          <a
-            href="/verify"
-            className="text-xs text-[hsl(var(--muted-foreground))] underline-offset-4 transition-colors hover:text-[hsl(var(--foreground))] hover:underline"
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[hsl(262,83%,58%)/0.25] transition-all hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
           >
-            已有邀请码？手动验证 →
+            {loading ? "登录中..." : "登 录"}
+          </button>
+        </form>
+
+        {/* Links */}
+        <div className="mt-4 flex justify-between text-xs">
+          <a
+            href="/forgot-passcode"
+            className="text-[hsl(var(--muted-foreground))] underline-offset-4 transition-colors hover:text-[hsl(var(--foreground))] hover:underline"
+          >
+            忘记密码？
           </a>
+          <a
+            href="/signup"
+            className="text-[hsl(var(--primary))] underline-offset-4 transition-colors hover:underline"
+          >
+            首次注册 →
+          </a>
+        </div>
+
+        {/* Signup hint */}
+        <div className="mt-5 rounded-xl bg-[hsl(var(--secondary))] p-4">
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            📱 首次使用？在 QQ 群中发送{" "}
+            <code className="rounded bg-[hsl(var(--muted))] px-1.5 py-0.5 font-mono text-[hsl(var(--foreground))]">
+              /signup
+            </code>{" "}
+            指令，机器人会帮你发起注册。
+          </p>
         </div>
       </div>
 
@@ -129,11 +176,6 @@ function LoginContent() {
           </div>
         </div>
       )}
-
-      {/* Footer */}
-      <p className="text-center text-xs text-[hsl(var(--muted-foreground))] opacity-60">
-        登录链接有效期 5 分钟，过期请重新获取
-      </p>
     </div>
   );
 }

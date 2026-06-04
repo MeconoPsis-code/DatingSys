@@ -9,7 +9,8 @@ const COOKIE_NAME = "date-session";
 const PUBLIC_PATHS = [
   "/",
   "/login",
-  "/callback",
+  "/signup",
+  "/forgot-passcode",
   "/api/auth",
   "/api/health",
 ];
@@ -25,7 +26,7 @@ const ADMIN_PATHS = [
 ];
 
 // Routes that require SCORER+ role
-const SCORER_PATHS = ["/scoring", "/api/scorer"];
+const SCORER_PATHS = ["/scoring", "/api/scorer", "/api/scoring"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some(

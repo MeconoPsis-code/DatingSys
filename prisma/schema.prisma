@@ -48,18 +48,28 @@ enum ProfileStatus {
   FROZEN
 }
 
-enum PoolType {
-  NORMAL
-  RATED
+enum PhotoMatchPref {
+  PHOTO_ONLY   // only match with other photo users
+  ALL          // match with all users
 }
 
 enum Attribute {
   ONE
   ZERO
+  HALF
   LEAN_ONE
   LEAN_ZERO
   SIDE
   OTHER
+}
+
+enum LocationType {
+  RESIDENCE   // 常住地
+  HOMETOWN    // 家乡
+  SCHOOL      // 就读地
+  WORK        // 工作地
+  TRAVEL      // 旅居地
+  OTHER       // 其他
 }
 
 enum LocationScope {
@@ -77,10 +87,7 @@ enum RatingStatus {
   WITHDRAWN
 }
 
-enum ScoreThresholdPref {
-  ANY
-  GTE_7
-}
+
 
 enum RatingTaskStatus {
   PENDING
@@ -124,12 +131,15 @@ enum PenaltyType {
 
 /// Core user account — every person in the system has exactly one User record
 model User {
-  id          String     @id @default(cuid())
-  status      UserStatus @default(ACTIVE)
-  role        UserRole   @default(USER)
-  lastLoginAt DateTime?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id            String     @id @default(cuid())
+  qqNumber      String?    @unique  // QQ号 — primary login identifier
+  passwordHash  String?              // bcrypt hash of passcode
+  status        UserStatus @default(ACTIVE)
+  role          UserRole   @default(USER)
+  lastLoginAt   DateTime?
+  lastProfileClearedAt DateTime?  // tracks 30-day publish cooldown after clear
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
   // Relations
   authIdentities    AuthIdentity[]
@@ -238,26 +248,50 @@ model InviteCode {
 
 /// User profile with personal information
 model Profile {
-  id                       String        @id @default(cuid())
-  userId                   String        @unique
-  poolType                 PoolType      @default(NORMAL)
+  id                       String         @id @default(cuid())
+  userId                   String         @unique
   birthDate                DateTime
   heightCm                 Int
   weightKg                 Int
   provinceCode             String
   cityCode                 String
+  locationType             LocationType   @default(RESIDENCE)
   attribute                Attribute
+  customAttribute          String?        @db.VarChar(20)
+  mbti                     String?        @db.VarChar(4)
   selfIntro                String?
-  consentProfileVisibility Boolean       @default(false)
-  status                   ProfileStatus @default(DRAFT)
-  createdAt                DateTime      @default(now())
-  updatedAt                DateTime      @updatedAt
+  consentProfileVisibility Boolean        @default(false)
+  status                   ProfileStatus  @default(DRAFT)
+  lastSubmittedAt          DateTime?
+  // Photo matching preferences (only relevant when user has photos)
+  photoMatchPref           PhotoMatchPref?  // null = no photos
+  highScoreOnly            Boolean        @default(false) // only match ≥7.0
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([poolType, status])
   @@index([status])
   @@map("profiles")
+
+  photos ProfilePhoto[]
+}
+
+/// User's profile photos, stored in MinIO (S3-compatible)
+model ProfilePhoto {
+  id          String   @id @default(cuid())
+  profileId   String
+  storageKey  String   // MinIO object key, e.g. "photos/userId/uuid.webp"
+  order       Int      @default(0)   // display order (0-based)
+  originalName String?
+  mimeType    String?  @db.VarChar(100)
+  sizeBytes   Int?
+  createdAt   DateTime @default(now())
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, order])
+  @@map("profile_photos")
 }
 
 /// User preference / expected conditions for matching
@@ -274,6 +308,7 @@ model Preference {
   expectedProvinceCode String?
   expectedCityCode     String?
   expectedAttributes   Json         // Array of Attribute enum values
+  expectedCustomAttribute String? @db.VarChar(20)  // custom text when OTHER in expectedAttributes
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
@@ -282,16 +317,13 @@ model Preference {
   @@map("preferences")
 }
 
-/// Rating pool extended profile (photo, score, preferences)
+/// Rating profile — tracks scoring status for users with photos
 model RatingProfile {
   id                       String             @id @default(cuid())
   userId                   String             @unique
-  photoObjectKey           String?
-  photoStatus              String?            // upload status tracking
   ratingStatus             RatingStatus       @default(NOT_SUBMITTED)
   finalScore               Float?
   scoreCompletedAt         DateTime?
-  scoreThresholdPreference ScoreThresholdPref @default(ANY)
   createdAt                DateTime           @default(now())
   updatedAt                DateTime           @updatedAt
 
@@ -323,7 +355,7 @@ model RatingScore {
   id            String   @id @default(cuid())
   ratingTaskId  String
   scorerUserId  String
-  score         Int      // 1-10 integer
+  score         Float    // 0-10 with 0.5 steps
   createdAt     DateTime @default(now())
 
   ratingTask RatingTask @relation(fields: [ratingTaskId], references: [id], onDelete: Cascade)

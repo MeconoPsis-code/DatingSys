@@ -1,0 +1,254 @@
+import { db } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
+import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
+import {
+  profileFormSchema,
+  CLEAR_COOLDOWN_DAYS,
+  EDIT_COOLDOWN_DAYS,
+} from "@/lib/validations/profile";
+import { success, error } from "@/lib/api-response";
+import { Prisma } from "@prisma/client";
+
+/* ── Helpers ─────────────────────────────────────────── */
+
+function daysSince(date: Date | null | undefined): number | null {
+  if (!date) return null;
+  return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * GET /api/profile/me
+ *
+ * Fetch the current user's profile + preferences + cooldown info + rating info.
+ */
+export async function GET() {
+  const session = await requireAuth();
+
+  const user = await db.user.findUnique({
+    where: { id: session.id },
+    include: {
+      profile: {
+        include: {
+          photos: { orderBy: { order: "asc" }, select: { id: true } },
+        },
+      },
+      preference: true,
+      ratingProfile: true,
+    },
+  });
+
+  // Calculate cooldown info for the UI
+  const clearDays = daysSince(user?.lastProfileClearedAt);
+  const editDays = daysSince(user?.profile?.lastSubmittedAt);
+
+  const cooldowns = {
+    canPublish:
+      clearDays === null || clearDays >= CLEAR_COOLDOWN_DAYS,
+    publishCooldownRemaining:
+      clearDays !== null && clearDays < CLEAR_COOLDOWN_DAYS
+        ? CLEAR_COOLDOWN_DAYS - clearDays
+        : 0,
+    canEdit:
+      editDays === null || editDays >= EDIT_COOLDOWN_DAYS,
+    editCooldownRemaining:
+      editDays !== null && editDays < EDIT_COOLDOWN_DAYS
+        ? EDIT_COOLDOWN_DAYS - editDays
+        : 0,
+  };
+
+  const hasPhotos = (user?.profile?.photos?.length ?? 0) > 0;
+
+  return success({
+    profile: user?.profile ?? null,
+    preference: user?.preference ?? null,
+    cooldowns,
+    hasPhotos,
+    ratingProfile: user?.ratingProfile
+      ? {
+          ratingStatus: user.ratingProfile.ratingStatus,
+          finalScore: user.ratingProfile.finalScore,
+          scoreCompletedAt: user.ratingProfile.scoreCompletedAt,
+        }
+      : null,
+  });
+}
+
+/**
+ * PUT /api/profile/me
+ *
+ * Create or update the current user's profile + preferences.
+ * Enforces cooldown rules. Auto-creates rating task for photo users.
+ */
+export async function PUT(req: Request) {
+  const session = await requireAuth();
+
+  // 1. Parse body
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return error("VALIDATION_ERROR", "无效的请求体", 422);
+  }
+
+  // 2. Validate with Zod
+  const result = profileFormSchema.safeParse(body);
+  if (!result.success) {
+    const firstError = result.error.issues[0];
+    return error(
+      "VALIDATION_ERROR",
+      firstError?.message || "数据验证失败",
+      422
+    );
+  }
+
+  const { profile: profileData, preference: prefData } = result.data;
+  const profileStatus = profileData.status || "DRAFT";
+
+  // 3. Fetch user for cooldown checks
+  const user = await db.user.findUnique({
+    where: { id: session.id },
+    include: { profile: true },
+  });
+
+  // 3a. Check 7-day edit cooldown (only if profile already exists)
+  if (user?.profile?.lastSubmittedAt) {
+    const editDays = daysSince(user.profile.lastSubmittedAt);
+    if (editDays !== null && editDays < EDIT_COOLDOWN_DAYS) {
+      const remaining = EDIT_COOLDOWN_DAYS - editDays;
+      return error(
+        "COOLDOWN",
+        `修改后 ${EDIT_COOLDOWN_DAYS} 天内不能再次修改。还需等待 ${remaining} 天。`,
+        429
+      );
+    }
+  }
+
+  // 3b. Check 30-day clear cooldown (only blocks ACTIVE publish)
+  if (profileStatus === "ACTIVE" && user?.lastProfileClearedAt) {
+    const clearDays = daysSince(user.lastProfileClearedAt);
+    if (clearDays !== null && clearDays < CLEAR_COOLDOWN_DAYS) {
+      const remaining = CLEAR_COOLDOWN_DAYS - clearDays;
+      return error(
+        "COOLDOWN",
+        `清空资料后 ${CLEAR_COOLDOWN_DAYS} 天内不能发布。还需等待 ${remaining} 天。`,
+        429
+      );
+    }
+  }
+
+  // 4. Build profile data (no poolType — single pool)
+  const profileFields = {
+    birthDate: profileData.birthDate,
+    heightCm: profileData.heightCm,
+    weightKg: profileData.weightKg,
+    provinceCode: profileData.provinceCode,
+    cityCode: profileData.cityCode,
+    locationType: profileData.locationType,
+    attribute: profileData.attribute,
+    customAttribute: profileData.customAttribute ?? null,
+    mbti: profileData.mbti || null,
+    selfIntro: profileData.selfIntro ?? null,
+    consentProfileVisibility: profileData.consentProfileVisibility,
+    status: profileStatus,
+    lastSubmittedAt: new Date(),
+    photoMatchPref: profileData.photoMatchPref ?? null,
+    highScoreOnly: profileData.highScoreOnly ?? false,
+  };
+
+  const prefFields = {
+    ageMin: prefData.ageMin,
+    ageMax: prefData.ageMax,
+    heightMinCm: prefData.heightMinCm,
+    heightMaxCm: prefData.heightMaxCm,
+    weightMinKg: prefData.weightMinKg,
+    weightMaxKg: prefData.weightMaxKg,
+    locationScope: prefData.locationScope,
+    expectedProvinceCode: prefData.expectedProvinceCode ?? null,
+    expectedCityCode: prefData.expectedCityCode ?? null,
+    expectedAttributes: prefData.expectedAttributes as unknown as Prisma.InputJsonValue,
+    expectedCustomAttribute: prefData.expectedCustomAttribute ?? null,
+  };
+
+  // 5. Upsert in transaction
+  const [profile, preference] = await db.$transaction([
+    db.profile.upsert({
+      where: { userId: session.id },
+      create: { userId: session.id, ...profileFields },
+      update: profileFields,
+    }),
+    db.preference.upsert({
+      where: { userId: session.id },
+      create: { userId: session.id, ...prefFields },
+      update: prefFields,
+    }),
+  ]);
+
+  // 6. Auto-create rating task for photo users publishing as ACTIVE
+  if (profileStatus === "ACTIVE") {
+    const photoCount = await db.profilePhoto.count({
+      where: { profileId: profile.id },
+    });
+
+    if (photoCount > 0) {
+      // Check if there's already a pending/scoring task
+      const existingTask = await db.ratingTask.findFirst({
+        where: {
+          ratedUserId: session.id,
+          status: { in: ["PENDING", "SCORING"] },
+        },
+      });
+
+      if (!existingTask) {
+        // Get all eligible scorers
+        const scorers = await db.user.findMany({
+          where: {
+            role: { in: ["SCORER", "ADMIN", "SUPER_ADMIN"] },
+            id: { not: session.id }, // can't score yourself
+          },
+          select: { id: true },
+        });
+
+        if (scorers.length > 0) {
+          const firstPhoto = await db.profilePhoto.findFirst({
+            where: { profileId: profile.id },
+            orderBy: { order: "asc" },
+          });
+
+          await db.ratingTask.create({
+            data: {
+              ratedUserId: session.id,
+              photoObjectKey: firstPhoto!.storageKey,
+              status: "PENDING",
+              scorerSnapshot: scorers.map((s) => s.id),
+            },
+          });
+
+          // Upsert RatingProfile
+          await db.ratingProfile.upsert({
+            where: { userId: session.id },
+            create: {
+              userId: session.id,
+              ratingStatus: "PENDING",
+            },
+            update: {
+              ratingStatus: "PENDING",
+            },
+          });
+        }
+      }
+    }
+  }
+
+  // 7. Audit log
+  await logAudit({
+    actorId: session.id,
+    action: AUDIT_ACTIONS.PROFILE_UPDATE,
+    targetType: "Profile",
+    targetId: profile.id,
+    metadata: { status: profileStatus } as Prisma.InputJsonValue,
+    ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
+  });
+
+  return success({ profile, preference });
+}

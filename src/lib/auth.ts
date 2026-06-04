@@ -41,7 +41,7 @@ export async function getSession(): Promise<SessionUser | null> {
     id: user.id,
     role: user.role,
     status: user.status,
-    qqNumber: user.groupMembership?.qqNumber ?? null,
+    qqNumber: user.qqNumber ?? null,
     nickname: user.authIdentities[0]?.nickname ?? null,
     membershipStatus: user.groupMembership?.status ?? null,
     membershipExpiresAt: user.groupMembership?.expiresAt ?? null,

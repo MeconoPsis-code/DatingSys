@@ -1,7 +1,8 @@
-import { PrismaClient, UserRole, Attribute, PoolType, ProfileStatus, MembershipStatus, InviteCodeStatus } from "@prisma/client";
+import { PrismaClient, UserRole, Attribute, ProfileStatus, MembershipStatus, InviteCodeStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { createHash } from "crypto";
+import bcrypt from "bcrypt";
 import "dotenv/config";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -15,12 +16,36 @@ function hashCode(code: string): string {
 async function main() {
   console.log("🌱 Seeding database...");
 
+  // ── 0. Cleanup: delete all data in reverse FK order ──
+  console.log("  🗑️  Cleaning existing data...");
+  await prisma.ratingScore.deleteMany();
+  await prisma.ratingTask.deleteMany();
+  await prisma.ratingProfile.deleteMany();
+  await prisma.profilePhoto.deleteMany();
+  await prisma.matchSnapshot.deleteMany();
+  await prisma.viewRequest.deleteMany();
+  await prisma.report.deleteMany();
+  await prisma.auditLog.deleteMany();
+  await prisma.preference.deleteMany();
+  await prisma.profile.deleteMany();
+  await prisma.penalty.deleteMany();
+  await prisma.inviteCode.deleteMany();
+  await prisma.groupMembership.deleteMany();
+  await prisma.authIdentity.deleteMany();
+  await prisma.user.deleteMany();
+  console.log("  ✅ Cleanup done");
+
+  // Default password for all seed users: "password1"
+  const defaultPasswordHash = await bcrypt.hash("password1", 12);
+
   // ── 1. Super Admin ──────────────────────────────────
   const superAdmin = await prisma.user.upsert({
     where: { id: "seed-super-admin" },
     update: {},
     create: {
       id: "seed-super-admin",
+      qqNumber: "00001",
+      passwordHash: defaultPasswordHash,
       role: UserRole.SUPER_ADMIN,
       authIdentities: {
         create: {
@@ -40,6 +65,8 @@ async function main() {
     update: {},
     create: {
       id: "seed-admin",
+      qqNumber: "00002",
+      passwordHash: defaultPasswordHash,
       role: UserRole.ADMIN,
       authIdentities: {
         create: {
@@ -61,6 +88,8 @@ async function main() {
       update: {},
       create: {
         id: scorerIds[i],
+        qqNumber: `0000${i + 3}`,
+        passwordHash: defaultPasswordHash,
         role: UserRole.SCORER,
         authIdentities: {
           create: {
@@ -140,6 +169,8 @@ async function main() {
       update: {},
       create: {
         id: u.id,
+        qqNumber: u.qqNumber,
+        passwordHash: defaultPasswordHash,
         role: UserRole.USER,
         authIdentities: {
           create: {
@@ -151,7 +182,7 @@ async function main() {
         },
         profile: {
           create: {
-            poolType: PoolType.NORMAL,
+
             birthDate: u.birthDate,
             heightCm: u.heightCm,
             weightKg: u.weightKg,

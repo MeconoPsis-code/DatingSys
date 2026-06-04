@@ -20,6 +20,7 @@ export const AUDIT_ACTIONS = {
   REPORT_CREATE: "REPORT_CREATE",
   PENALTY_CREATE: "PENALTY_CREATE",
   ROLE_CHANGE: "ROLE_CHANGE",
+  PASSCODE_RESET: "PASSCODE_RESET",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
