@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const links = [
   { label: "概览", href: "/dashboard", icon: "📊" },
   { label: "用户", href: "/users", icon: "👥" },
+  { label: "群认证", href: "/memberships", icon: "✅" },
   { label: "邀请码", href: "/invites", icon: "🎟️" },
   { label: "举报", href: "/reports", icon: "🚨" },
   { label: "日志", href: "/audit", icon: "📋" },

@@ -89,9 +89,13 @@ function getAvatarColor(userId: string): string {
 function MutualMatchCard({
   match,
   onCopyQQ,
+  photoRequestStatus,
+  onRequestPhoto,
 }: {
   match: MutualMatch;
   onCopyQQ: (qq: string) => void;
+  photoRequestStatus: string | null;
+  onRequestPhoto: (userId: string) => void;
 }) {
   const [showReport, setShowReport] = useState(false);
 
@@ -152,6 +156,36 @@ function MutualMatchCard({
         </p>
       )}
 
+      {/* Photo request button */}
+      {match.hasPhotos && (
+        <div className="mb-4">
+          {photoRequestStatus === "APPROVED" ? (
+            <Link
+              href={`/matches/${match.userId}`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
+            >
+              ✅ 照片已授权 · 查看完整资料
+            </Link>
+          ) : photoRequestStatus === "PENDING" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+              ⏳ 照片查看申请待审核
+            </span>
+          ) : photoRequestStatus === "REJECTED" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-3 py-1.5 text-xs text-[hsl(0,60%,65%)]">
+              ❌ 照片申请已被拒绝（7天后可重新申请）
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onRequestPhoto(match.userId)}
+              className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400 transition-all hover:bg-purple-500/20"
+            >
+              📷 申请查看照片
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex items-center gap-2">
         {match.qqNumber && (
@@ -203,6 +237,8 @@ export default function MutualMatchesPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [viewRequestMap, setViewRequestMap] = useState<Record<string, string>>({});
+  const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const pageSize = 20;
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -239,9 +275,29 @@ export default function MutualMatchesPage() {
     }
   }, [page]);
 
+  // Load outgoing view requests to track photo approval status
+  const fetchViewRequests = useCallback(async () => {
+    try {
+      const res = await fetch("/api/view-requests?type=outgoing&status=all&pageSize=100");
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, string> = {};
+        for (const req of data.data || []) {
+          if (!map[req.targetUserId] || req.status === "PENDING" || req.status === "APPROVED") {
+            map[req.targetUserId] = req.status;
+          }
+        }
+        setViewRequestMap(map);
+      }
+    } catch {
+      // non-critical
+    }
+  }, []);
+
   useEffect(() => {
     fetchMatches();
-  }, [fetchMatches]);
+    fetchViewRequests();
+  }, [fetchMatches, fetchViewRequests]);
 
   function handleCopyQQ(qq: string) {
     navigator.clipboard.writeText(qq).then(() => {
@@ -253,6 +309,25 @@ export default function MutualMatchesPage() {
   function handlePageChange(newPage: number) {
     setPage(newPage);
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function sendPhotoRequest(targetUserId: string) {
+    try {
+      const res = await fetch("/api/view-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "申请失败");
+      }
+      setViewRequestMap((prev) => ({ ...prev, [targetUserId]: "PENDING" }));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "申请失败");
+    } finally {
+      setConfirmTarget(null);
+    }
   }
 
   return (
@@ -323,6 +398,8 @@ export default function MutualMatchesPage() {
               key={match.userId}
               match={match}
               onCopyQQ={handleCopyQQ}
+              photoRequestStatus={viewRequestMap[match.userId] ?? null}
+              onRequestPhoto={(userId) => setConfirmTarget(userId)}
             />
           ))}
         </div>
@@ -350,6 +427,35 @@ export default function MutualMatchesPage() {
           >
             下一页
           </button>
+        </div>
+      )}
+
+      {/* Photo request confirmation modal */}
+      {confirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
+            <div className="mb-4 text-center text-3xl">📷</div>
+            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">申请查看照片</h3>
+            <p className="mb-5 text-center text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
+              申请一旦通过，<span className="font-medium text-amber-400">对方也将能查看您的照片</span>。照片查看权限是双向的，仅当双方都有照片档案时生效。
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmTarget(null)}
+                className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))]"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => sendPhotoRequest(confirmTarget)}
+                className="flex-1 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                确认申请
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, Attribute, ProfileStatus, MembershipStatus, InviteCodeStatus } from "@prisma/client";
+import { PrismaClient, UserRole, MembershipStatus, InviteCodeStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { createHash } from "crypto";
@@ -16,33 +16,35 @@ function hashCode(code: string): string {
 async function main() {
   console.log("🌱 Seeding database...");
 
-  // ── 0. Cleanup: delete all data in reverse FK order ──
+  // ── 0. Cleanup: TRUNCATE all tables (CASCADE handles FK deps) ──
   console.log("  🗑️  Cleaning existing data...");
-  await prisma.ratingScore.deleteMany();
-  await prisma.ratingTask.deleteMany();
-  await prisma.ratingProfile.deleteMany();
-  await prisma.profilePhoto.deleteMany();
-  await prisma.matchSnapshot.deleteMany();
-  await prisma.viewRequest.deleteMany();
-  await prisma.report.deleteMany();
-  await prisma.auditLog.deleteMany();
-  await prisma.preference.deleteMany();
-  await prisma.profile.deleteMany();
-  await prisma.penalty.deleteMany();
-  await prisma.inviteCode.deleteMany();
-  await prisma.groupMembership.deleteMany();
-  await prisma.authIdentity.deleteMany();
-  await prisma.user.deleteMany();
-  console.log("  ✅ Cleanup done");
+  await prisma.$executeRawUnsafe(`
+    TRUNCATE TABLE
+      rating_scores,
+      rating_tasks,
+      rating_profiles,
+      profile_photos,
+      match_snapshots,
+      view_requests,
+      reports,
+      audit_logs,
+      preferences,
+      profiles,
+      penalties,
+      invite_codes,
+      group_memberships,
+      auth_identities,
+      users
+    CASCADE
+  `);
+  console.log("  ✅ Cleanup done (TRUNCATE CASCADE)");
 
   // Default password for all seed users: "password1"
   const defaultPasswordHash = await bcrypt.hash("password1", 12);
 
   // ── 1. Super Admin ──────────────────────────────────
-  const superAdmin = await prisma.user.upsert({
-    where: { id: "seed-super-admin" },
-    update: {},
-    create: {
+  const superAdmin = await prisma.user.create({
+    data: {
       id: "seed-super-admin",
       qqNumber: "00001",
       passwordHash: defaultPasswordHash,
@@ -60,10 +62,8 @@ async function main() {
   console.log(`  ✅ Super Admin: ${superAdmin.id}`);
 
   // ── 2. Admin ────────────────────────────────────────
-  const admin = await prisma.user.upsert({
-    where: { id: "seed-admin" },
-    update: {},
-    create: {
+  const admin = await prisma.user.create({
+    data: {
       id: "seed-admin",
       qqNumber: "00002",
       passwordHash: defaultPasswordHash,
@@ -83,10 +83,8 @@ async function main() {
   // ── 3. Scorers ──────────────────────────────────────
   const scorerIds = ["seed-scorer-1", "seed-scorer-2"];
   for (let i = 0; i < scorerIds.length; i++) {
-    const scorer = await prisma.user.upsert({
-      where: { id: scorerIds[i] },
-      update: {},
-      create: {
+    const scorer = await prisma.user.create({
+      data: {
         id: scorerIds[i],
         qqNumber: `0000${i + 3}`,
         passwordHash: defaultPasswordHash,
@@ -104,70 +102,18 @@ async function main() {
     console.log(`  ✅ Scorer: ${scorer.id}`);
   }
 
-  // ── 4. Regular Users with Profiles ──────────────────
+  // ── 4. Regular Users (blank state — no profile, no preference) ──
   const users = [
-    {
-      id: "seed-user-1",
-      nickname: "用户小红",
-      qqNumber: "10001",
-      birthDate: new Date("2000-03-15"),
-      heightCm: 165,
-      weightKg: 55,
-      province: "110000",
-      city: "110100",
-      attribute: Attribute.ZERO,
-    },
-    {
-      id: "seed-user-2",
-      nickname: "用户小蓝",
-      qqNumber: "10002",
-      birthDate: new Date("1998-07-20"),
-      heightCm: 178,
-      weightKg: 72,
-      province: "310000",
-      city: "310100",
-      attribute: Attribute.ONE,
-    },
-    {
-      id: "seed-user-3",
-      nickname: "用户小绿",
-      qqNumber: "10003",
-      birthDate: new Date("2001-11-05"),
-      heightCm: 170,
-      weightKg: 63,
-      province: "440000",
-      city: "440100",
-      attribute: Attribute.LEAN_ONE,
-    },
-    {
-      id: "seed-user-4",
-      nickname: "用户小紫",
-      qqNumber: "10004",
-      birthDate: new Date("1999-01-28"),
-      heightCm: 175,
-      weightKg: 68,
-      province: "510000",
-      city: "510100",
-      attribute: Attribute.LEAN_ZERO,
-    },
-    {
-      id: "seed-user-5",
-      nickname: "用户小橙",
-      qqNumber: "10005",
-      birthDate: new Date("2002-09-12"),
-      heightCm: 168,
-      weightKg: 58,
-      province: "330000",
-      city: "330100",
-      attribute: Attribute.SIDE,
-    },
+    { id: "seed-user-1", nickname: "用户小红", qqNumber: "10001" },
+    { id: "seed-user-2", nickname: "用户小蓝", qqNumber: "10002" },
+    { id: "seed-user-3", nickname: "用户小绿", qqNumber: "10003" },
+    { id: "seed-user-4", nickname: "用户小紫", qqNumber: "10004" },
+    { id: "seed-user-5", nickname: "用户小橙", qqNumber: "10005" },
   ];
 
   for (const u of users) {
-    const user = await prisma.user.upsert({
-      where: { id: u.id },
-      update: {},
-      create: {
+    const user = await prisma.user.create({
+      data: {
         id: u.id,
         qqNumber: u.qqNumber,
         passwordHash: defaultPasswordHash,
@@ -180,41 +126,14 @@ async function main() {
             nickname: u.nickname,
           },
         },
-        profile: {
-          create: {
-
-            birthDate: u.birthDate,
-            heightCm: u.heightCm,
-            weightKg: u.weightKg,
-            provinceCode: u.province,
-            cityCode: u.city,
-            attribute: u.attribute,
-            selfIntro: `大家好，我是${u.nickname}`,
-            consentProfileVisibility: true,
-            status: ProfileStatus.ACTIVE,
-          },
-        },
-        preference: {
-          create: {
-            ageMin: 18,
-            ageMax: 35,
-            heightMinCm: 155,
-            heightMaxCm: 190,
-            weightMinKg: 40,
-            weightMaxKg: 90,
-            expectedAttributes: [Attribute.ONE, Attribute.ZERO, Attribute.LEAN_ONE],
-          },
-        },
       },
     });
-    console.log(`  ✅ User: ${user.id} (${u.nickname})`);
+    console.log(`  ✅ User: ${user.id} (${u.nickname}) — blank state`);
   }
 
   // ── 5. Group Memberships ────────────────────────────
-  await prisma.groupMembership.upsert({
-    where: { userId: "seed-user-1" },
-    update: {},
-    create: {
+  await prisma.groupMembership.create({
+    data: {
       userId: "seed-user-1",
       qqNumber: "10001",
       status: MembershipStatus.VERIFIED,
@@ -223,10 +142,8 @@ async function main() {
       verifiedBy: "seed-admin",
     },
   });
-  await prisma.groupMembership.upsert({
-    where: { userId: "seed-user-2" },
-    update: {},
-    create: {
+  await prisma.groupMembership.create({
+    data: {
       userId: "seed-user-2",
       qqNumber: "10002",
       status: MembershipStatus.EXPIRED,
@@ -245,10 +162,8 @@ async function main() {
   ];
 
   for (const c of codes) {
-    await prisma.inviteCode.upsert({
-      where: { codeHash: hashCode(c.code) },
-      update: {},
-      create: {
+    await prisma.inviteCode.create({
+      data: {
         codeHash: hashCode(c.code),
         qqNumber: c.qqNumber,
         status: c.status,

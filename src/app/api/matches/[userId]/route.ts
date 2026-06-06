@@ -34,11 +34,14 @@ export async function GET(
     });
     const isMutual = matchSnapshot?.matchType === 'mutual';
 
+    // Photo approval is bidirectional: if either party approved, both can see photos
     const approvedRequest = await db.viewRequest.findFirst({
       where: {
-        requesterId: session.id,
-        targetUserId: userId,
         status: 'APPROVED',
+        OR: [
+          { requesterId: session.id, targetUserId: userId },
+          { requesterId: userId, targetUserId: session.id },
+        ],
       },
     });
 
@@ -61,14 +64,18 @@ export async function GET(
       return error('NOT_FOUND', '用户不存在或未完善资料', 404);
     }
 
-    // 3. Sign photo URLs
-    const photos = await Promise.all(
-      (targetUser.profile.photos ?? []).map(async (p) => ({
-        id: p.id,
-        url: await getSignedUrl(p.storageKey),
-        order: p.order,
-      }))
-    );
+    // 3. Photos require an approved ViewRequest (even for mutual matches)
+    const photoApproved = !!approvedRequest;
+    let photos: { id: string; url: string; order: number }[] = [];
+    if (photoApproved) {
+      photos = await Promise.all(
+        (targetUser.profile.photos ?? []).map(async (p) => ({
+          id: p.id,
+          url: await getSignedUrl(p.storageKey),
+          order: p.order,
+        }))
+      );
+    }
 
     // 4. Build response
     const p = targetUser.profile;
@@ -88,7 +95,8 @@ export async function GET(
       customAttribute: p.customAttribute,
       mbti: p.mbti,
       selfIntro: p.selfIntro,
-      hasPhotos: photos.length > 0,
+      hasPhotos: (targetUser.profile.photos ?? []).length > 0,
+      photoApproved,
       finalScore: targetUser.ratingProfile?.finalScore ?? null,
       photos,
     });

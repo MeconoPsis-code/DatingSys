@@ -149,6 +149,7 @@ export default function OneWayMatchesPage() {
   const [total, setTotal] = useState(0);
   const [viewRequestMap, setViewRequestMap] = useState<Record<string, string>>({});
   const [requesting, setRequesting] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "i_like" | "likes_me">("all");
   const pageSize = 20;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -210,7 +211,7 @@ export default function OneWayMatchesPage() {
     fetchViewRequests();
   }, [fetchMatches, fetchViewRequests]);
 
-  async function handleRequestView(targetUserId: string) {
+  async function sendViewRequest(targetUserId: string) {
     setRequesting(true);
     try {
       const res = await fetch("/api/view-requests", {
@@ -222,12 +223,12 @@ export default function OneWayMatchesPage() {
       if (!res.ok) {
         throw new Error(data.error?.message || "申请失败");
       }
-      // Update local state
       setViewRequestMap((prev) => ({ ...prev, [targetUserId]: "PENDING" }));
     } catch (err) {
       alert(err instanceof Error ? err.message : "申请失败");
     } finally {
       setRequesting(false);
+      setConfirmTarget(null);
     }
   }
 
@@ -331,7 +332,7 @@ export default function OneWayMatchesPage() {
             <OneWayMatchCard
               key={match.userId}
               match={match}
-              onRequestView={handleRequestView}
+              onRequestView={(userId) => setConfirmTarget(userId)}
               viewRequestStatus={viewRequestMap[match.userId] ?? null}
             />
           ))}
@@ -360,6 +361,35 @@ export default function OneWayMatchesPage() {
           >
             下一页
           </button>
+        </div>
+      )}
+
+      {/* Photo request confirmation modal */}
+      {confirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
+            <div className="mb-4 text-center text-3xl">📷</div>
+            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">申请查看资料</h3>
+            <p className="mb-5 text-center text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
+              申请一旦通过，如果您也有照片档案，<span className="font-medium text-amber-400">对方也将能查看您的照片</span>。照片查看权限是双向的。
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmTarget(null)}
+                className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))]"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => sendViewRequest(confirmTarget)}
+                className="flex-1 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                确认申请
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

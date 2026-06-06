@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { PROVINCES, getCities } from "@/data/regions";
+import { PROVINCES, getCities, isOverseas } from "@/data/regions";
 import { ATTRIBUTE_OPTIONS } from "@/data/attributes";
 import { LOCATION_TYPE_OPTIONS } from "@/data/location-types";
 import { MBTI_OPTIONS } from "@/data/mbti";
@@ -250,8 +250,8 @@ export default function ProfileEditPage() {
     if (!form.weightKg) return "请输入体重";
     const wVal = Number(form.weightKg);
     if (isNaN(wVal) || wVal < 30 || wVal > 200) return "体重范围: 30-200kg";
-    if (!form.provinceCode) return "请选择省份";
-    if (!form.cityCode) return "请选择城市";
+    if (!form.provinceCode) return "请选择地区";
+    if (!form.cityCode) return isOverseas(form.provinceCode) ? "请选择国家" : "请选择城市";
     if (!form.attribute) return "请选择属性";
     if (form.attribute === "OTHER" && !form.customAttribute.trim()) return "请输入自定义属性";
     if (form.attribute === "OTHER" && form.customAttribute.length > 20) return "自定义属性不能超过 20 个字";
@@ -491,27 +491,27 @@ export default function ProfileEditPage() {
       <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
         <h2 className="mb-5 text-base font-semibold text-[hsl(var(--foreground))]">所在地区</h2>
 
-        {/* Province */}
+        {/* Province / Region */}
         <div className="mb-4">
           <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-            省份 <span className="text-[hsl(var(--destructive))]">*</span>
+            {isOverseas(form.provinceCode) ? "地区" : "省份"} <span className="text-[hsl(var(--destructive))]">*</span>
           </label>
           <select
             value={form.provinceCode}
             onChange={(e) => handleProvinceChange(e.target.value)}
             className={form.provinceCode ? SELECT_CLS : SELECT_CLS_EMPTY}
           >
-            <option value="">请选择省份</option>
+            <option value="">请选择地区</option>
             {PROVINCES.map((p) => (
               <option key={p.code} value={p.code}>{p.name}</option>
             ))}
           </select>
         </div>
 
-        {/* City */}
+        {/* City / Country */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-            城市 <span className="text-[hsl(var(--destructive))]">*</span>
+            {isOverseas(form.provinceCode) ? "国家" : "城市"} <span className="text-[hsl(var(--destructive))]">*</span>
           </label>
           <select
             value={form.cityCode}
@@ -519,7 +519,7 @@ export default function ProfileEditPage() {
             disabled={!form.provinceCode}
             className={`${form.cityCode ? SELECT_CLS : SELECT_CLS_EMPTY} disabled:opacity-50`}
           >
-            <option value="">请选择城市</option>
+            <option value="">{isOverseas(form.provinceCode) ? "请选择国家" : "请选择城市"}</option>
             {cities.map((c) => (
               <option key={c.code} value={c.code}>{c.name}</option>
             ))}

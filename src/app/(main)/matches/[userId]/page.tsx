@@ -28,6 +28,7 @@ interface MatchDetail {
   mbti: string | null;
   selfIntro: string | null;
   hasPhotos: boolean;
+  photoApproved: boolean;
   finalScore: number | null;
   photos: MatchPhoto[];
 }
@@ -61,6 +62,8 @@ export default function MatchDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [photoRequesting, setPhotoRequesting] = useState(false);
+  const [photoRequestError, setPhotoRequestError] = useState<string | null>(null);
 
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -90,6 +93,28 @@ export default function MatchDetailPage({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
+  }
+
+  async function handleRequestPhoto() {
+    setPhotoRequesting(true);
+    setPhotoRequestError(null);
+    try {
+      const res = await fetch("/api/view-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "申请失败");
+      }
+      // Refresh detail to reflect new state
+      await fetchDetail();
+    } catch (err) {
+      setPhotoRequestError(err instanceof Error ? err.message : "申请失败");
+    } finally {
+      setPhotoRequesting(false);
+    }
   }
 
   if (loading) {
@@ -177,6 +202,26 @@ export default function MatchDetailPage({
                   ))}
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {/* Photos not approved placeholder */}
+        {detail.hasPhotos && !detail.photoApproved && sortedPhotos.length === 0 && (
+          <div className="flex flex-col items-center justify-center bg-[hsl(var(--secondary)/0.5)] py-12">
+            <div className="mb-3 text-4xl">🔒</div>
+            <p className="mb-1 text-sm font-medium text-[hsl(var(--foreground))]">该用户有照片</p>
+            <p className="mb-4 text-xs text-[hsl(var(--muted-foreground))]">需经对方授权后才能查看</p>
+            <button
+              type="button"
+              onClick={handleRequestPhoto}
+              disabled={photoRequesting}
+              className="rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-2 text-xs font-semibold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+            >
+              {photoRequesting ? "申请中..." : "📷 申请查看照片"}
+            </button>
+            {photoRequestError && (
+              <p className="mt-2 text-xs text-[hsl(0,60%,65%)]">{photoRequestError}</p>
             )}
           </div>
         )}
