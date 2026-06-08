@@ -49,14 +49,29 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await requireAuth();
 
-  // 1. Must have a profile
-  const profile = await db.profile.findUnique({
+  // 1. Find or auto-create a DRAFT profile so photos can be uploaded
+  //    during the profile creation flow (before the form is saved).
+  let profile = await db.profile.findUnique({
     where: { userId: session.id },
     include: { photos: true },
   });
 
   if (!profile) {
-    return error("NOT_FOUND", "请先创建资料再上传照片", 404);
+    // Create a minimal DRAFT profile — placeholder values will be
+    // overwritten when the user submits the profile form (PUT /api/profile/me).
+    profile = await db.profile.create({
+      data: {
+        userId: session.id,
+        birthDate: new Date("2000-01-01"),
+        heightCm: 170,
+        weightKg: 60,
+        provinceCode: "000000",
+        cityCode: "000000",
+        attribute: "OTHER",
+        status: "DRAFT",
+      },
+      include: { photos: true },
+    });
   }
 
   // 2. Check photo limit

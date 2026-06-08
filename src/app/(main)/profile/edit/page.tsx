@@ -676,24 +676,26 @@ export default function ProfileEditPage() {
                   <div className="text-xs text-[hsl(var(--muted-foreground))]">只匹配同样上传了照片的用户</div>
                 </div>
               </label>
-            </div>
 
-            {/* High score only — show when user is scored >= 7 */}
-            <div className="mt-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.highScoreOnly}
-                  onChange={(e) => updateField("highScoreOnly", e.target.checked)}
-                  className="h-4 w-4 rounded accent-[hsl(var(--primary))]"
-                />
-                <span className="text-sm text-[hsl(var(--foreground))]">
-                  仅与高分用户匹配（≥ 7.0 分）
-                </span>
-              </label>
-              <p className="mt-1 ml-7 text-xs text-[hsl(var(--muted-foreground))]">
-                只有你的评分也达到 7.0 分时此选项才会生效
-              </p>
+              {/* High score only — nested under PHOTO_ONLY */}
+              {form.photoMatchPref === "PHOTO_ONLY" && (
+                <div className="ml-7 mt-1 rounded-lg border border-[hsl(var(--border)/0.5)] bg-[hsl(var(--secondary)/0.3)] px-4 py-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.highScoreOnly}
+                      onChange={(e) => updateField("highScoreOnly", e.target.checked)}
+                      className="h-4 w-4 rounded accent-[hsl(var(--primary))]"
+                    />
+                    <span className="text-sm text-[hsl(var(--foreground))]">
+                      仅与高分用户匹配（≥ 7.0 分）
+                    </span>
+                  </label>
+                  <p className="mt-1 ml-7 text-xs text-[hsl(var(--muted-foreground))]">
+                    只有你的评分也达到 7.0 分时此选项才会生效
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

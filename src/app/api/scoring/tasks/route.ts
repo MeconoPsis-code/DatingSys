@@ -26,6 +26,8 @@ export async function GET(req: Request) {
     const tasks = await db.ratingTask.findMany({
       where: {
         status: { in: ["PENDING", "SCORING"] },
+        // Exclude scorer's own profile
+        ratedUserId: { not: session.id },
         scores: {
           none: { scorerUserId: session.id },
         },

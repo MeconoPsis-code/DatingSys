@@ -215,7 +215,7 @@ function MutualMatchCard({
         <div className="mt-3 rounded-lg border border-[hsl(0,60%,50%/0.2)] bg-[hsl(0,60%,50%/0.05)] p-3">
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
             如需举报，请前往
-            <Link href="/reports" className="ml-1 text-[hsl(var(--primary))] underline">
+            <Link href={`/report?target=${match.userId}`} className="ml-1 text-[hsl(var(--primary))] underline">
               举报页面
             </Link>
             提交详细信息。

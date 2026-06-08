@@ -9,6 +9,7 @@ const links = [
   { label: "群认证", href: "/memberships", icon: "✅" },
   { label: "邀请码", href: "/invites", icon: "🎟️" },
   { label: "举报", href: "/reports", icon: "🚨" },
+  { label: "评分", href: "/scoring-admin", icon: "🎯" },
   { label: "日志", href: "/audit", icon: "📋" },
 ];
 

@@ -189,18 +189,39 @@ export default function OneWayMatchesPage() {
   // Load existing view requests
   const fetchViewRequests = useCallback(async () => {
     try {
-      const res = await fetch("/api/view-requests?type=outgoing&status=all&pageSize=100");
-      if (res.ok) {
-        const data = await res.json();
-        const map: Record<string, string> = {};
-        for (const req of data.data || []) {
-          // Keep the most recent status for each target
+      // Fetch outgoing requests (requests I sent)
+      const [outRes, inRes] = await Promise.all([
+        fetch("/api/view-requests?type=outgoing&status=all&pageSize=100"),
+        fetch("/api/view-requests?type=incoming&status=all&pageSize=100"),
+      ]);
+
+      const map: Record<string, string> = {};
+
+      // Outgoing: map by targetUserId
+      if (outRes.ok) {
+        const outData = await outRes.json();
+        for (const req of outData.data || []) {
           if (!map[req.targetUserId] || req.status === "PENDING" || req.status === "APPROVED") {
             map[req.targetUserId] = req.status;
           }
         }
-        setViewRequestMap(map);
       }
+
+      // Incoming APPROVED: if I approved someone's request, I also get access
+      // Map by requesterId so the card for that person shows "APPROVED"
+      if (inRes.ok) {
+        const inData = await inRes.json();
+        for (const req of inData.data || []) {
+          if (req.status === "APPROVED") {
+            // Only set if not already tracked (outgoing takes priority)
+            if (!map[req.requesterId]) {
+              map[req.requesterId] = "APPROVED";
+            }
+          }
+        }
+      }
+
+      setViewRequestMap(map);
     } catch {
       // non-critical
     }
