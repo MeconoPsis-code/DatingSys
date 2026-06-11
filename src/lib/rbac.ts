@@ -35,7 +35,6 @@ export const PERMISSIONS = {
 
   // Admin-level
   MANAGE_USERS: "ADMIN" as UserRole,
-  MANAGE_INVITES: "ADMIN" as UserRole,
   MANAGE_REPORTS: "ADMIN" as UserRole,
   VIEW_AUDIT_LOG: "ADMIN" as UserRole,
 

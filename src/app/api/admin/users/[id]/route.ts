@@ -94,3 +94,62 @@ export async function GET(
     return error("INTERNAL_ERROR", "服务器内部错误", 500);
   }
 }
+
+// ── DELETE /api/admin/users/:id ─────────────────────────
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireRole("SUPER_ADMIN");
+    const { id } = await params;
+
+    // Prevent self-deletion
+    if (id === session.id) {
+      return error("FORBIDDEN", "不能删除自己的账号", 403);
+    }
+
+    const target = await db.user.findUnique({ where: { id } });
+    if (!target) {
+      return error("NOT_FOUND", "用户不存在", 404);
+    }
+
+    // Delete user and all related data in a transaction
+    await db.$transaction([
+      // Records without cascade that reference this user
+      db.ratingScore.deleteMany({ where: { scorerUserId: id } }),
+      db.ratingTask.deleteMany({ where: { ratedUserId: id } }),
+      db.matchSnapshot.deleteMany({ where: { OR: [{ userId: id }, { targetUserId: id }] } }),
+      db.viewRequest.deleteMany({ where: { OR: [{ requesterId: id }, { targetUserId: id }] } }),
+      db.report.deleteMany({ where: { OR: [{ reporterId: id }, { targetUserId: id }] } }),
+      db.penalty.deleteMany({ where: { OR: [{ userId: id }, { createdBy: id }] } }),
+      db.auditLog.deleteMany({ where: { actorUserId: id } }),
+      // Records with cascade will be handled automatically
+      db.user.delete({ where: { id } }),
+    ]);
+
+    // Audit log
+    await db.auditLog.create({
+      data: {
+        actorUserId: session.id,
+        action: "ADMIN_DELETE_USER",
+        targetType: "User",
+        targetId: id,
+        metadata: {
+          qqNumber: target.qqNumber,
+          role: target.role,
+        },
+      },
+    });
+
+    return success({ message: "用户已删除" });
+  } catch (err) {
+    console.error("[admin/users/:id] DELETE error:", err);
+    if (err && typeof err === "object" && "status" in err) {
+      const appErr = err as { code: string; message: string; status: number };
+      return error(appErr.code, appErr.message, appErr.status);
+    }
+    return error("INTERNAL_ERROR", "服务器内部错误", 500);
+  }
+}

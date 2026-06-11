@@ -364,8 +364,13 @@ export default function ProfileEditPage() {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
-    setPendingStatus(status);
-    setConfirmOpen(true);
+    if (status === "DRAFT") {
+      // Draft saves skip confirmation
+      doSubmit("DRAFT");
+    } else {
+      setPendingStatus(status);
+      setConfirmOpen(true);
+    }
   }
 
   // Confirmation text depends on action
@@ -395,7 +400,7 @@ export default function ProfileEditPage() {
       {/* Cooldown warnings */}
       {!cooldowns.canEdit && (
         <div className="rounded-lg border border-[hsl(40,90%,50%/0.3)] bg-[hsl(40,90%,50%/0.08)] px-4 py-3 text-sm text-[hsl(40,90%,70%)]">
-          ⚠️ 修改后 7 天内不能再次修改。还需等待 {cooldowns.editCooldownRemaining} 天。
+          ⚠️ 发布后 {7} 天内不能再次修改发布。还需等待 {cooldowns.editCooldownRemaining} 天。但仍可保存草稿。
         </div>
       )}
       {!cooldowns.canPublish && (
@@ -877,10 +882,10 @@ export default function ProfileEditPage() {
           <button
             type="button"
             onClick={() => handleSubmit("DRAFT")}
-            disabled={submitting || !cooldowns.canEdit}
+            disabled={submitting}
             className="flex-1 rounded-lg border border-[hsl(var(--border))] px-4 py-2.5 text-sm font-semibold text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] active:scale-[0.98] disabled:opacity-50"
           >
-            {submitting ? "保存中..." : !cooldowns.canEdit ? `${cooldowns.editCooldownRemaining}天后可修改` : "保存草稿"}
+            {submitting ? "保存中..." : "保存草稿"}
           </button>
           <button
             type="button"

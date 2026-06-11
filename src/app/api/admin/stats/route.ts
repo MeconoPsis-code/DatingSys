@@ -14,8 +14,8 @@ export async function GET() {
     const [
       totalUsers,
       activeUsers,
-      frozenUsers,
       bannedUsers,
+      warnedUsers,
       verifiedMembers,
       pendingMembers,
       expiredMembers,
@@ -27,8 +27,11 @@ export async function GET() {
     ] = await Promise.all([
       db.user.count({ where: { status: { not: "DELETED" } } }),
       db.user.count({ where: { status: "ACTIVE" } }),
-      db.user.count({ where: { status: "FROZEN" } }),
       db.user.count({ where: { status: "BANNED" } }),
+      db.penalty.groupBy({
+        by: ['userId'],
+        where: { type: 'WARNING', revokedAt: null },
+      }).then((g) => g.length),
       db.groupMembership.count({ where: { status: "VERIFIED" } }),
       db.groupMembership.count({ where: { status: "PENDING" } }),
       db.groupMembership.count({ where: { status: "EXPIRED" } }),
@@ -46,8 +49,8 @@ export async function GET() {
     return success({
       totalUsers,
       activeUsers,
-      frozenUsers,
       bannedUsers,
+      warnedUsers,
       verifiedMembers,
       pendingMembers,
       expiredMembers,

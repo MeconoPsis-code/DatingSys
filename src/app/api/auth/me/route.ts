@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { db } from "@/lib/db";
 
 /**
  * GET /api/auth/me
  *
- * Returns the current authenticated user's info.
+ * Returns the current authenticated user's info plus active penalties.
  */
 export async function GET() {
   const session = await getSession();
@@ -16,6 +17,21 @@ export async function GET() {
     );
   }
 
+  // Query active (unrevoked) penalties for this user
+  const activePenalties = await db.penalty.findMany({
+    where: {
+      userId: session.id,
+      revokedAt: null,
+    },
+    select: {
+      id: true,
+      type: true,
+      reason: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
   return NextResponse.json({
     data: {
       id: session.id,
@@ -25,6 +41,7 @@ export async function GET() {
       nickname: session.nickname,
       membershipStatus: session.membershipStatus,
       membershipExpiresAt: session.membershipExpiresAt,
+      activePenalties,
     },
   });
 }

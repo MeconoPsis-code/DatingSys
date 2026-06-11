@@ -1,7 +1,6 @@
-import { PrismaClient, UserRole, MembershipStatus, InviteCodeStatus } from "@prisma/client";
+import { PrismaClient, UserRole, MembershipStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import { createHash } from "crypto";
 import bcrypt from "bcrypt";
 import "dotenv/config";
 
@@ -9,9 +8,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-function hashCode(code: string): string {
-  return createHash("sha256").update(code).digest("hex");
-}
+
 
 async function main() {
   console.log("🌱 Seeding database...");
@@ -31,7 +28,6 @@ async function main() {
       preferences,
       profiles,
       penalties,
-      invite_codes,
       group_memberships,
       auth_identities,
       users
@@ -154,30 +150,7 @@ async function main() {
   });
   console.log("  ✅ Group memberships created");
 
-  // ── 6. Invite Codes ─────────────────────────────────
-  const codes = [
-    { code: "INVITE-UNUSED-001", status: InviteCodeStatus.UNUSED, qqNumber: "20001" },
-    { code: "INVITE-USED-001", status: InviteCodeStatus.USED, qqNumber: "10001", usedBy: "seed-user-1" },
-    { code: "INVITE-EXPIRED-001", status: InviteCodeStatus.EXPIRED, qqNumber: null },
-  ];
 
-  for (const c of codes) {
-    await prisma.inviteCode.create({
-      data: {
-        codeHash: hashCode(c.code),
-        qqNumber: c.qqNumber,
-        status: c.status,
-        expiresAt: c.status === InviteCodeStatus.EXPIRED
-          ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        createdBy: "seed-admin",
-        usedBy: c.usedBy || null,
-        usedAt: c.usedBy ? new Date() : null,
-        remark: `Seed: ${c.code}`,
-      },
-    });
-  }
-  console.log("  ✅ Invite codes created");
 
   console.log("\n🎉 Seed completed successfully!");
 }

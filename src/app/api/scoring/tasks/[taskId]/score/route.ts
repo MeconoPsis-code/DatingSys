@@ -103,30 +103,51 @@ export async function POST(
       allScores.reduce((sum, s) => sum + s.score, 0) / allScores.length;
     const finalScore = Math.round(avg * 10) / 10; // round to 1 decimal
 
-    // Update task to COMPLETED
-    await db.ratingTask.update({
-      where: { id: taskId },
-      data: {
-        status: "COMPLETED",
-        completedAt: new Date(),
-      },
-    });
+    if (finalScore <= 6) {
+      // Low score — hold for super admin review before publishing
+      await db.ratingTask.update({
+        where: { id: taskId },
+        data: {
+          status: "REVIEW",
+          completedAt: new Date(),
+        },
+      });
 
-    // Upsert RatingProfile with final score
-    await db.ratingProfile.upsert({
-      where: { userId: task.ratedUserId },
-      create: {
-        userId: task.ratedUserId,
-        ratingStatus: "COMPLETED",
-        finalScore,
-        scoreCompletedAt: new Date(),
-      },
-      update: {
-        ratingStatus: "COMPLETED",
-        finalScore,
-        scoreCompletedAt: new Date(),
-      },
-    });
+      await db.ratingProfile.upsert({
+        where: { userId: task.ratedUserId },
+        create: {
+          userId: task.ratedUserId,
+          ratingStatus: "REVIEW",
+        },
+        update: {
+          ratingStatus: "REVIEW",
+        },
+      });
+    } else {
+      // Score > 6 — publish directly
+      await db.ratingTask.update({
+        where: { id: taskId },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+      });
+
+      await db.ratingProfile.upsert({
+        where: { userId: task.ratedUserId },
+        create: {
+          userId: task.ratedUserId,
+          ratingStatus: "COMPLETED",
+          finalScore,
+          scoreCompletedAt: new Date(),
+        },
+        update: {
+          ratingStatus: "COMPLETED",
+          finalScore,
+          scoreCompletedAt: new Date(),
+        },
+      });
+    }
   }
 
   // Audit log

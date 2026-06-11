@@ -41,6 +41,9 @@ export async function GET() {
   const clearDays = daysSince(user?.lastProfileClearedAt);
   const editDays = daysSince(user?.profile?.lastSubmittedAt);
 
+  // hasPublishedBefore: true if the profile was ever published (lastSubmittedAt is set on publish)
+  const hasPublishedBefore = user?.profile?.lastSubmittedAt != null;
+
   const cooldowns = {
     canPublish:
       clearDays === null || clearDays >= CLEAR_COOLDOWN_DAYS,
@@ -49,9 +52,9 @@ export async function GET() {
         ? CLEAR_COOLDOWN_DAYS - clearDays
         : 0,
     canEdit:
-      editDays === null || editDays >= EDIT_COOLDOWN_DAYS,
+      !hasPublishedBefore || editDays === null || editDays >= EDIT_COOLDOWN_DAYS,
     editCooldownRemaining:
-      editDays !== null && editDays < EDIT_COOLDOWN_DAYS
+      hasPublishedBefore && editDays !== null && editDays < EDIT_COOLDOWN_DAYS
         ? EDIT_COOLDOWN_DAYS - editDays
         : 0,
   };
@@ -110,14 +113,17 @@ export async function PUT(req: Request) {
     include: { profile: true },
   });
 
-  // 3a. Check 7-day edit cooldown (only if profile already exists)
-  if (user?.profile?.lastSubmittedAt) {
+  // 3a. Check 7-day edit cooldown (blocks re-publishing if previously published within cooldown)
+  if (
+    profileStatus === "ACTIVE" &&
+    user?.profile?.lastSubmittedAt
+  ) {
     const editDays = daysSince(user.profile.lastSubmittedAt);
     if (editDays !== null && editDays < EDIT_COOLDOWN_DAYS) {
       const remaining = EDIT_COOLDOWN_DAYS - editDays;
       return error(
         "COOLDOWN",
-        `修改后 ${EDIT_COOLDOWN_DAYS} 天内不能再次修改。还需等待 ${remaining} 天。`,
+        `发布后 ${EDIT_COOLDOWN_DAYS} 天内不能再次发布。还需等待 ${remaining} 天。`,
         429
       );
     }
@@ -150,7 +156,7 @@ export async function PUT(req: Request) {
     selfIntro: profileData.selfIntro ?? null,
     consentProfileVisibility: profileData.consentProfileVisibility,
     status: profileStatus,
-    lastSubmittedAt: new Date(),
+    lastSubmittedAt: profileStatus === "ACTIVE" ? new Date() : undefined,
     photoMatchPref: profileData.photoMatchPref ?? null,
     highScoreOnly: profileData.highScoreOnly ?? false,
   };

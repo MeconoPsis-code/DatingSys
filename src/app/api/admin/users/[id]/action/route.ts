@@ -17,7 +17,7 @@ export async function POST(
     const { action, reason } = body as { action: string; reason: string };
 
     // Validate input
-    const validActions = ['warn', 'freeze', 'unfreeze', 'ban', 'unban'];
+    const validActions = ['warn', 'ban', 'unban', 'revoke_warn', 'revoke_ban'];
     if (!validActions.includes(action)) {
       return error('INVALID_ACTION', `无效操作: ${action}`, 400);
     }
@@ -41,6 +41,7 @@ export async function POST(
     }
 
     // Execute action
+    let autoBanned = false;
     switch (action) {
       case 'warn': {
         await db.penalty.create({
@@ -51,44 +52,41 @@ export async function POST(
             createdBy: session.id,
           },
         });
-        break;
-      }
 
-      case 'freeze': {
-        await db.$transaction([
-          db.penalty.create({
+        // Auto-ban if active warnings > 3
+        const activeWarnings = await db.penalty.count({
+          where: { userId: id, type: 'WARNING', revokedAt: null },
+        });
+        if (activeWarnings > 3 && target.status !== 'BANNED') {
+          const autoBanReason = '被警告次数大于3次';
+          await db.$transaction([
+            db.penalty.create({
+              data: {
+                userId: id,
+                type: 'ACCOUNT_BANNED',
+                reason: autoBanReason,
+                createdBy: session.id,
+              },
+            }),
+            db.user.update({
+              where: { id },
+              data: { status: 'BANNED' },
+            }),
+          ]);
+          await db.auditLog.create({
             data: {
-              userId: id,
-              type: 'PROFILE_FROZEN',
-              reason: reason.trim(),
-              createdBy: session.id,
+              actorUserId: session.id,
+              action: 'ADMIN_AUTO_BAN',
+              targetType: 'User',
+              targetId: id,
+              metadata: { reason: autoBanReason, warningCount: activeWarnings },
             },
-          }),
-          db.user.update({
-            where: { id },
-            data: { status: 'FROZEN' },
-          }),
-        ]);
+          });
+          autoBanned = true;
+        }
         break;
       }
 
-      case 'unfreeze': {
-        await db.$transaction([
-          db.penalty.updateMany({
-            where: {
-              userId: id,
-              type: 'PROFILE_FROZEN',
-              revokedAt: null,
-            },
-            data: { revokedAt: new Date() },
-          }),
-          db.user.update({
-            where: { id },
-            data: { status: 'ACTIVE' },
-          }),
-        ]);
-        break;
-      }
 
       case 'ban': {
         await db.$transaction([
@@ -125,6 +123,36 @@ export async function POST(
         ]);
         break;
       }
+
+      case 'revoke_warn': {
+        await db.penalty.updateMany({
+          where: {
+            userId: id,
+            type: 'WARNING',
+            revokedAt: null,
+          },
+          data: { revokedAt: new Date() },
+        });
+        break;
+      }
+
+      case 'revoke_ban': {
+        await db.$transaction([
+          db.penalty.updateMany({
+            where: {
+              userId: id,
+              type: { in: ['ACCOUNT_BANNED', 'WARNING'] },
+              revokedAt: null,
+            },
+            data: { revokedAt: new Date() },
+          }),
+          db.user.update({
+            where: { id },
+            data: { status: 'ACTIVE' },
+          }),
+        ]);
+        break;
+      }
     }
 
     // Create audit log
@@ -140,13 +168,18 @@ export async function POST(
 
     const actionLabels: Record<string, string> = {
       warn: '警告已发出',
-      freeze: '账号已冻结',
-      unfreeze: '账号已解冻',
       ban: '账号已封禁',
       unban: '账号已解封',
+      revoke_warn: '警告已撤销',
+      revoke_ban: '封禁已撤销',
     };
 
-    return success({ message: actionLabels[action] || '操作成功' });
+    let message = actionLabels[action] || '操作成功';
+    if (autoBanned) {
+      message += '，该用户被警告次数大于3次，已被自动封禁';
+    }
+
+    return success({ message });
   } catch (err) {
     console.error('[admin/users/:id/action] POST error:', err);
     if (err && typeof err === 'object' && 'status' in err) {

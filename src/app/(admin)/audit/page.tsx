@@ -36,7 +36,6 @@ const TARGET_TYPES = [
   { label: "资料", value: "Profile" },
   { label: "举报", value: "Report" },
   { label: "群认证", value: "GroupMembership" },
-  { label: "邀请码", value: "InviteCode" },
 ];
 
 function formatDateTime(d: string) {

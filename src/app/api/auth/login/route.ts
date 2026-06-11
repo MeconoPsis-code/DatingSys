@@ -35,9 +35,9 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Check user status
-  if (user.status === "FROZEN" || user.status === "BANNED") {
+  if (user.status === "BANNED") {
     return NextResponse.json(
-      { error: { code: "ACCOUNT_LOCKED", message: "账号已被冻结或封禁" } },
+      { error: { code: "ACCOUNT_LOCKED", message: "账号已被封禁，请联系管理员" } },
       { status: 403 }
     );
   }

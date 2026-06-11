@@ -10,7 +10,6 @@ import { usePathname } from "next/navigation";
 
 interface MutualMatch {
   userId: string;
-  qqNumber: string | null;
   nickname: string | null;
   age: number;
   heightCm: number;
@@ -88,16 +87,24 @@ function getAvatarColor(userId: string): string {
 
 function MutualMatchCard({
   match,
-  onCopyQQ,
-  photoRequestStatus,
-  onRequestPhoto,
+  viewRequestStatus,
+  onRequestView,
+  viewDetail,
 }: {
   match: MutualMatch;
-  onCopyQQ: (qq: string) => void;
-  photoRequestStatus: string | null;
-  onRequestPhoto: (userId: string) => void;
+  viewRequestStatus: string | null;
+  onRequestView: (userId: string) => void;
+  viewDetail: { qqNumber: string | null } | null;
 }) {
   const [showReport, setShowReport] = useState(false);
+  const [qqCopied, setQqCopied] = useState(false);
+
+  function handleCopyQQ(qq: string) {
+    navigator.clipboard.writeText(qq).then(() => {
+      setQqCopied(true);
+      setTimeout(() => setQqCopied(false), 1500);
+    });
+  }
 
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 transition-all hover:border-[hsl(var(--primary)/0.3)]">
@@ -156,50 +163,58 @@ function MutualMatchCard({
         </p>
       )}
 
-      {/* Photo request button */}
-      {match.hasPhotos && (
-        <div className="mb-4">
-          {photoRequestStatus === "APPROVED" ? (
-            <Link
-              href={`/matches/${match.userId}`}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
-            >
-              ✅ 照片已授权 · 查看完整资料
-            </Link>
-          ) : photoRequestStatus === "PENDING" ? (
-            <span className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))]">
-              ⏳ 照片查看申请待审核
-            </span>
-          ) : photoRequestStatus === "REJECTED" ? (
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-3 py-1.5 text-xs text-[hsl(0,60%,65%)]">
-              ❌ 照片申请已被拒绝（7天后可重新申请）
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onRequestPhoto(match.userId)}
-              className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400 transition-all hover:bg-purple-500/20"
-            >
-              📷 申请查看照片
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        {match.qqNumber && (
+      {/* View request / QQ reveal section */}
+      <div className="mb-4">
+        {viewRequestStatus === "APPROVED" ? (
+          <div className="space-y-2">
+            {/* QQ number revealed */}
+            {viewDetail?.qqNumber && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyQQ(viewDetail.qqNumber!)}
+                  className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  QQ: {viewDetail.qqNumber}
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </button>
+                {qqCopied && (
+                  <span className="text-[10px] text-emerald-400">已复制</span>
+                )}
+              </div>
+            )}
+            {match.hasPhotos && (
+              <Link
+                href={`/matches/${match.userId}`}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
+              >
+                📷 查看照片与完整资料
+              </Link>
+            )}
+          </div>
+        ) : viewRequestStatus === "PENDING" ? (
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+            ⏳ 资料查看申请待审核
+          </span>
+        ) : viewRequestStatus === "REJECTED" ? (
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-3 py-1.5 text-xs text-[hsl(0,60%,65%)]">
+            ❌ 申请已被拒绝（7天后可重新申请）
+          </span>
+        ) : (
           <button
             type="button"
-            onClick={() => onCopyQQ(match.qqNumber!)}
-            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
+            onClick={() => onRequestView(match.userId)}
+            className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400 transition-all hover:bg-purple-500/20"
           >
-            QQ: {match.qqNumber}
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
+            🔓 申请查看完整资料（QQ号+照片）
           </button>
         )}
+      </div>
+
+      {/* Report */}
+      <div className="flex items-center gap-2">
         <div className="flex-1" />
         <button
           type="button"
@@ -236,8 +251,8 @@ export default function MutualMatchesPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
-  const [copied, setCopied] = useState(false);
   const [viewRequestMap, setViewRequestMap] = useState<Record<string, string>>({});
+  const [approvedDetails, setApprovedDetails] = useState<Record<string, { qqNumber: string | null }>>({});
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const pageSize = 20;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -275,7 +290,7 @@ export default function MutualMatchesPage() {
     }
   }, [page]);
 
-  // Load outgoing view requests to track photo approval status
+  // Load outgoing view requests to track approval status
   const fetchViewRequests = useCallback(async () => {
     try {
       const res = await fetch("/api/view-requests?type=outgoing&status=all&pageSize=100");
@@ -294,24 +309,39 @@ export default function MutualMatchesPage() {
     }
   }, []);
 
+  // For approved requests, fetch the target user's QQ from the detail endpoint
+  useEffect(() => {
+    const approvedUserIds = Object.entries(viewRequestMap)
+      .filter(([, status]) => status === "APPROVED")
+      .map(([userId]) => userId);
+
+    for (const userId of approvedUserIds) {
+      if (approvedDetails[userId]) continue; // already fetched
+      fetch(`/api/matches/${userId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.data?.qqNumber !== undefined) {
+            setApprovedDetails((prev) => ({
+              ...prev,
+              [userId]: { qqNumber: data.data.qqNumber },
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [viewRequestMap, approvedDetails]);
+
   useEffect(() => {
     fetchMatches();
     fetchViewRequests();
   }, [fetchMatches, fetchViewRequests]);
-
-  function handleCopyQQ(qq: string) {
-    navigator.clipboard.writeText(qq).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
 
   function handlePageChange(newPage: number) {
     setPage(newPage);
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function sendPhotoRequest(targetUserId: string) {
+  async function sendViewRequest(targetUserId: string) {
     try {
       const res = await fetch("/api/view-requests", {
         method: "POST",
@@ -335,13 +365,6 @@ export default function MutualMatchesPage() {
       <h1 className="text-2xl font-bold">匹配结果</h1>
 
       <MatchTabs />
-
-      {/* Copied toast */}
-      {copied && (
-        <div className="fixed right-4 top-4 z-50 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-white shadow-lg">
-          ✅ QQ号已复制
-        </div>
-      )}
 
       {/* Error */}
       {error && (
@@ -397,9 +420,9 @@ export default function MutualMatchesPage() {
             <MutualMatchCard
               key={match.userId}
               match={match}
-              onCopyQQ={handleCopyQQ}
-              photoRequestStatus={viewRequestMap[match.userId] ?? null}
-              onRequestPhoto={(userId) => setConfirmTarget(userId)}
+              viewRequestStatus={viewRequestMap[match.userId] ?? null}
+              onRequestView={(userId) => setConfirmTarget(userId)}
+              viewDetail={approvedDetails[match.userId] ?? null}
             />
           ))}
         </div>
@@ -430,14 +453,15 @@ export default function MutualMatchesPage() {
         </div>
       )}
 
-      {/* Photo request confirmation modal */}
+      {/* View request confirmation modal */}
       {confirmTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
-            <div className="mb-4 text-center text-3xl">📷</div>
-            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">申请查看照片</h3>
+            <div className="mb-4 text-center text-3xl">🔓</div>
+            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">申请查看完整资料</h3>
             <p className="mb-5 text-center text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
-              申请一旦通过，<span className="font-medium text-amber-400">对方也将能查看您的照片</span>。照片查看权限是双向的，仅当双方都有照片档案时生效。
+              申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号和照片</span>。
+              同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号和照片</span>。资料查看权限是双向的。
             </p>
             <div className="flex gap-3">
               <button
@@ -449,7 +473,7 @@ export default function MutualMatchesPage() {
               </button>
               <button
                 type="button"
-                onClick={() => sendPhotoRequest(confirmTarget)}
+                onClick={() => sendViewRequest(confirmTarget)}
                 className="flex-1 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 确认申请

@@ -19,7 +19,6 @@ const PUBLIC_PATHS = [
 const ADMIN_PATHS = [
   "/dashboard",
   "/users",
-  "/invites",
   "/reports",
   "/audit",
   "/api/admin",

@@ -6,6 +6,13 @@ import Link from "next/link";
 
 /* ─── Types ──────────────────────────────────────────── */
 
+interface PenaltyInfo {
+  id: string;
+  type: string;
+  reason: string;
+  createdAt: string;
+}
+
 interface MeData {
   id: string;
   role: string;
@@ -14,6 +21,7 @@ interface MeData {
   nickname: string | null;
   membershipStatus: string | null;
   membershipExpiresAt: string | null;
+  activePenalties: PenaltyInfo[];
 }
 
 /* ─── Constants ──────────────────────────────────────── */
@@ -27,7 +35,6 @@ const ROLE_LABELS: Record<string, string> = {
 
 const STATUS_INFO: Record<string, { label: string; cls: string }> = {
   ACTIVE: { label: "正常", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-  FROZEN: { label: "已冻结", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
   BANNED: { label: "已封禁", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
 };
 
@@ -324,6 +331,47 @@ export default function MePage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
+      {/* Warning / Ban Notices */}
+      {me.activePenalties && me.activePenalties.length > 0 && (
+        <div className="space-y-3">
+          {me.activePenalties.map((p) => (
+            <div
+              key={p.id}
+              className={`rounded-2xl border p-5 ${
+                p.type === "ACCOUNT_BANNED"
+                  ? "border-red-500/30 bg-red-500/10"
+                  : "border-amber-500/30 bg-amber-500/10"
+              }`}
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-lg">
+                  {p.type === "ACCOUNT_BANNED" ? "🚫" : "⚠️"}
+                </span>
+                <span
+                  className={`text-sm font-bold ${
+                    p.type === "ACCOUNT_BANNED" ? "text-red-400" : "text-amber-400"
+                  }`}
+                >
+                  {p.type === "ACCOUNT_BANNED" ? "账号已被封禁" : "警告通知"}
+                </span>
+                <span className="ml-auto text-[10px] text-[hsl(var(--muted-foreground))]">
+                  {new Date(p.createdAt).toLocaleDateString("zh-CN")}
+                </span>
+              </div>
+              <p
+                className={`text-sm ${
+                  p.type === "ACCOUNT_BANNED"
+                    ? "text-red-300/80"
+                    : "text-amber-300/80"
+                }`}
+              >
+                原因：{p.reason}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] text-2xl font-bold text-white shadow-lg shadow-[hsl(262,83%,58%/0.25)]">

@@ -228,19 +228,44 @@ export async function GET(req: Request) {
 
     // 13. Format response based on match type
     if (type === 'one_way') {
-      // Desensitized one-way response
+      // Desensitized one-way response — show match indicators, not actual values
       const data = pageItems.map((m) => {
         const p = m.candidate.profile!;
-        const age = ageFromDate(p.birthDate);
+        const cAge = ageFromDate(p.birthDate);
         const direction =
           m.matchType === 'one_way_ab' ? 'i_like' : 'likes_me';
 
+        // Check if candidate meets the CURRENT USER's preferences
+        const ageMatch =
+          cAge >= preference.ageMin && cAge <= preference.ageMax;
+        const heightMatch =
+          p.heightCm >= preference.heightMinCm &&
+          p.heightCm <= preference.heightMaxCm;
+        const weightMatch =
+          p.weightKg >= preference.weightMinKg &&
+          p.weightKg <= preference.weightMaxKg;
+        const attributeMatch = (preference.expectedAttributes as string[]).includes(
+          p.attribute
+        );
+
+        let locationMatch = true;
+        if (preference.locationScope === 'CITY') {
+          const targetCity =
+            preference.expectedCityCode || profile.cityCode;
+          locationMatch = p.cityCode === targetCity;
+        } else if (preference.locationScope === 'PROVINCE') {
+          const targetProv =
+            preference.expectedProvinceCode || profile.provinceCode;
+          locationMatch = p.provinceCode === targetProv;
+        }
+
         return {
           userId: m.userId,
-          ageRange: getAgeRange(age),
-          province: p.provinceCode,
-          heightRange: getHeightRange(p.heightCm),
-          attribute: p.attribute,
+          ageMatch,
+          heightMatch,
+          weightMatch,
+          locationMatch,
+          attributeMatch,
           hasPhotos: p.photos.length > 0,
           direction,
           relevanceScore: m.relevanceScore,
@@ -250,7 +275,7 @@ export async function GET(req: Request) {
       return paginated(data, total, page, pageSize);
     }
 
-    // Mutual match — full profile response
+    // Mutual match — full profile except qqNumber and photos
     const data = pageItems.map((m) => {
       const c = m.candidate;
       const p = c.profile!;
@@ -258,7 +283,6 @@ export async function GET(req: Request) {
 
       return {
         userId: m.userId,
-        qqNumber: c.qqNumber,
         nickname: c.authIdentities[0]?.nickname ?? null,
         age,
         heightCm: p.heightCm,

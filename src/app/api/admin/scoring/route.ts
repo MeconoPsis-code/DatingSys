@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { error, paginated } from '@/lib/api-response';
+import { getSignedUrl } from '@/lib/storage';
 
 // ── GET /api/admin/scoring — admin scoring management ──
 
@@ -24,6 +25,12 @@ export async function GET(req: Request) {
           ratedUser: {
             include: {
               authIdentities: { select: { nickname: true }, take: 1 },
+              ratingProfile: { select: { finalScore: true } },
+              profile: {
+                include: {
+                  photos: { orderBy: { order: 'asc' } },
+                },
+              },
             },
           },
           scores: {
@@ -43,30 +50,66 @@ export async function GET(req: Request) {
       }),
     ]);
 
-    const data = tasks.map((t) => {
-      const scorerSnapshot = (t.scorerSnapshot as string[]) || [];
-      return {
-        id: t.id,
-        ratedUserId: t.ratedUserId,
-        ratedUserNickname: t.ratedUser.authIdentities[0]?.nickname ?? null,
-        ratedUserQQ: t.ratedUser.qqNumber,
-        photoObjectKey: t.photoObjectKey,
-        status: t.status,
-        scorerSnapshot,
-        scores: t.scores.map((s) => ({
-          id: s.id,
-          scorerUserId: s.scorerUserId,
-          scorerNickname: s.scorer.authIdentities[0]?.nickname ?? null,
-          scorerQQ: s.scorer.qqNumber,
-          score: s.score,
-          createdAt: s.createdAt,
-        })),
-        scoredCount: t.scores.length,
-        totalScorers: scorerSnapshot.length,
-        completedAt: t.completedAt,
-        createdAt: t.createdAt,
-      };
+    // Fetch ALL current eligible scorers so the admin sees the complete list
+    const allEligibleScorers = await db.user.findMany({
+      where: {
+        role: { in: ['SCORER', 'ADMIN', 'SUPER_ADMIN'] },
+        status: 'ACTIVE',
+      },
+      include: { authIdentities: { select: { nickname: true }, take: 1 } },
     });
+
+    const scorerNameMap: Record<string, { nickname: string | null; qq: string | null }> = {};
+    for (const u of allEligibleScorers) {
+      scorerNameMap[u.id] = {
+        nickname: u.authIdentities[0]?.nickname ?? null,
+        qq: u.qqNumber,
+      };
+    }
+
+    const data = await Promise.all(
+      tasks.map(async (t) => {
+        const photos = t.ratedUser.profile?.photos ?? [];
+
+        // Use all eligible scorers minus the rated user as the full scorer list
+        const fullScorerList = allEligibleScorers
+          .filter((s) => s.id !== t.ratedUserId)
+          .map((s) => s.id);
+
+        const photosWithUrls = await Promise.all(
+          photos.map(async (p) => ({
+            id: p.id,
+            order: p.order,
+            url: await getSignedUrl(p.storageKey, 3600),
+          }))
+        );
+
+        return {
+          id: t.id,
+          ratedUserId: t.ratedUserId,
+          ratedUserNickname: t.ratedUser.authIdentities[0]?.nickname ?? null,
+          ratedUserQQ: t.ratedUser.qqNumber,
+          photoObjectKey: t.photoObjectKey,
+          status: t.status,
+          scorerSnapshot: fullScorerList,
+          scorerNames: scorerNameMap,
+          scores: t.scores.map((s) => ({
+            id: s.id,
+            scorerUserId: s.scorerUserId,
+            scorerNickname: s.scorer.authIdentities[0]?.nickname ?? null,
+            scorerQQ: s.scorer.qqNumber,
+            score: s.score,
+            createdAt: s.createdAt,
+          })),
+          scoredCount: t.scores.length,
+          totalScorers: fullScorerList.length,
+          photos: photosWithUrls,
+          completedAt: t.completedAt,
+          createdAt: t.createdAt,
+          finalScore: t.ratedUser.ratingProfile?.finalScore ?? null,
+        };
+      })
+    );
 
     return paginated(data, total, page, pageSize);
   } catch (err) {

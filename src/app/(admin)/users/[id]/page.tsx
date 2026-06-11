@@ -2,6 +2,8 @@
 
 import { useState, useEffect, use } from "react";
 import Link from "next/link";
+import { getAttributeLabel } from "@/data/attributes";
+import type { Attribute } from "@prisma/client";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -70,14 +72,12 @@ const ROLE_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  FROZEN: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   BANNED: "bg-red-500/15 text-red-400 border-red-500/30",
   DELETED: "bg-gray-500/15 text-gray-400 border-gray-500/30",
 };
 
 const PENALTY_LABELS: Record<string, { label: string; icon: string }> = {
   WARNING: { label: "警告", icon: "⚠️" },
-  PROFILE_FROZEN: { label: "冻结", icon: "🧊" },
   ACCOUNT_BANNED: { label: "封禁", icon: "🚫" },
 };
 
@@ -117,12 +117,15 @@ function ActionPanel({
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
+  const hasActiveWarnings = user.penalties.some(
+    (p) => p.type === "WARNING" && !p.revokedAt
+  );
+
   const actions = [
-    { value: "warn", label: "⚠️ 警告", show: true },
-    { value: "freeze", label: "🧊 冻结", show: user.status === "ACTIVE" },
-    { value: "unfreeze", label: "🔓 解冻", show: user.status === "FROZEN" },
+    { value: "warn", label: "⚠️ 警告", show: user.status !== "BANNED" },
     { value: "ban", label: "🚫 封禁", show: user.status !== "BANNED" },
-    { value: "unban", label: "✅ 解封", show: user.status === "BANNED" },
+    { value: "revoke_warn", label: "↩️ 撤销警告", show: hasActiveWarnings && user.status !== "BANNED" },
+    { value: "revoke_ban", label: "↩️ 撤销封禁", show: user.status === "BANNED" },
   ].filter((a) => a.show);
 
   async function handleSubmit() {
@@ -289,7 +292,7 @@ export default function AdminUserDetailPage({
               <InfoRow label="出生日期" value={formatDateTime(user.profile.birthDate)?.split(" ")[0]} />
               <InfoRow label="身高" value={`${user.profile.heightCm} cm`} />
               <InfoRow label="体重" value={`${user.profile.weightKg} kg`} />
-              <InfoRow label="属性" value={user.profile.attribute} />
+              <InfoRow label="属性" value={getAttributeLabel(user.profile.attribute as Attribute, user.profile.customAttribute)} />
               <InfoRow label="MBTI" value={user.profile.mbti || "—"} />
               <InfoRow label="自我介绍" value={user.profile.selfIntro || "—"} />
             </div>

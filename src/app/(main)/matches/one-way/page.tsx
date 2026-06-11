@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getProvinceName } from "@/data/regions";
-import { ATTRIBUTE_LABELS } from "@/data/attributes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -10,10 +8,11 @@ import { usePathname } from "next/navigation";
 
 interface OneWayMatch {
   userId: string;
-  ageRange: string;
-  province: string;
-  heightRange: string;
-  attribute: string;
+  ageMatch: boolean;
+  heightMatch: boolean;
+  weightMatch: boolean;
+  locationMatch: boolean;
+  attributeMatch: boolean;
   hasPhotos: boolean;
   direction: "i_like" | "likes_me";
   relevanceScore: number;
@@ -48,10 +47,20 @@ function MatchTabs() {
   );
 }
 
-/* ─── Helpers ────────────────────────────────────────── */
+/* ─── Match Indicator ────────────────────────────────── */
 
-function getAttrLabel(attr: string): string {
-  return (ATTRIBUTE_LABELS as Record<string, string>)[attr] ?? attr;
+function MatchBadge({ icon, label, match }: { icon: string; label: string; match: boolean }) {
+  return (
+    <span
+      className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
+        match
+          ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+          : "border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.08)] text-[hsl(0,60%,65%)]"
+      }`}
+    >
+      {icon} {label} {match ? "符合" : "不符合"}
+    </span>
+  );
 }
 
 /* ─── One-Way Match Card ─────────────────────────────── */
@@ -66,11 +75,12 @@ function OneWayMatchCard({
   viewRequestStatus: string | null; // null, "PENDING", "APPROVED", "REJECTED"
 }) {
   const isILike = match.direction === "i_like";
+  const matchCount = [match.ageMatch, match.heightMatch, match.weightMatch, match.locationMatch, match.attributeMatch].filter(Boolean).length;
 
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 transition-all hover:border-[hsl(var(--primary)/0.3)]">
       {/* Direction badge */}
-      <div className="mb-3">
+      <div className="mb-3 flex items-center gap-2">
         <span
           className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
             isILike
@@ -80,22 +90,18 @@ function OneWayMatchCard({
         >
           {isILike ? "→ 我符合对方条件" : "← 对方符合我的条件"}
         </span>
+        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
+          {matchCount}/5 项符合我的偏好
+        </span>
       </div>
 
-      {/* Blurred stats */}
+      {/* Match indicator badges */}
       <div className="mb-4 flex flex-wrap gap-2">
-        <span className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
-          🎂 {match.ageRange} 岁
-        </span>
-        <span className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
-          📍 {getProvinceName(match.province)}
-        </span>
-        <span className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
-          📏 {match.heightRange} cm
-        </span>
-        <span className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
-          {getAttrLabel(match.attribute)}
-        </span>
+        <MatchBadge icon="🎂" label="年龄" match={match.ageMatch} />
+        <MatchBadge icon="📏" label="身高" match={match.heightMatch} />
+        <MatchBadge icon="⚖️" label="体重" match={match.weightMatch} />
+        <MatchBadge icon="📍" label="地区" match={match.locationMatch} />
+        <MatchBadge icon="💫" label="属性" match={match.attributeMatch} />
         {match.hasPhotos && (
           <span className="rounded-full border border-purple-500/30 bg-purple-500/15 px-2 py-0.5 text-[10px] font-medium text-purple-400">
             📷 有照片
@@ -107,7 +113,7 @@ function OneWayMatchCard({
       <div>
         {viewRequestStatus === "PENDING" && (
           <span className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))]">
-            ⏳ 查看申请待审核
+            ⏳ 资料查看申请待审核
           </span>
         )}
         {viewRequestStatus === "APPROVED" && (
@@ -115,7 +121,7 @@ function OneWayMatchCard({
             href={`/matches/${match.userId}`}
             className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
           >
-            ✅ 已通过 · 查看资料
+            ✅ 已通过 · 查看完整资料
           </Link>
         )}
         {viewRequestStatus === "REJECTED" && (
@@ -129,7 +135,7 @@ function OneWayMatchCard({
             onClick={() => onRequestView(match.userId)}
             className="rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-2 text-xs font-semibold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
-            申请查看资料
+            🔓 申请查看完整资料
           </button>
         )}
       </div>
@@ -385,14 +391,15 @@ export default function OneWayMatchesPage() {
         </div>
       )}
 
-      {/* Photo request confirmation modal */}
+      {/* View request confirmation modal */}
       {confirmTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
-            <div className="mb-4 text-center text-3xl">📷</div>
-            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">申请查看资料</h3>
+            <div className="mb-4 text-center text-3xl">🔓</div>
+            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">申请查看完整资料</h3>
             <p className="mb-5 text-center text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
-              申请一旦通过，如果您也有照片档案，<span className="font-medium text-amber-400">对方也将能查看您的照片</span>。照片查看权限是双向的。
+              申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号和照片</span>。
+              同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号和照片</span>。资料查看权限是双向的。
             </p>
             <div className="flex gap-3">
               <button

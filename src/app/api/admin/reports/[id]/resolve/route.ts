@@ -17,7 +17,7 @@ export async function POST(
     const { verdict, resolution, action: penaltyAction, reason } = body as {
       verdict: 'accepted' | 'rejected';
       resolution: string;
-      action?: 'warn' | 'freeze' | 'ban' | null;
+      action?: 'warn' | 'ban' | null;
       reason?: string;
     };
 
@@ -73,23 +73,6 @@ export async function POST(
                 createdBy: session.id,
               },
             });
-            break;
-          }
-          case 'freeze': {
-            await db.$transaction([
-              db.penalty.create({
-                data: {
-                  userId: target.id,
-                  type: 'PROFILE_FROZEN',
-                  reason: penaltyReason,
-                  createdBy: session.id,
-                },
-              }),
-              db.user.update({
-                where: { id: target.id },
-                data: { status: 'FROZEN' },
-              }),
-            ]);
             break;
           }
           case 'ban': {

@@ -54,7 +54,6 @@ export async function getSession(): Promise<SessionUser | null> {
 export async function requireAuth(): Promise<SessionUser> {
   const session = await getSession();
   if (!session) throw new AppError("UNAUTHORIZED");
-  if (session.status === "FROZEN") throw new AppError("FORBIDDEN", "账号已被冻结");
   if (session.status === "BANNED") throw new AppError("FORBIDDEN", "账号已被封禁");
   return session;
 }

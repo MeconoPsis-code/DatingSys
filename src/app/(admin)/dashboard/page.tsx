@@ -7,7 +7,7 @@ import { useState, useEffect } from "react";
 interface DashboardStats {
   totalUsers: number;
   activeUsers: number;
-  frozenUsers: number;
+  warnedUsers: number;
   bannedUsers: number;
   verifiedMembers: number;
   pendingMembers: number;
@@ -108,24 +108,9 @@ export default function DashboardPage() {
         <SectionHeader title="用户概况" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon="👥" label="总用户数" value={stats.totalUsers} />
-          <StatCard
-            icon="✅"
-            label="活跃用户"
-            value={stats.activeUsers}
-            accent="text-emerald-400"
-          />
-          <StatCard
-            icon="🧊"
-            label="已冻结"
-            value={stats.frozenUsers}
-            accent="text-blue-400"
-          />
-          <StatCard
-            icon="🚫"
-            label="已封禁"
-            value={stats.bannedUsers}
-            accent="text-red-400"
-          />
+          <StatCard icon="✅" label="活跃用户" value={stats.activeUsers} accent="text-emerald-400" />
+          <StatCard icon="⚠️" label="被警告" value={stats.warnedUsers} accent="text-amber-400" />
+          <StatCard icon="🚫" label="已封禁" value={stats.bannedUsers} accent="text-red-400" />
         </div>
       </div>
 
