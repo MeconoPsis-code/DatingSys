@@ -71,14 +71,36 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  ACTIVE: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  BANNED: "bg-red-500/15 text-red-400 border-red-500/30",
-  DELETED: "bg-gray-500/15 text-gray-400 border-gray-500/30",
+  ACTIVE: "bg-[#f6ffed] text-[#389e0d] border-[#b7eb8f]",
+  BANNED: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]",
+  DELETED: "bg-[#f5f5f5] text-[#595959] border-[#d9d9d9]",
 };
 
-const PENALTY_LABELS: Record<string, { label: string; icon: string }> = {
-  WARNING: { label: "警告", icon: "⚠️" },
-  ACCOUNT_BANNED: { label: "封禁", icon: "🚫" },
+const WARNING_ICON = (
+  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-500">
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <circle cx="12" cy="17" r="1" style={{ fill: "currentColor", stroke: "none" }} />
+  </svg>
+);
+
+const BAN_ICON = (
+  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-red-500">
+    <circle cx="12" cy="12" r="10" />
+    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+  </svg>
+);
+
+const REVOKE_ICON = (
+  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-blue-500">
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h12a5 5 0 0 1 5 5v3" />
+  </svg>
+);
+
+const PENALTY_LABELS: Record<string, { label: string; icon: React.ReactNode }> = {
+  WARNING: { label: "警告", icon: WARNING_ICON },
+  ACCOUNT_BANNED: { label: "封禁", icon: BAN_ICON },
 };
 
 function formatDateTime(d: string | null) {
@@ -122,10 +144,10 @@ function ActionPanel({
   );
 
   const actions = [
-    { value: "warn", label: "⚠️ 警告", show: user.status !== "BANNED" },
-    { value: "ban", label: "🚫 封禁", show: user.status !== "BANNED" },
-    { value: "revoke_warn", label: "↩️ 撤销警告", show: hasActiveWarnings && user.status !== "BANNED" },
-    { value: "revoke_ban", label: "↩️ 撤销封禁", show: user.status === "BANNED" },
+    { value: "warn", label: "警告", icon: WARNING_ICON, show: user.status !== "BANNED" },
+    { value: "ban", label: "封禁", icon: BAN_ICON, show: user.status !== "BANNED" },
+    { value: "revoke_warn", label: "撤销警告", icon: REVOKE_ICON, show: hasActiveWarnings && user.status !== "BANNED" },
+    { value: "revoke_ban", label: "撤销封禁", icon: REVOKE_ICON, show: user.status === "BANNED" },
   ].filter((a) => a.show);
 
   async function handleSubmit() {
@@ -154,7 +176,12 @@ function ActionPanel({
 
   return (
     <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
-      <h3 className="mb-4 text-sm font-semibold text-[hsl(var(--foreground))]">🛡️ 管理操作</h3>
+      <h3 className="flex items-center gap-1.5 mb-4 text-sm font-semibold text-[hsl(var(--foreground))]">
+        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        </svg>
+        管理操作
+      </h3>
 
       <div className="mb-3 flex flex-wrap gap-2">
         {actions.map((a) => (
@@ -162,12 +189,13 @@ function ActionPanel({
             key={a.value}
             type="button"
             onClick={() => setAction(a.value)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
               action === a.value
                 ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"
                 : "border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)]"
             }`}
           >
+            {a.icon}
             {a.label}
           </button>
         ))}
@@ -189,7 +217,7 @@ function ActionPanel({
         type="button"
         onClick={handleSubmit}
         disabled={submitting || !action}
-        className="rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] disabled:opacity-50"
+        className="rounded-lg bg-brand-blue px-4 py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] hover:bg-brand-blue/90 disabled:opacity-50"
       >
         {submitting ? "处理中..." : "确认执行"}
       </button>
@@ -264,7 +292,7 @@ export default function AdminUserDetailPage({
 
       {/* Header */}
       <div className="flex items-center gap-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] text-xl font-bold text-white">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-brand-blue to-blue-500 text-xl font-bold text-white shadow-md shadow-brand-blue/20">
           {(user.nickname || "?").charAt(0).toUpperCase()}
         </div>
         <div>
@@ -286,7 +314,7 @@ export default function AdminUserDetailPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Profile */}
         <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
-          <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">📋 个人资料</h3>
+          <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">个人资料</h3>
           {user.profile ? (
             <div className="divide-y divide-[hsl(var(--border)/0.5)]">
               <InfoRow label="出生日期" value={formatDateTime(user.profile.birthDate)?.split(" ")[0]} />
@@ -303,7 +331,7 @@ export default function AdminUserDetailPage({
 
         {/* Membership */}
         <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
-          <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">✅ 群认证</h3>
+          <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">群认证</h3>
           {user.membership ? (
             <div className="divide-y divide-[hsl(var(--border)/0.5)]">
               <InfoRow label="状态" value={user.membership.status} />
@@ -329,9 +357,16 @@ export default function AdminUserDetailPage({
               <InfoRow
                 label="颜值分"
                 value={
-                  user.ratingProfile.finalScore !== null
-                    ? `⭐ ${user.ratingProfile.finalScore.toFixed(1)}`
-                    : "—"
+                  user.ratingProfile.finalScore !== null ? (
+                    <span className="flex items-center gap-1.5">
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-amber-500 stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-500">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                      <span className="font-semibold text-[hsl(var(--foreground))]">{user.ratingProfile.finalScore.toFixed(1)}</span>
+                    </span>
+                  ) : (
+                    "—"
+                  )
                 }
               />
             </div>
@@ -343,15 +378,31 @@ export default function AdminUserDetailPage({
 
         {/* Penalties */}
         <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
-          <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">
-            ⚖️ 处罚记录 ({user.penalties.length})
+          <h3 className="flex items-center gap-1.5 mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+              <path d="m16 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+              <path d="m2 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+              <path d="M7 21h10" />
+              <path d="M12 3v18" />
+              <path d="M3 7h18" />
+            </svg>
+            处罚记录 ({user.penalties.length})
           </h3>
           {user.penalties.length === 0 ? (
             <p className="text-sm text-[hsl(var(--muted-foreground))]">无处罚记录</p>
           ) : (
             <div className="space-y-3">
               {user.penalties.map((p) => {
-                const info = PENALTY_LABELS[p.type] || { label: p.type, icon: "📌" };
+                const info = PENALTY_LABELS[p.type] || {
+                  label: p.type,
+                  icon: (
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-muted">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                  ),
+                };
                 return (
                   <div
                     key={p.id}
@@ -384,7 +435,7 @@ export default function AdminUserDetailPage({
       {/* Audit Logs */}
       <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
         <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">
-          📋 最近操作日志 ({user.recentAuditLogs.length})
+          最近操作日志 ({user.recentAuditLogs.length})
         </h3>
         {user.recentAuditLogs.length === 0 ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))]">无操作日志</p>

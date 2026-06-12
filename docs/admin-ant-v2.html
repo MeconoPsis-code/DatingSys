@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Date System Admin UI V2</title>
+  <style>
+    :root {
+      --blue: #1677ff;
+      --cyan: #13c2c2;
+      --green: #52c41a;
+      --gold: #faad14;
+      --rose: #eb2f96;
+      --red: #ff4d4f;
+      --ink: #192033;
+      --text: #262626;
+      --muted: #595959;
+      --subtle: #8c8c8c;
+      --line: #e9edf5;
+      --bg: #f5f7fb;
+      --blue-1: #e6f4ff;
+      --cyan-1: #e6fffb;
+      --green-1: #f6ffed;
+      --gold-1: #fffbe6;
+      --rose-1: #fff0f6;
+      --red-1: #fff1f0;
+      --shadow: 0 20px 50px rgba(25, 32, 51, .09);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    .board {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      padding: 52px 64px 40px;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 30px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      background: var(--ink);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 30px;
+      line-height: 1;
+      font-weight: 760;
+      box-shadow: 0 14px 28px rgba(25, 32, 51, .18);
+      flex: 0 0 auto;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 40px;
+      font-weight: 730;
+    }
+
+    .desc {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 24px;
+      margin-top: 4px;
+    }
+
+    .note {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 15px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #d9d9d9;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .palette { display: flex; gap: 7px; }
+    .palette span { width: 10px; height: 10px; border-radius: 999px; }
+
+    .shell {
+      height: 865px;
+      border-radius: 30px;
+      background: #fff;
+      border: 1px solid rgba(217, 217, 217, .85);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: 246px 1fr;
+    }
+
+    .sidebar {
+      background: #fbfcfe;
+      border-right: 1px solid var(--line);
+      padding: 28px 18px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .side-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 34px;
+      padding: 0 8px;
+      font-size: 18px;
+      font-weight: 760;
+    }
+
+    .side-brand .logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      font-size: 24px;
+      box-shadow: none;
+    }
+
+    svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .menu {
+      display: grid;
+      gap: 8px;
+    }
+
+    .menu-item {
+      height: 44px;
+      border-radius: 13px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 14px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 22px;
+      font-weight: 650;
+    }
+
+    .menu-item.active {
+      background: var(--blue);
+      color: #fff;
+      box-shadow: 0 10px 22px rgba(22, 119, 255, .18);
+    }
+
+    .side-foot {
+      margin-top: auto;
+      padding: 16px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 21px;
+    }
+
+    .content {
+      padding: 30px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .content-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }
+
+    .content-head h2 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 36px;
+      font-weight: 760;
+    }
+
+    .content-head p {
+      margin: 4px 0 0;
+      color: var(--subtle);
+      font-size: 14px;
+      line-height: 22px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .search {
+      width: 260px;
+      height: 40px;
+      border-radius: 12px;
+      border: 1px solid #d9d9d9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      color: var(--subtle);
+      font-size: 13px;
+    }
+
+    .button {
+      height: 40px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 720;
+      border: 1px solid transparent;
+    }
+
+    .button.primary {
+      color: #fff;
+      background: var(--blue);
+      box-shadow: 0 10px 20px rgba(22, 119, 255, .17);
+    }
+
+    .button.outline {
+      color: var(--blue);
+      background: #fff;
+      border-color: #91caff;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+
+    .stat {
+      min-height: 126px;
+      padding: 18px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .stat-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 20px;
+      font-weight: 620;
+    }
+
+    .icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+
+    .icon.blue { color: var(--blue); background: var(--blue-1); }
+    .icon.cyan { color: var(--cyan); background: var(--cyan-1); }
+    .icon.green { color: var(--green); background: var(--green-1); }
+    .icon.gold { color: var(--gold); background: var(--gold-1); }
+    .icon.rose { color: var(--rose); background: var(--rose-1); }
+    .icon.red { color: var(--red); background: var(--red-1); }
+
+    .stat strong {
+      display: block;
+      font-size: 34px;
+      line-height: 40px;
+      font-weight: 790;
+    }
+
+    .stat small {
+      display: block;
+      margin-top: 7px;
+      color: var(--subtle);
+      font-size: 12px;
+      line-height: 18px;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.24fr .76fr;
+      gap: 18px;
+    }
+
+    .card {
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: #fff;
+      padding: 20px;
+      min-height: 270px;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .card-head h3 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 26px;
+      font-weight: 740;
+    }
+
+    .card-head p {
+      margin: 3px 0 0;
+      color: var(--subtle);
+      font-size: 13px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 26px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 12px;
+      line-height: 26px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .badge.blue { color: #0958d9; background: var(--blue-1); border-color: #91caff; }
+    .badge.cyan { color: #08979c; background: var(--cyan-1); border-color: #87e8de; }
+    .badge.green { color: #389e0d; background: var(--green-1); border-color: #b7eb8f; }
+    .badge.gold { color: #d48806; background: var(--gold-1); border-color: #ffe58f; }
+    .badge.rose { color: #c41d7f; background: var(--rose-1); border-color: #ffadd2; }
+    .badge.red { color: #cf1322; background: var(--red-1); border-color: #ffa39e; }
+    .badge.gray { color: var(--muted); background: #f5f5f5; border-color: #d9d9d9; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      table-layout: fixed;
+    }
+
+    th {
+      height: 42px;
+      padding: 0 12px;
+      background: #fafafa;
+      color: var(--subtle);
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-weight: 650;
+    }
+
+    td {
+      height: 54px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      vertical-align: middle;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    td strong { color: var(--text); font-weight: 720; }
+
+    .user-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 14px;
+      font-weight: 740;
+      color: var(--blue);
+      background: var(--blue-1);
+      flex: 0 0 auto;
+    }
+
+    .todo-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .todo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px;
+      border-radius: 16px;
+      background: #fafafa;
+      border: 1px solid var(--line);
+    }
+
+    .todo-main {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .todo strong {
+      display: block;
+      font-size: 14px;
+      line-height: 21px;
+      font-weight: 730;
+    }
+
+    .todo span {
+      display: block;
+      color: var(--subtle);
+      font-size: 12px;
+      line-height: 18px;
+      margin-top: 2px;
+    }
+
+    .lower-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .mini-card {
+      min-height: 158px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      padding: 18px;
+      background: #fff;
+    }
+
+    .mini-card h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      line-height: 24px;
+      font-weight: 740;
+    }
+
+    .mini-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .mini-row:first-of-type { border-top: 0; }
+
+    .footer {
+      position: absolute;
+      right: 64px;
+      bottom: 18px;
+      color: var(--subtle);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <header class="top">
+      <div class="brand">
+        <div class="logo">D</div>
+        <div>
+          <h1>Date System 管理端 UI</h1>
+          <div class="desc">1920×1080 桌面设计稿 · Ant Design 信息架构 · 覆盖当前项目已实现后台功能</div>
+        </div>
+      </div>
+      <div class="note">
+        <div class="palette">
+          <span style="background:#1677ff"></span><span style="background:#13c2c2"></span><span style="background:#52c41a"></span><span style="background:#faad14"></span><span style="background:#eb2f96"></span>
+        </div>
+        多色状态，不做单一蓝
+      </div>
+    </header>
+
+    <section class="shell">
+      <aside class="sidebar">
+        <div class="side-brand"><div class="logo">D</div><span>管理后台</span></div>
+        <nav class="menu">
+          <div class="menu-item active"><svg viewBox="0 0 24 24"><path d="M3 13h8V3H3z"/><path d="M13 21h8V11h-8z"/><path d="M13 3v6h8V3z"/><path d="M3 21h8v-6H3z"/></svg>概览</div>
+          <div class="menu-item"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>用户管理</div>
+          <div class="menu-item"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 5-3 8-7 9-4-1-7-4-7-9V7z"/><path d="M9 12l2 2 4-4"/></svg>群认证</div>
+          <div class="menu-item"><svg viewBox="0 0 24 24"><path d="M4 9a3 3 0 0 0 0 6v3h16v-3a3 3 0 0 0 0-6V6H4z"/><path d="M9 6v12"/><path d="M15 6v12"/></svg>邀请码</div>
+          <div class="menu-item"><svg viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10 3h4l8 15a2 2 0 0 1-2 3H4a2 2 0 0 1-2-3z"/></svg>举报处理</div>
+          <div class="menu-item"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M7 7l1-3h8l1 3"/><rect x="5" y="7" width="14" height="13" rx="2"/><path d="M9 13h6"/></svg>评分管理</div>
+          <div class="menu-item"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>审计日志</div>
+        </nav>
+        <div class="side-foot">当前为本地 Docker 预览数据。后台视觉以真实页面模块为基准重设计。</div>
+      </aside>
+
+      <section class="content">
+        <div class="content-head">
+          <div>
+            <h2>管理概览</h2>
+            <p>统一查看成员状态、群认证、举报、评分任务和审计数据</p>
+          </div>
+          <div class="toolbar">
+            <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>搜索 QQ号 / 昵称 / 用户ID</div>
+            <div class="button outline"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M6 12h12"/><path d="M10 18h4"/></svg>筛选</div>
+            <div class="button primary"><svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></svg>生成邀请码</div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-top"><span class="stat-label">总用户数</span><span class="icon blue"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span></div>
+            <strong style="color:var(--blue)">9</strong><small>种子数据用户总量</small>
+          </div>
+          <div class="stat">
+            <div class="stat-top"><span class="stat-label">已认证成员</span><span class="icon cyan"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 5-3 8-7 9-4-1-7-4-7-9V7z"/><path d="M9 12l2 2 4-4"/></svg></span></div>
+            <strong style="color:var(--cyan)">1</strong><small>群成员认证通过</small>
+          </div>
+          <div class="stat">
+            <div class="stat-top"><span class="stat-label">待处理举报</span><span class="icon red"><svg viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10 3h4l8 15a2 2 0 0 1-2 3H4a2 2 0 0 1-2-3z"/></svg></span></div>
+            <strong style="color:var(--red)">0</strong><small>待管理员核实</small>
+          </div>
+          <div class="stat">
+            <div class="stat-top"><span class="stat-label">评分任务</span><span class="icon rose"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><rect x="5" y="7" width="14" height="13" rx="2"/><path d="M9 13h6"/></svg></span></div>
+            <strong style="color:var(--rose)">0</strong><small>待评分 / 评分中</small>
+          </div>
+          <div class="stat">
+            <div class="stat-top"><span class="stat-label">今日匹配</span><span class="icon gold"><svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M8 21H3v-5"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg></span></div>
+            <strong style="color:var(--gold)">0</strong><small>匹配快照统计</small>
+          </div>
+        </div>
+
+        <div class="main-grid">
+          <div class="card">
+            <div class="card-head">
+              <div><h3>用户管理</h3><p>状态、角色、认证与封禁统一处理</p></div>
+              <span class="badge blue">共 9 人</span>
+            </div>
+            <table>
+              <thead><tr><th style="width:30%">用户</th><th>QQ号</th><th>角色</th><th>群认证</th><th>状态</th><th>操作</th></tr></thead>
+              <tbody>
+                <tr><td><div class="user-cell"><span class="avatar">红</span><strong>用户小红</strong></div></td><td>10001</td><td>普通用户</td><td><span class="badge cyan">已认证</span></td><td><span class="badge green">正常</span></td><td><span class="badge blue">查看</span></td></tr>
+                <tr><td><div class="user-cell"><span class="avatar" style="color:var(--rose);background:var(--rose-1)">评</span><strong>评分员 A</strong></div></td><td>20001</td><td>评分组</td><td><span class="badge gray">无需认证</span></td><td><span class="badge rose">可评分</span></td><td><span class="badge blue">查看</span></td></tr>
+                <tr><td><div class="user-cell"><span class="avatar" style="color:var(--cyan);background:var(--cyan-1)">管</span><strong>管理员</strong></div></td><td>90001</td><td>普通管理</td><td><span class="badge gray">后台账号</span></td><td><span class="badge green">在线</span></td><td><span class="badge blue">查看</span></td></tr>
+                <tr><td><div class="user-cell"><span class="avatar" style="color:var(--gold);background:var(--gold-1)">蓝</span><strong>用户小蓝</strong></div></td><td>10002</td><td>普通用户</td><td><span class="badge gold">待完善</span></td><td><span class="badge green">正常</span></td><td><span class="badge blue">查看</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div><h3>待办流转</h3><p>管理员日常处理入口</p></div>
+            </div>
+            <div class="todo-list">
+              <div class="todo"><div class="todo-main"><span class="icon cyan"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 5-3 8-7 9-4-1-7-4-7-9V7z"/></svg></span><div><strong>群成员认证</strong><span>邀请码与 QQ 号绑定</span></div></div><span class="badge cyan">已认证 1</span></div>
+              <div class="todo"><div class="todo-main"><span class="icon green"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span><div><strong>资料审核与封禁</strong><span>警告、冻结、封禁账号</span></div></div><span class="badge green">正常</span></div>
+              <div class="todo"><div class="todo-main"><span class="icon red"><svg viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10 3h4l8 15a2 2 0 0 1-2 3H4a2 2 0 0 1-2-3z"/></svg></span><div><strong>举报处理</strong><span>核实后记录审计日志</span></div></div><span class="badge red">0 待办</span></div>
+              <div class="todo"><div class="todo-main"><span class="icon rose"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><rect x="5" y="7" width="14" height="13" rx="2"/></svg></span><div><strong>颜值评分</strong><span>匿名评分，去高低分取均值</span></div></div><span class="badge rose">0 任务</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lower-grid">
+          <div class="mini-card">
+            <h3>群认证管理</h3>
+            <div class="mini-row"><span>已认证</span><span class="badge cyan">1</span></div>
+            <div class="mini-row"><span>待审核</span><span class="badge gold">0</span></div>
+            <div class="mini-row"><span>已过期</span><span class="badge gray">1</span></div>
+          </div>
+          <div class="mini-card">
+            <h3>评分管理</h3>
+            <div class="mini-row"><span>待评分</span><span class="badge rose">0</span></div>
+            <div class="mini-row"><span>评分中</span><span class="badge blue">0</span></div>
+            <div class="mini-row"><span>已完成</span><span class="badge green">0</span></div>
+          </div>
+          <div class="mini-card">
+            <h3>安全审计</h3>
+            <div class="mini-row"><span>登录记录</span><span class="badge blue">实时</span></div>
+            <div class="mini-row"><span>处罚记录</span><span class="badge gray">可追溯</span></div>
+            <div class="mini-row"><span>举报处理</span><span class="badge green">留痕</span></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <div class="footer">图片仅供参考，实际以上线产品为准</div>
+  </main>
+</body>
+</html>

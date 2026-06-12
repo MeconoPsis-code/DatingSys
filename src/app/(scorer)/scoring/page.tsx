@@ -120,7 +120,14 @@ export default function ScoringPage() {
   if (loading) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="text-2xl font-bold">🎯 评分任务</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-pink-500 stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="6" />
+            <circle cx="12" cy="12" r="2" />
+          </svg>
+          评分任务
+        </h1>
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent" />
         </div>
@@ -132,7 +139,14 @@ export default function ScoringPage() {
     <div className="flex flex-col gap-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">🎯 评分任务</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-pink-500 stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="6" />
+            <circle cx="12" cy="12" r="2" />
+          </svg>
+          评分任务
+        </h1>
         {tab === "pending" && totalPending > 0 && (
           <span className="rounded-full bg-[hsl(var(--primary)/0.15)] px-3 py-1 text-sm font-medium text-[hsl(var(--primary))]">
             剩余 {totalPending} 个
@@ -141,25 +155,35 @@ export default function ScoringPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 rounded-xl bg-[hsl(var(--secondary))] p-1">
+      <div className="flex gap-1 rounded-xl bg-blue-500/10 p-1">
         <button
+          type="button"
           onClick={() => setTab("pending")}
-          className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
             tab === "pending"
-              ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-              : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
+              : "text-brand-muted hover:bg-slate-100/50 hover:text-brand-text"
           }`}
         >
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
           待评分
         </button>
         <button
+          type="button"
           onClick={() => setTab("completed")}
-          className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
             tab === "completed"
-              ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-              : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
+              : "text-brand-muted hover:bg-slate-100/50 hover:text-brand-text"
           }`}
         >
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
           已评分
         </button>
       </div>
@@ -175,7 +199,11 @@ export default function ScoringPage() {
       {showSuccess && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="animate-bounce rounded-2xl bg-emerald-500 px-8 py-6 text-center shadow-2xl">
-            <div className="text-4xl">✅</div>
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white">
+              <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-[2.5] stroke-linecap-round stroke-linejoin-round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
             <div className="mt-2 text-lg font-bold text-white">评分已提交</div>
           </div>
         </div>
@@ -187,7 +215,12 @@ export default function ScoringPage() {
           {/* Empty state */}
           {totalPending === 0 && !error && (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-20">
-              <div className="mb-3 text-5xl">✅</div>
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 shrink-0">
+                <svg viewBox="0 0 24 24" className="h-8 w-8 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
               <p className="text-base font-medium text-[hsl(var(--foreground))]">
                 全部评分完成
               </p>
@@ -279,7 +312,7 @@ export default function ScoringPage() {
                     type="range"
                     min={0}
                     max={10}
-                    step={0.5}
+                    step={0.1}
                     value={scoreValue}
                     onChange={(e) => setScoreValue(Number(e.target.value))}
                     className="w-full accent-[hsl(var(--primary))] h-2"
@@ -321,7 +354,7 @@ export default function ScoringPage() {
                   type="button"
                   onClick={handleSubmitScore}
                   disabled={submitting}
-                  className="w-full rounded-xl bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-3 text-base font-bold text-white shadow-lg shadow-[hsl(262,83%,58%)/0.25] transition-all hover:scale-[1.01] hover:shadow-xl active:scale-[0.99] disabled:opacity-50"
+                  className="w-full rounded-xl bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-4 py-3 text-base font-bold text-white shadow-lg shadow-brand-blue/25 transition-all hover:scale-[1.01] hover:shadow-xl active:scale-[0.99] disabled:opacity-50"
                 >
                   {submitting ? "提交中..." : `提交评分 ${scoreValue.toFixed(1)} 分`}
                 </button>
@@ -336,7 +369,12 @@ export default function ScoringPage() {
         <>
           {tasks.length === 0 && !error && (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
-              <div className="mb-3 text-4xl">📋</div>
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-500/10 text-blue-500 shrink-0">
+                <svg viewBox="0 0 24 24" className="h-7 w-7 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                </svg>
+              </div>
               <p className="text-sm text-[hsl(var(--muted-foreground))]">
                 暂无已评分记录
               </p>
@@ -362,24 +400,27 @@ export default function ScoringPage() {
                 )}
 
                 {/* Scores */}
-                <div className="p-4 flex items-center gap-4">
-                  <div className="rounded-lg bg-[hsl(var(--secondary))] px-4 py-2">
-                    <div className="text-xs text-[hsl(var(--muted-foreground))]">我的评分</div>
-                    <div className="text-lg font-bold text-[hsl(var(--foreground))]">
+                <div className="p-4 flex items-center gap-4 bg-blue-100/80 dark:bg-blue-950/40 border-t border-blue-200/40">
+                  <div className="rounded-lg bg-white dark:bg-slate-900 border border-blue-500/10 px-4 py-2 shadow-sm">
+                    <div className="text-xs text-blue-600/80 dark:text-blue-400/80">我的评分</div>
+                    <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
                       {task.myScore?.toFixed(1)}
                     </div>
                   </div>
                   {task.finalScore !== null && task.finalScore !== undefined && (
-                    <div className="rounded-lg bg-[hsl(var(--secondary))] px-4 py-2">
-                      <div className="text-xs text-[hsl(var(--muted-foreground))]">最终分数</div>
-                      <div className="text-lg font-bold text-amber-400">
-                        ⭐ {task.finalScore.toFixed(1)}
+                    <div className="rounded-lg bg-white dark:bg-slate-900 border border-blue-500/10 px-4 py-2 shadow-sm">
+                      <div className="text-xs text-blue-600/80 dark:text-blue-400/80">最终分数</div>
+                      <div className="flex items-center gap-1 text-lg font-bold text-amber-500">
+                        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-amber-500 stroke-amber-500 stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                        <span>{task.finalScore.toFixed(1)}</span>
                       </div>
                     </div>
                   )}
                   {task.status !== "COMPLETED" && (
-                    <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2">
-                      <div className="text-xs text-blue-400">等待其他评分员</div>
+                    <div className="rounded-lg bg-white dark:bg-slate-900 border border-blue-500/10 px-4 py-2 shadow-sm">
+                      <div className="text-xs text-blue-500/70 font-medium">等待其他评分员</div>
                     </div>
                   )}
                 </div>

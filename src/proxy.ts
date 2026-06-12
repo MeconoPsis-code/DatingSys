@@ -28,6 +28,19 @@ const ADMIN_PATHS = [
 const SCORER_PATHS = ["/scoring", "/api/scorer", "/api/scoring"];
 
 function isPublicPath(pathname: string): boolean {
+  // Allow static assets
+  if (
+    pathname.endsWith(".png") ||
+    pathname.endsWith(".jpg") ||
+    pathname.endsWith(".jpeg") ||
+    pathname.endsWith(".svg") ||
+    pathname.endsWith(".gif") ||
+    pathname.endsWith(".webp") ||
+    pathname.endsWith(".ico")
+  ) {
+    return true;
+  }
+
   return PUBLIC_PATHS.some(
     (p) => pathname === p || pathname.startsWith(p + "/")
   );

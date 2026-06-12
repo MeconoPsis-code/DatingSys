@@ -208,7 +208,7 @@ export async function PUT(req: Request) {
         // Get all eligible scorers
         const scorers = await db.user.findMany({
           where: {
-            role: { in: ["SCORER", "ADMIN", "SUPER_ADMIN"] },
+            role: { in: ["SCORER", "ADMIN"] },
             id: { not: session.id }, // can't score yourself
           },
           select: { id: true },
@@ -242,6 +242,20 @@ export async function PUT(req: Request) {
           });
         }
       }
+    } else {
+      // No photos — delete any pending/scoring rating tasks and clean up RatingProfile
+      // Scores are cascade-deleted via onDelete: Cascade
+      await db.ratingTask.deleteMany({
+        where: {
+          ratedUserId: session.id,
+          status: { in: ["PENDING", "SCORING"] },
+        },
+      });
+
+      // Remove rating profile so user is no longer shown as 待评分
+      await db.ratingProfile.deleteMany({
+        where: { userId: session.id },
+      });
     }
   }
 

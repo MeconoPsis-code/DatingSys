@@ -276,6 +276,7 @@ export async function GET(req: Request) {
     }
 
     // Mutual match — full profile except qqNumber and photos
+    const currentUserHasPhotos = profile.photos.length > 0;
     const data = pageItems.map((m) => {
       const c = m.candidate;
       const p = c.profile!;
@@ -295,8 +296,11 @@ export async function GET(req: Request) {
         mbti: p.mbti,
         selfIntro: p.selfIntro,
         hasPhotos: p.photos.length > 0,
-        finalScore: c.ratingProfile?.finalScore ?? null,
+        // No-photo users cannot see appearance scores
+        finalScore: currentUserHasPhotos ? (c.ratingProfile?.finalScore ?? null) : null,
         relevanceScore: m.relevanceScore,
+        // Tell frontend whether the current user has photos (for UI gating)
+        currentUserHasPhotos,
       };
     });
 

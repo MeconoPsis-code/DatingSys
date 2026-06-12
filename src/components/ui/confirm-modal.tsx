@@ -38,7 +38,7 @@ export function ConfirmModal({
   const btnClass =
     variant === "danger"
       ? "bg-[hsl(var(--destructive))] text-white hover:opacity-90"
-      : "bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] text-white shadow-lg shadow-[hsl(262,83%,58%)/0.25] hover:scale-[1.02]";
+      : "bg-brand-blue text-white shadow-md shadow-brand-blue/20 hover:scale-[1.02] hover:bg-brand-blue/90";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -56,7 +56,7 @@ export function ConfirmModal({
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
               variant === "danger"
                 ? "bg-[hsl(0,62%,50%/0.15)]"
-                : "bg-[hsl(262,83%,58%/0.15)]"
+                : "bg-blue-1"
             }`}
           >
             <span className="text-lg">{variant === "danger" ? "⚠️" : "✏️"}</span>
@@ -71,14 +71,14 @@ export function ConfirmModal({
           className={`mb-5 rounded-lg border px-4 py-3 ${
             variant === "danger"
               ? "border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.08)]"
-              : "border-[hsl(262,83%,58%/0.3)] bg-[hsl(262,83%,58%/0.08)]"
+              : "border-brand-blue/15 bg-blue-1"
           }`}
         >
           <p
             className={`text-sm ${
               variant === "danger"
                 ? "text-[hsl(0,62%,70%)]"
-                : "text-[hsl(262,83%,80%)]"
+                : "text-brand-blue font-medium"
             }`}
           >
             {description}

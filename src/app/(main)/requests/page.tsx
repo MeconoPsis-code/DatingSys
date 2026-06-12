@@ -85,7 +85,7 @@ function IncomingRequestCard({
       {/* Header */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] text-sm font-bold text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#1677ff] to-[#0958d9] text-sm font-bold text-white">
             {(request.requesterNickname || "?").charAt(0)}
           </div>
           <div>
@@ -105,17 +105,48 @@ function IncomingRequestCard({
       {/* Requester profile summary */}
       {request.requesterProfile && (
         <div className="mb-3 flex flex-wrap gap-2">
-          <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            🎂 {request.requesterProfile.age} 岁
+          <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+              <path d="M8 14h.01" />
+              <path d="M12 14h.01" />
+              <path d="M16 14h.01" />
+              <path d="M8 18h.01" />
+              <path d="M12 18h.01" />
+              <path d="M16 18h.01" />
+            </svg>
+            <span>{request.requesterProfile.age} 岁</span>
           </span>
-          <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            📏 {request.requesterProfile.heightCm} cm
+          <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+              <path d="M21.3 15.3a2.82 2.82 0 0 1 0 4c-1 1-2.5 1-3.5 0L2.8 4.3a2.82 2.82 0 0 1 0-4c1-1 2.5-1 3.5 0Z" />
+              <path d="m5.6 7.2 1.4-1.4" />
+              <path d="m8.4 10 1.4-1.4" />
+              <path d="m11.2 12.8 1.4-1.4" />
+              <path d="m14 15.6 1.4-1.4" />
+              <path d="m16.8 18.5 1.4-1.4" />
+            </svg>
+            <span>{request.requesterProfile.heightCm} cm</span>
           </span>
-          <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            ⚖️ {request.requesterProfile.weightKg} kg
+          <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+              <path d="m16 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+              <path d="m2 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+              <path d="M7 21h10" />
+              <path d="M12 3v18" />
+              <path d="M3 7h18" />
+            </svg>
+            <span>{request.requesterProfile.weightKg} kg</span>
           </span>
-          <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            📍 {getProvinceName(request.requesterProfile.provinceCode)} · {getCityName(request.requesterProfile.provinceCode, request.requesterProfile.cityCode)}
+          <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            <span>{getProvinceName(request.requesterProfile.provinceCode)} · {getCityName(request.requesterProfile.provinceCode, request.requesterProfile.cityCode)}</span>
           </span>
           <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
             {getAttrLabel(request.requesterProfile.attribute, request.requesterProfile.customAttribute)}
@@ -142,17 +173,30 @@ function IncomingRequestCard({
             type="button"
             disabled={responding === request.id}
             onClick={() => onRespond(request.id, "approve")}
-            className="flex-1 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
           >
-            {responding === request.id ? "处理中..." : "✅ 通过"}
+            {responding === request.id ? (
+              "处理中..."
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                通过
+              </>
+            )}
           </button>
           <button
             type="button"
             disabled={responding === request.id}
             onClick={() => onRespond(request.id, "reject")}
-            className="flex-1 rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] disabled:opacity-50"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] disabled:opacity-50"
           >
-            ❌ 拒绝
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+            拒绝
           </button>
         </div>
       )}
@@ -198,8 +242,11 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
         </div>
       )}
       {request.status === "APPROVED" && request.requesterQQ && (
-        <div className="mt-3 text-xs text-emerald-400">
-          ✅ 对方已通过，可在匹配页面查看完整资料
+        <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-400">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span>对方已通过，可在匹配页面查看完整资料</span>
         </div>
       )}
       {request.status === "REJECTED" && (
@@ -285,7 +332,13 @@ export default function RequestsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-2xl font-bold">📨 查看申请</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold">
+        <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+          <rect width="20" height="16" x="2" y="4" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </svg>
+        查看申请
+      </h1>
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl bg-[hsl(var(--secondary))] p-1">
@@ -293,8 +346,8 @@ export default function RequestsPage() {
           onClick={() => { setTab("incoming"); setPage(1); }}
           className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
             tab === "incoming"
-              ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-              : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
+              : "text-brand-muted hover:bg-slate-100/50 hover:text-brand-text"
           }`}
         >
           收到的申请
@@ -308,8 +361,8 @@ export default function RequestsPage() {
           onClick={() => { setTab("outgoing"); setPage(1); }}
           className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
             tab === "outgoing"
-              ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-              : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
+              : "text-brand-muted hover:bg-slate-100/50 hover:text-brand-text"
           }`}
         >
           发出的申请
@@ -333,8 +386,18 @@ export default function RequestsPage() {
       {/* Empty state */}
       {!loading && !error && requests.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
-          <div className="mb-3 text-4xl">
-            {tab === "incoming" ? "📭" : "📤"}
+          <div className="mb-3 text-[hsl(var(--muted-foreground))]">
+            {tab === "incoming" ? (
+              <svg viewBox="0 0 24 24" className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <rect width="20" height="16" x="2" y="4" rx="2" />
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+                <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+              </svg>
+            )}
           </div>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
             {tab === "incoming" ? "暂无收到的申请" : "暂无发出的申请"}

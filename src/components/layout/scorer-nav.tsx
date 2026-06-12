@@ -4,17 +4,22 @@ import Link from "next/link";
 
 export function ScorerNav() {
   return (
-    <header className="flex h-14 items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-5">
-      <span className="text-lg font-bold text-[hsl(var(--foreground))]">
-        🎯 评分面板
+    <header className="flex h-14 items-center justify-between border-b border-blue-600/10 bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-5 text-white shadow-sm">
+      <span className="flex items-center gap-2 text-lg font-bold text-white">
+        <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-white stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+          <circle cx="12" cy="12" r="10" />
+          <circle cx="12" cy="12" r="6" />
+          <circle cx="12" cy="12" r="2" />
+        </svg>
+        评分面板
       </span>
       <div className="flex items-center gap-4">
-        <span className="inline-flex items-center rounded-full bg-[hsl(var(--secondary))] px-3 py-1 text-xs font-medium text-[hsl(var(--muted-foreground))]">
+        <span className="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-semibold text-white/95">
           待评分: --
         </span>
         <Link
           href="/profile"
-          className="text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+          className="text-xs font-semibold text-white/80 transition-colors hover:text-white"
         >
           ← 返回用户端
         </Link>

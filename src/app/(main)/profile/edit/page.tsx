@@ -133,6 +133,7 @@ export default function ProfileEditPage() {
 
   // Photo state
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [wantPhotos, setWantPhotos] = useState(false);
 
   // Cities based on selected province
   const cities = useMemo(
@@ -204,7 +205,9 @@ export default function ProfileEditPage() {
             const photoRes = await fetch("/api/profile/photos");
             if (photoRes.ok) {
               const photoData = await photoRes.json();
-              setPhotos(photoData.data?.photos || []);
+              const loadedPhotos = photoData.data?.photos || [];
+              setPhotos(loadedPhotos);
+              if (loadedPhotos.length > 0) setWantPhotos(true);
             }
           } catch {
             // Photos are optional, don't block on error
@@ -399,13 +402,23 @@ export default function ProfileEditPage() {
 
       {/* Cooldown warnings */}
       {!cooldowns.canEdit && (
-        <div className="rounded-lg border border-[hsl(40,90%,50%/0.3)] bg-[hsl(40,90%,50%/0.08)] px-4 py-3 text-sm text-[hsl(40,90%,70%)]">
-          ⚠️ 发布后 {7} 天内不能再次修改发布。还需等待 {cooldowns.editCooldownRemaining} 天。但仍可保存草稿。
+        <div className="flex items-start gap-2 rounded-lg border border-[hsl(40,90%,50%/0.3)] bg-[hsl(40,90%,50%/0.08)] px-4 py-3 text-sm text-[hsl(40,90%,70%)]">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round mt-0.5">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <span>发布后 {7} 天内不能再次修改发布。还需等待 {cooldowns.editCooldownRemaining} 天。但仍可保存草稿。</span>
         </div>
       )}
       {!cooldowns.canPublish && (
-        <div className="rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.08)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
-          ⚠️ 清空资料后 30 天内不能发布。还需等待 {cooldowns.publishCooldownRemaining} 天。
+        <div className="flex items-start gap-2 rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.08)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round mt-0.5">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          <span>清空资料后 30 天内不能发布。还需等待 {cooldowns.publishCooldownRemaining} 天。</span>
         </div>
       )}
 
@@ -642,67 +655,114 @@ export default function ProfileEditPage() {
         <p className="mb-4 text-xs text-[hsl(var(--muted-foreground))]">
           上传照片后将由评分哨对你的照片进行评分，你会获得一个颜值分属性。
         </p>
-        <PhotoUploader
-          photos={photos}
-          onPhotosChange={setPhotos}
-          maxPhotos={6}
-        />
 
-        {/* Photo matching preference — only shown when user has photos */}
-        {photos.length > 0 && (
-          <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
-            <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">
-              🎯 匹配偏好
-            </h3>
-            <div className="space-y-2">
-              <label className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border))] px-4 py-3 cursor-pointer transition-all hover:border-[hsl(var(--primary)/0.5)]">
-                <input
-                  type="radio"
-                  name="photoMatchPref"
-                  checked={form.photoMatchPref === "ALL"}
-                  onChange={() => updateField("photoMatchPref", "ALL")}
-                  className="h-4 w-4 accent-[hsl(var(--primary))]"
-                />
-                <div>
-                  <div className="text-sm font-medium text-[hsl(var(--foreground))]">与所有用户匹配</div>
-                  <div className="text-xs text-[hsl(var(--muted-foreground))]">包括有照片和无照片用户</div>
-                </div>
-              </label>
-              <label className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border))] px-4 py-3 cursor-pointer transition-all hover:border-[hsl(var(--primary)/0.5)]">
-                <input
-                  type="radio"
-                  name="photoMatchPref"
-                  checked={form.photoMatchPref === "PHOTO_ONLY"}
-                  onChange={() => updateField("photoMatchPref", "PHOTO_ONLY")}
-                  className="h-4 w-4 accent-[hsl(var(--primary))]"
-                />
-                <div>
-                  <div className="text-sm font-medium text-[hsl(var(--foreground))]">仅与有照片用户匹配</div>
-                  <div className="text-xs text-[hsl(var(--muted-foreground))]">只匹配同样上传了照片的用户</div>
-                </div>
-              </label>
+        {/* Toggle buttons */}
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setWantPhotos(false)}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+              !wantPhotos
+                ? "bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] border border-[hsl(var(--primary)/0.3)]"
+                : "border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)] hover:text-[hsl(var(--foreground))]"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+              <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+              <path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+              <line x1="2" y1="2" x2="22" y2="22" />
+            </svg>
+            我不想传照片
+          </button>
+          <button
+            type="button"
+            onClick={() => setWantPhotos(true)}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+              wantPhotos
+                ? "bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] border border-[hsl(var(--primary)/0.3)]"
+                : "border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)] hover:text-[hsl(var(--foreground))]"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
+            我想传照片
+          </button>
+        </div>
 
-              {/* High score only — nested under PHOTO_ONLY */}
-              {form.photoMatchPref === "PHOTO_ONLY" && (
-                <div className="ml-7 mt-1 rounded-lg border border-[hsl(var(--border)/0.5)] bg-[hsl(var(--secondary)/0.3)] px-4 py-3">
-                  <label className="flex items-center gap-3 cursor-pointer">
+        {/* Photo uploader — only shown when user wants to upload */}
+        {wantPhotos && (
+          <>
+            <PhotoUploader
+              photos={photos}
+              onPhotosChange={setPhotos}
+              maxPhotos={6}
+            />
+
+            {/* Photo matching preference — only shown when user has photos */}
+            {photos.length > 0 && (
+              <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
+                <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-[hsl(var(--foreground))]">
+                  <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="6" />
+                    <circle cx="12" cy="12" r="2" />
+                  </svg>
+                  匹配偏好
+                </h3>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border))] px-4 py-3 cursor-pointer transition-all hover:border-[hsl(var(--primary)/0.5)]">
                     <input
-                      type="checkbox"
-                      checked={form.highScoreOnly}
-                      onChange={(e) => updateField("highScoreOnly", e.target.checked)}
-                      className="h-4 w-4 rounded accent-[hsl(var(--primary))]"
+                      type="radio"
+                      name="photoMatchPref"
+                      checked={form.photoMatchPref === "ALL"}
+                      onChange={() => updateField("photoMatchPref", "ALL")}
+                      className="h-4 w-4 accent-[hsl(var(--primary))]"
                     />
-                    <span className="text-sm text-[hsl(var(--foreground))]">
-                      仅与高分用户匹配（≥ 7.0 分）
-                    </span>
+                    <div>
+                      <div className="text-sm font-medium text-[hsl(var(--foreground))]">与所有用户匹配</div>
+                      <div className="text-xs text-[hsl(var(--muted-foreground))]">包括有照片和无照片用户</div>
+                    </div>
                   </label>
-                  <p className="mt-1 ml-7 text-xs text-[hsl(var(--muted-foreground))]">
-                    只有你的评分也达到 7.0 分时此选项才会生效
-                  </p>
+                  <label className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border))] px-4 py-3 cursor-pointer transition-all hover:border-[hsl(var(--primary)/0.5)]">
+                    <input
+                      type="radio"
+                      name="photoMatchPref"
+                      checked={form.photoMatchPref === "PHOTO_ONLY"}
+                      onChange={() => updateField("photoMatchPref", "PHOTO_ONLY")}
+                      className="h-4 w-4 accent-[hsl(var(--primary))]"
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-[hsl(var(--foreground))]">仅与有照片用户匹配</div>
+                      <div className="text-xs text-[hsl(var(--muted-foreground))]">只匹配同样上传了照片的用户</div>
+                    </div>
+                  </label>
+
+                  {/* High score only — nested under PHOTO_ONLY */}
+                  {form.photoMatchPref === "PHOTO_ONLY" && (
+                    <div className="ml-7 mt-1 rounded-lg border border-[hsl(var(--border)/0.5)] bg-[hsl(var(--secondary)/0.3)] px-4 py-3">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={form.highScoreOnly}
+                          onChange={(e) => updateField("highScoreOnly", e.target.checked)}
+                          className="h-4 w-4 rounded accent-[hsl(var(--primary))]"
+                        />
+                        <span className="text-sm text-[hsl(var(--foreground))]">
+                          仅与高分用户匹配（≥ 7.0 分）
+                        </span>
+                      </label>
+                      <p className="mt-1 ml-7 text-xs text-[hsl(var(--muted-foreground))]">
+                        只有你的评分也达到 7.0 分时此选项才会生效
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            )}
+          </>
         )}
       </section>
 
@@ -891,7 +951,7 @@ export default function ProfileEditPage() {
             type="button"
             onClick={() => handleSubmit("ACTIVE")}
             disabled={submitting || !form.consent || !cooldowns.canEdit || !cooldowns.canPublish}
-            className="flex-1 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[hsl(262,83%,58%)/0.25] transition-all hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
+            className="flex-1 rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
           >
             {submitting ? "保存中..." : !cooldowns.canPublish ? `${cooldowns.publishCooldownRemaining}天后可发布` : !cooldowns.canEdit ? `${cooldowns.editCooldownRemaining}天后可修改` : "发布资料"}
           </button>

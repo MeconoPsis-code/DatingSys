@@ -216,7 +216,7 @@ export default function MatchDetailPage({
               type="button"
               onClick={handleRequestPhoto}
               disabled={photoRequesting}
-              className="rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-2 text-xs font-semibold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+              className="rounded-lg bg-brand-blue px-4 py-2 text-xs font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50"
             >
               {photoRequesting ? "申请中..." : "📷 申请查看照片"}
             </button>
@@ -234,7 +234,7 @@ export default function MatchDetailPage({
               {detail.nickname || "匿名用户"}
             </h2>
             {detail.hasPhotos && (
-              <span className="rounded-full border border-purple-500/30 bg-purple-500/15 px-2 py-0.5 text-[10px] font-medium text-purple-400">
+              <span className="rounded-full border border-brand-blue/30 bg-blue-1 px-2 py-0.5 text-[10px] font-medium text-brand-blue">
                 📷 有照片
               </span>
             )}
@@ -273,7 +273,7 @@ export default function MatchDetailPage({
             <button
               type="button"
               onClick={handleCopyQQ}
-              className="w-full rounded-xl bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-3 text-sm font-bold text-white shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99]"
+              className="w-full rounded-xl bg-brand-blue px-4 py-3 text-sm font-bold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.01] hover:bg-brand-blue/90 active:scale-[0.99]"
             >
               QQ: {detail.qqNumber} · 点击复制
             </button>

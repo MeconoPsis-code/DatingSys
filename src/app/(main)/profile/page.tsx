@@ -180,7 +180,13 @@ export default function ProfilePage() {
   if (error) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold">我的资料</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          我的资料
+        </h1>
         <div className="rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.1)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
           {error}
         </div>
@@ -198,9 +204,20 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold">我的资料</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-bold">
+          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          我的资料
+        </h1>
         <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-8 text-center">
-          <div className="mb-4 text-5xl">👤</div>
+          <div className="mb-4 flex justify-center text-[hsl(var(--muted-foreground))]">
+            <svg viewBox="0 0 24 24" className="h-14 w-14 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </div>
           <h2 className="mb-2 text-lg font-semibold text-[hsl(var(--foreground))]">
             还没有资料
           </h2>
@@ -209,7 +226,7 @@ export default function ProfilePage() {
           </p>
           <Link
             href="/profile/edit"
-            className="inline-block rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[hsl(262,83%,58%)/0.25] transition-all hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
+            className="inline-block rounded-lg bg-brand-blue px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98]"
           >
             创建资料
           </Link>
@@ -223,7 +240,13 @@ export default function ProfilePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">我的资料</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold">
+        <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+          <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
+        我的资料
+      </h1>
 
       {/* Profile card */}
       <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
@@ -233,18 +256,29 @@ export default function ProfilePage() {
             {statusInfo.label}
           </span>
           {ratingInfo?.finalScore !== null && ratingInfo?.finalScore !== undefined && (
-            <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-400">
-              ⭐ 颜值分: {ratingInfo.finalScore.toFixed(1)}
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-3 py-1 text-xs font-medium text-amber-400">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-amber-500 stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-500">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              颜值分: {ratingInfo.finalScore.toFixed(1)}
             </span>
           )}
           {ratingInfo && ratingInfo.ratingStatus === "PENDING" && (
-            <span className="rounded-full border border-blue-500/30 bg-blue-500/15 px-3 py-1 text-xs font-medium text-blue-400">
-              ⏳ 评分中
+            <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/15 px-3 py-1 text-xs font-medium text-blue-400">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              评分中
             </span>
           )}
           {photos.length > 0 && (
-            <span className="rounded-full border border-purple-500/30 bg-purple-500/15 px-3 py-1 text-xs font-medium text-purple-400">
-              📷 有照片
+            <span className="inline-flex items-center gap-1 rounded-full border border-brand-blue/30 bg-blue-1 px-3 py-1 text-xs font-medium text-brand-blue">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                <circle cx="12" cy="13" r="3" />
+              </svg>
+              有照片
             </span>
           )}
         </div>
@@ -276,8 +310,12 @@ export default function ProfilePage() {
         {/* Photos section */}
         {photos.length > 0 && (
           <div className="mt-6">
-            <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">
-              📸 照片
+            <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-[hsl(var(--foreground))]">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                <circle cx="12" cy="13" r="3" />
+              </svg>
+              照片
             </h3>
             <div className="grid grid-cols-3 gap-3">
               {photos.map((photo) => (
@@ -330,7 +368,7 @@ export default function ProfilePage() {
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
           <Link
             href="/profile/edit"
-            className="flex-1 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg shadow-[hsl(262,83%,58%)/0.25] transition-all hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
+            className="flex-1 rounded-lg bg-brand-blue px-4 py-2.5 text-center text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98]"
           >
             编辑资料
           </Link>

@@ -49,14 +49,14 @@ const MEMBERSHIP_INFO: Record<string, { label: string; cls: string }> = {
 /* ─── Info Row ───────────────────────────────────────── */
 
 function InfoRow({ icon, label, value, badge }: {
-  icon: string;
+  icon: React.ReactNode;
   label: string;
   value?: React.ReactNode;
   badge?: { label: string; cls: string };
 }) {
   return (
-    <div className="flex items-center gap-3 border-b border-[hsl(var(--border)/0.3)] px-1 py-3.5 last:border-b-0">
-      <span className="text-base">{icon}</span>
+    <div className="flex items-center gap-3 border-b border-[hsl(var(--border)/0.3)] px-1 py-2.5 last:border-b-0">
+      <span className="shrink-0 flex items-center justify-center">{icon}</span>
       <span className="w-24 shrink-0 text-sm text-[hsl(var(--muted-foreground))]">{label}</span>
       {badge ? (
         <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${badge.cls}`}>
@@ -129,7 +129,13 @@ function ChangePasscodeModal({ onClose }: { onClose: () => void }) {
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl"
       >
-        <h3 className="mb-5 text-base font-semibold text-[hsl(var(--foreground))]">🔑 修改密码</h3>
+        <h3 className="mb-5 flex items-center gap-1.5 text-base font-semibold text-[hsl(var(--foreground))]">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          修改密码
+        </h3>
 
         <div className="mb-3">
           <label className="mb-1.5 block text-sm text-[hsl(var(--muted-foreground))]">当前密码</label>
@@ -180,7 +186,7 @@ function ChangePasscodeModal({ onClose }: { onClose: () => void }) {
           <button
             type="submit"
             disabled={submitting}
-            className="flex-1 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02] disabled:opacity-50"
+            className="flex-1 rounded-lg bg-gradient-to-r from-[#1677ff] to-[#0958d9] py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.02] disabled:opacity-50"
           >
             {submitting ? "修改中..." : "确认修改"}
           </button>
@@ -230,7 +236,14 @@ function ClearProfileModal({ onClose, onSuccess }: { onClose: () => void; onSucc
         onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-2xl border border-[hsl(0,60%,40%/0.3)] bg-[hsl(var(--card))] p-6 shadow-xl"
       >
-        <h3 className="mb-2 text-base font-semibold text-[hsl(0,60%,65%)]">⚠️ 清空资料</h3>
+        <h3 className="mb-2 flex items-center gap-1.5 text-base font-semibold text-[hsl(0,60%,65%)]">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+          清空资料
+        </h3>
         <p className="mb-4 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
           此操作将<strong className="text-[hsl(0,60%,65%)]">永久删除</strong>您的个人资料和偏好设置。
           清空后 <strong>30天内</strong>不能重新发布资料。
@@ -344,8 +357,19 @@ export default function MePage() {
               }`}
             >
               <div className="mb-2 flex items-center gap-2">
-                <span className="text-lg">
-                  {p.type === "ACCOUNT_BANNED" ? "🚫" : "⚠️"}
+                <span className="shrink-0 flex items-center justify-center">
+                  {p.type === "ACCOUNT_BANNED" ? (
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-red-500 stroke-2 stroke-linecap-round stroke-linejoin-round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-amber-500 stroke-2 stroke-linecap-round stroke-linejoin-round">
+                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  )}
                 </span>
                 <span
                   className={`text-sm font-bold ${
@@ -374,7 +398,7 @@ export default function MePage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] text-2xl font-bold text-white shadow-lg shadow-[hsl(262,83%,58%/0.25)]">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#1677ff] to-[#0958d9] text-2xl font-bold text-white shadow-lg shadow-brand-blue/25">
           {(me.nickname || me.qqNumber || "?").charAt(0).toUpperCase()}
         </div>
         <div className="flex-1">
@@ -397,19 +421,78 @@ export default function MePage() {
       {/* Account Info */}
       <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
         <h2 className="mb-2 text-sm font-semibold text-[hsl(var(--foreground))]">账号信息</h2>
-        <InfoRow icon="💬" label="QQ号" value={me.qqNumber} />
-        <InfoRow icon="🏷️" label="昵称" value={me.nickname} />
-        <InfoRow icon="🛡️" label="角色" value={ROLE_LABELS[me.role]} />
-        <InfoRow icon="📊" label="账号状态" badge={statusInfo} />
         <InfoRow
-          icon="✅"
+          icon={
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-500 shrink-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+              </svg>
+            </div>
+          }
+          label="QQ号"
+          value={me.qqNumber}
+        />
+        <InfoRow
+          icon={
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z" />
+                <path d="M7 7h.01" />
+              </svg>
+            </div>
+          }
+          label="昵称"
+          value={me.nickname}
+        />
+        <InfoRow
+          icon={
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </div>
+          }
+          label="角色"
+          value={ROLE_LABELS[me.role]}
+        />
+        <InfoRow
+          icon={
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 shrink-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+              </svg>
+            </div>
+          }
+          label="账号状态"
+          badge={statusInfo}
+        />
+        <InfoRow
+          icon={
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/10 text-teal-500 shrink-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </div>
+          }
           label="群认证"
           badge={memberInfo || undefined}
           value={!memberInfo ? "未认证" : undefined}
         />
         {me.membershipExpiresAt && me.membershipStatus === "VERIFIED" && (
           <InfoRow
-            icon="📅"
+            icon={
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </div>
+            }
             label="认证到期"
             value={new Date(me.membershipExpiresAt).toLocaleDateString("zh-CN")}
           />
@@ -422,26 +505,43 @@ export default function MePage() {
         <div className="space-y-1">
           <Link
             href="/profile/edit"
-            className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
+            className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
           >
-            <span className="text-base">✏️</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-500 shrink-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </div>
             编辑资料
             <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
           </Link>
           <Link
             href="/report"
-            className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
+            className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
           >
-            <span className="text-base">🚨</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </div>
             举报中心
             <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
           </Link>
           {isScorer && (
             <Link
               href="/scoring"
-              className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
+              className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
             >
-              <span className="text-base">🎯</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-pink-500/10 text-pink-500 shrink-0">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" />
+                </svg>
+              </div>
               评分任务
               <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
             </Link>
@@ -449,9 +549,14 @@ export default function MePage() {
           {isAdmin && (
             <Link
               href="/dashboard"
-              className="flex items-center gap-3 rounded-lg px-2 py-2.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
+              className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
             >
-              <span className="text-base">⚙️</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600 shrink-0">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </div>
               管理后台
               <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
             </Link>
@@ -467,9 +572,13 @@ export default function MePage() {
           <button
             type="button"
             onClick={() => setShowChangePasscode(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
+            className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
           >
-            <span className="text-base">🔑</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />
+              </svg>
+            </div>
             修改密码
             <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
           </button>
@@ -478,9 +587,15 @@ export default function MePage() {
           <button
             type="button"
             onClick={() => setShowClearProfile(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-sm text-[hsl(0,60%,65%)] transition-colors hover:bg-[hsl(0,60%,50%/0.08)]"
+            className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(0,60%,65%)] transition-colors hover:bg-[hsl(0,60%,50%/0.08)]"
           >
-            <span className="text-base">🗑️</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-500 shrink-0">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M3 6h18" />
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              </svg>
+            </div>
             清空资料
             <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
           </button>

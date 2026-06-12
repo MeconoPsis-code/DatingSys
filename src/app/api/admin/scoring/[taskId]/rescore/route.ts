@@ -18,11 +18,12 @@ export async function POST(
       return error('NOT_FOUND', '评分任务不存在', 404);
     }
 
-    // Get current scorers (SCORER, ADMIN, SUPER_ADMIN)
+    // Get current eligible scorers (exclude SUPER_ADMIN and the rated user)
     const scorers = await db.user.findMany({
       where: {
-        role: { in: ['SCORER', 'ADMIN', 'SUPER_ADMIN'] },
+        role: { in: ['SCORER', 'ADMIN'] },
         status: 'ACTIVE',
+        id: { not: task.ratedUserId }, // can't score yourself
       },
       select: { id: true },
     });

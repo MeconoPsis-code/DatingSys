@@ -1,44 +1,66 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand-blue: #1677ff;
+  --color-brand-cyan: #13c2c2;
+  --color-brand-green: #52c41a;
+  --color-brand-gold: #faad14;
+  --color-brand-rose: #eb2f96;
+  --color-brand-red: #ff4d4f;
+  --color-brand-ink: #192033;
+  --color-brand-text: #262626;
+  --color-brand-muted: #595959;
+  --color-brand-subtle: #8c8c8c;
+  --color-brand-line: #e9edf5;
+  --color-brand-bg: #f5f7fb;
+  
+  --color-blue-1: #e6f4ff;
+  --color-cyan-1: #e6fffb;
+  --color-green-1: #f6ffed;
+  --color-gold-1: #fffbe6;
+  --color-rose-1: #fff0f6;
+  --color-red-1: #fff1f0;
+}
+
 /* ─── CSS Custom Properties ─────────────────────────── */
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
+  --background: 220 33% 97%;
+  --foreground: 225 15% 15%;
   --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
-  --primary: 262 83% 58%;
+  --card-foreground: 225 15% 15%;
+  --primary: 215 100% 54%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --accent: 262 83% 58%;
-  --accent-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 262 83% 58%;
-  --radius: 0.75rem;
+  --secondary: 218 30% 95.7%;
+  --secondary-foreground: 225 15% 15%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 55%;
+  --accent: 215 100% 96%;
+  --accent-foreground: 215 100% 54%;
+  --destructive: 359 100% 65%;
+  --border: 220 25% 94%;
+  --input: 220 25% 94%;
+  --ring: 215 100% 54%;
+  --radius: 1rem;
 }
 
 .dark {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
-  --card: 240 10% 7%;
-  --card-foreground: 0 0% 98%;
-  --primary: 262 83% 68%;
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+  --card: 224 71% 4%;
+  --card-foreground: 210 40% 98%;
+  --primary: 215 100% 60%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 262 83% 68%;
+  --secondary: 222 47% 16%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 223 47% 16%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 215 100% 60%;
   --accent-foreground: 0 0% 100%;
-  --destructive: 0 62% 50%;
-  --border: 240 3.7% 20%;
-  --input: 240 3.7% 20%;
-  --ring: 262 83% 68%;
+  --destructive: 0 84.2% 60.2%;
+  --border: 217 32% 17%;
+  --input: 217 32% 17%;
+  --ring: 215 100% 60%;
 }
 
 /* ─── Base Styles ───────────────────────────────────── */
@@ -80,3 +102,301 @@ body {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* ─── Landing Page Redesign Custom Styles ──────────────── */
+
+@keyframes landing-fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes landing-fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes landing-portraitEntrance {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes landing-gentleFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes landing-orbitRotate {
+  from {
+    transform: rotate(-10deg);
+  }
+  to {
+    transform: rotate(350deg);
+  }
+}
+
+@keyframes landing-floatBadge1 {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.02);
+  }
+}
+
+@keyframes landing-floatBadge2 {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+@keyframes landing-floatBadge3 {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-8px) scale(1.03);
+  }
+}
+
+@keyframes landing-twinkle {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.2);
+  }
+}
+
+.landing-animate-fadeInDown {
+  animation: landing-fadeInDown 0.8s ease-out both;
+}
+
+.landing-animate-fadeInUp {
+  animation: landing-fadeInUp 0.8s ease-out both;
+}
+
+.landing-animate-fadeInLeft {
+  animation: landing-fadeInLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.landing-animate-portrait {
+  animation: landing-portraitEntrance 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.landing-animate-float {
+  animation: landing-gentleFloat 6s ease-in-out infinite;
+}
+
+.landing-animate-orbit {
+  animation: landing-orbitRotate 180s linear infinite;
+}
+
+.landing-animate-badge1 {
+  animation: landing-floatBadge1 4.5s ease-in-out infinite;
+}
+
+.landing-animate-badge2 {
+  animation: landing-floatBadge2 5s ease-in-out infinite;
+}
+
+.landing-animate-badge3 {
+  animation: landing-floatBadge3 5.5s ease-in-out infinite;
+}
+
+.landing-animate-twinkle {
+  animation: landing-twinkle 3.5s ease-in-out infinite;
+}
+
+/* ─── Tailwind V4 Fallback Theme Colors ────────────── */
+.bg-brand-blue { background-color: #1677ff !important; }
+.text-brand-blue { color: #1677ff !important; }
+.border-brand-blue { border-color: #1677ff !important; }
+.bg-blue-1 { background-color: #e6f4ff !important; }
+
+.bg-brand-cyan { background-color: #13c2c2 !important; }
+.text-brand-cyan { color: #13c2c2 !important; }
+.border-brand-cyan { border-color: #13c2c2 !important; }
+.bg-cyan-1 { background-color: #e6fffb !important; }
+
+.bg-brand-green { background-color: #52c41a !important; }
+.text-brand-green { color: #52c41a !important; }
+.border-brand-green { border-color: #52c41a !important; }
+.bg-green-1 { background-color: #f6ffed !important; }
+
+.bg-brand-gold { background-color: #faad14 !important; }
+.text-brand-gold { color: #faad14 !important; }
+.border-brand-gold { border-color: #faad14 !important; }
+.bg-gold-1 { background-color: #fffbe6 !important; }
+
+.bg-brand-rose { background-color: #eb2f96 !important; }
+.text-brand-rose { color: #eb2f96 !important; }
+.border-brand-rose { border-color: #eb2f96 !important; }
+.bg-rose-1 { background-color: #fff0f6 !important; }
+
+.bg-brand-red { background-color: #ff4d4f !important; }
+.text-brand-red { color: #ff4d4f !important; }
+.border-brand-red { border-color: #ff4d4f !important; }
+.bg-red-1 { background-color: #fff1f0 !important; }
+
+.border-brand-blue\/30 { border-color: rgba(22, 119, 255, 0.3) !important; }
+.border-brand-blue\/15 { border-color: rgba(22, 119, 255, 0.15) !important; }
+.bg-brand-blue\/10 { background-color: rgba(22, 119, 255, 0.1) !important; }
+.bg-brand-blue\/15 { background-color: rgba(22, 119, 255, 0.15) !important; }
+.bg-brand-blue\/20 { background-color: rgba(22, 119, 255, 0.2) !important; }
+.bg-brand-blue\/95 { background-color: rgba(22, 119, 255, 0.95) !important; }
+.shadow-brand-blue\/20 { box-shadow: 0 10px 24px rgba(22, 119, 255, 0.2) !important; }
+.shadow-brand-blue\/25 { box-shadow: 0 10px 24px rgba(22, 119, 255, 0.25) !important; }
+
+.text-brand-text { color: #262626 !important; }
+.text-brand-muted { color: #595959 !important; }
+.text-brand-subtle { color: #8c8c8c !important; }
+.bg-brand-bg { background-color: #f5f7fb !important; }
+.border-brand-line { border-color: #e9edf5 !important; }
+
+.hover\:bg-brand-blue\/95:hover { background-color: #0958d9 !important; }
+.hover\:bg-brand-blue\/90:hover { background-color: #0958d9 !important; }
+.hover\:scale-\[1\.02\]:hover { transform: scale(1.02) !important; }
+.hover\:-translate-y-0\.5:hover { transform: translateY(-2px) !important; }
+.active\:translate-y-px:active { transform: translateY(1px) !important; }
+
+/* ─── Self-Adaptive Layout for Landing Page ───────── */
+@media (max-height: 860px) and (min-width: 1024px) {
+  .app-window {
+    height: 100vh !important;
+    max-height: none !important;
+  }
+  .main-container {
+    padding-left: 90px !important;
+    padding-right: 70px !important;
+    margin-top: 30px !important;
+  }
+  .title-brand {
+    font-size: 80px !important;
+    margin-bottom: 8px !important;
+  }
+  .title-sub {
+    font-size: 30px !important;
+    margin-bottom: 8px !important;
+  }
+  .title-desc {
+    margin-bottom: 24px !important;
+    font-size: 16px !important;
+  }
+  .scene-wrapper {
+    width: 560px !important;
+    height: 560px !important;
+  }
+  .orbit-ring {
+    width: 480px !important;
+    height: 380px !important;
+  }
+  .portrait-container {
+    width: 440px !important;
+    height: 440px !important;
+  }
+  .badge-speech {
+    top: 140px !important;
+    left: 30px !important;
+  }
+  .badge-shield {
+    bottom: 110px !important;
+    left: 50px !important;
+  }
+  .badge-users {
+    top: 260px !important;
+    right: 15px !important;
+  }
+}
+
+@media (max-height: 720px) and (min-width: 1024px) {
+  .app-window {
+    height: 100vh !important;
+    max-height: none !important;
+  }
+  .main-container {
+    margin-top: 15px !important;
+  }
+  .title-brand {
+    font-size: 64px !important;
+    margin-bottom: 6px !important;
+  }
+  .title-sub {
+    font-size: 24px !important;
+    margin-bottom: 6px !important;
+  }
+  .title-desc {
+    margin-bottom: 16px !important;
+    font-size: 14px !important;
+  }
+  .scene-wrapper {
+    width: 460px !important;
+    height: 460px !important;
+  }
+  .orbit-ring {
+    width: 380px !important;
+    height: 300px !important;
+  }
+  .portrait-container {
+    width: 360px !important;
+    height: 360px !important;
+  }
+  .badge-speech {
+    top: 110px !important;
+    left: 25px !important;
+    width: 38px !important;
+    height: 38px !important;
+  }
+  .badge-shield {
+    bottom: 90px !important;
+    left: 40px !important;
+    width: 38px !important;
+    height: 38px !important;
+  }
+  .badge-users {
+    top: 210px !important;
+    right: 10px !important;
+    width: 38px !important;
+    height: 38px !important;
+  }
+}
+
+
+

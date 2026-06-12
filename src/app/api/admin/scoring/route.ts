@@ -53,7 +53,7 @@ export async function GET(req: Request) {
     // Fetch ALL current eligible scorers so the admin sees the complete list
     const allEligibleScorers = await db.user.findMany({
       where: {
-        role: { in: ['SCORER', 'ADMIN', 'SUPER_ADMIN'] },
+        role: { in: ['SCORER', 'ADMIN'] },
         status: 'ACTIVE',
       },
       include: { authIdentities: { select: { nickname: true }, take: 1 } },

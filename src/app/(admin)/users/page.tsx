@@ -28,22 +28,22 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  ACTIVE: { label: "正常", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-  BANNED: { label: "封禁", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
-  DELETED: { label: "注销", cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
+  ACTIVE: { label: "正常", cls: "bg-[#f6ffed] text-[#389e0d] border-[#b7eb8f]" },
+  BANNED: { label: "封禁", cls: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]" },
+  DELETED: { label: "注销", cls: "bg-[#f5f5f5] text-[#595959] border-[#d9d9d9]" },
 };
 
 const MEMBERSHIP_LABELS: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "待审核", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-  VERIFIED: { label: "已认证", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-  REJECTED: { label: "已拒绝", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
-  EXPIRED: { label: "已过期", cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
-  REVOKED: { label: "已撤销", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
+  PENDING: { label: "待审核", cls: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]" },
+  VERIFIED: { label: "已认证", cls: "bg-[#e6fffb] text-[#08979c] border-[#87e8de]" },
+  REJECTED: { label: "已拒绝", cls: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]" },
+  EXPIRED: { label: "已过期", cls: "bg-[#f5f5f5] text-[#595959] border-[#d9d9d9]" },
+  REVOKED: { label: "已撤销", cls: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]" },
 };
 
 function Badge({ label, cls }: { label: string; cls: string }) {
   return (
-    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${cls}`}>
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${cls}`}>
       {label}
     </span>
   );
@@ -59,10 +59,10 @@ function formatDate(d: string | null) {
 }
 
 const ROLE_BADGE_CLS: Record<string, string> = {
-  USER: "bg-gray-500/15 text-gray-400 border-gray-500/30",
-  SCORER: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  ADMIN: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-  SUPER_ADMIN: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  USER: "bg-[#f5f5f5] text-[#595959] border-[#d9d9d9]",
+  SCORER: "bg-[#fff0f6] text-[#c41d7f] border-[#ffadd2]",
+  ADMIN: "bg-[#e6f4ff] text-[#0958d9] border-[#91caff]",
+  SUPER_ADMIN: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]",
 };
 
 /* ─── Role Selector (Super Admin only) ──────────── */
@@ -78,9 +78,9 @@ function RoleSelector({
   const [loading, setLoading] = useState(false);
 
   const options = [
-    { value: "USER", label: "👤 用户" },
-    { value: "SCORER", label: "⭐ 评分员" },
-    { value: "ADMIN", label: "🛡️ 管理员" },
+    { value: "USER", label: "用户" },
+    { value: "SCORER", label: "评分员" },
+    { value: "ADMIN", label: "管理员" },
   ];
 
   async function handleSelect(role: string) {
@@ -277,7 +277,7 @@ function ActionModal({
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex-1 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+            className="flex-1 rounded-lg bg-brand-blue py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50"
           >
             {submitting ? "处理中..." : "确认执行"}
           </button>
@@ -448,7 +448,7 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
-        👥 用户管理
+        用户管理
       </h1>
 
       {/* Search & Filters */}
@@ -617,7 +617,12 @@ export default function AdminUsersPage() {
       {/* Empty state */}
       {!loading && users.length === 0 && !error && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
-          <div className="mb-3 text-4xl">👤</div>
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-brand-muted mb-3 [&_svg]:h-6 [&_svg]:w-6 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+            <svg viewBox="0 0 24 24">
+              <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </span>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">未找到匹配的用户</p>
         </div>
       )}

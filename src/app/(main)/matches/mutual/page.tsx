@@ -24,6 +24,7 @@ interface MutualMatch {
   hasPhotos: boolean;
   finalScore: number | null;
   relevanceScore: number;
+  currentUserHasPhotos: boolean;
 }
 
 /* ─── Match Tabs ─────────────────────────────────────── */
@@ -31,8 +32,25 @@ interface MutualMatch {
 function MatchTabs() {
   const pathname = usePathname();
   const tabs = [
-    { label: "双向匹配", href: "/matches/mutual", icon: "💕" },
-    { label: "单向匹配", href: "/matches/one-way", icon: "💌" },
+    {
+      label: "双向匹配",
+      href: "/matches/mutual",
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+        </svg>
+      ),
+    },
+    {
+      label: "单向匹配",
+      href: "/matches/one-way",
+      icon: (
+        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <rect width="20" height="16" x="2" y="4" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </svg>
+      ),
+    },
   ];
 
   return (
@@ -43,8 +61,8 @@ function MatchTabs() {
           href={tab.href}
           className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
             pathname === tab.href
-              ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-              : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
+              : "text-brand-muted hover:bg-slate-100/50 hover:text-brand-text"
           }`}
         >
           <span>{tab.icon}</span>
@@ -68,7 +86,7 @@ function getInitial(nickname: string | null): string {
 }
 
 const AVATAR_COLORS = [
-  "from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)]",
+  "from-[#1677ff] to-[#0958d9]",
   "from-[hsl(200,80%,55%)] to-[hsl(220,70%,50%)]",
   "from-[hsl(340,80%,55%)] to-[hsl(10,70%,50%)]",
   "from-[hsl(150,60%,45%)] to-[hsl(170,70%,40%)]",
@@ -121,8 +139,12 @@ function MutualMatchCard({
               {match.nickname || "匿名用户"}
             </h3>
             {match.hasPhotos && (
-              <span className="shrink-0 rounded-full border border-purple-500/30 bg-purple-500/15 px-2 py-0.5 text-[10px] font-medium text-purple-400">
-                📷 有照片
+              <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-brand-blue/30 bg-blue-1 px-2 py-0.5 text-[10px] font-medium text-brand-blue">
+                <svg viewBox="0 0 24 24" className="h-3 w-3 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                  <circle cx="12" cy="13" r="3" />
+                </svg>
+                有照片
               </span>
             )}
           </div>
@@ -135,11 +157,26 @@ function MutualMatchCard({
 
       {/* Stats row */}
       <div className="mb-4 flex flex-wrap gap-2">
-        <span className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
-          📏 {match.heightCm} cm
+        <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+            <path d="M21.3 15.3a2.82 2.82 0 0 1 0 4c-1 1-2.5 1-3.5 0L2.8 4.3a2.82 2.82 0 0 1 0-4c1-1 2.5-1 3.5 0Z" />
+            <path d="m5.6 7.2 1.4-1.4" />
+            <path d="m8.4 10 1.4-1.4" />
+            <path d="m11.2 12.8 1.4-1.4" />
+            <path d="m14 15.6 1.4-1.4" />
+            <path d="m16.8 18.5 1.4-1.4" />
+          </svg>
+          {match.heightCm} cm
         </span>
-        <span className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
-          ⚖️ {match.weightKg} kg
+        <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+            <path d="m16 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+            <path d="m2 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+            <path d="M7 21h10" />
+            <path d="M12 3v18" />
+            <path d="M3 7h18" />
+          </svg>
+          {match.weightKg} kg
         </span>
         <span className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
           {getAttrLabel(match.attribute, match.customAttribute)}
@@ -149,9 +186,12 @@ function MutualMatchCard({
             {match.mbti}
           </span>
         )}
-        {match.finalScore !== null && (
-          <span className="rounded-lg border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs text-amber-400">
-            ⭐ {match.finalScore.toFixed(1)}
+        {match.finalScore !== null && match.currentUserHasPhotos && (
+          <span className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs text-amber-400">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-amber-500 stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-500">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            {match.finalScore.toFixed(1)}
           </span>
         )}
       </div>
@@ -173,7 +213,7 @@ function MutualMatchCard({
                 <button
                   type="button"
                   onClick={() => handleCopyQQ(viewDetail.qqNumber!)}
-                  className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
+                  className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                   QQ: {viewDetail.qqNumber}
                   <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -185,30 +225,49 @@ function MutualMatchCard({
                 )}
               </div>
             )}
-            {match.hasPhotos && (
+            {match.hasPhotos && match.currentUserHasPhotos && (
               <Link
                 href={`/matches/${match.userId}`}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
               >
-                📷 查看照片与完整资料
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                  <circle cx="12" cy="13" r="3" />
+                </svg>
+                查看照片与完整资料
               </Link>
             )}
           </div>
         ) : viewRequestStatus === "PENDING" ? (
           <span className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))]">
-            ⏳ 资料查看申请待审核
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            资料查看申请待审核
           </span>
         ) : viewRequestStatus === "REJECTED" ? (
           <span className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-3 py-1.5 text-xs text-[hsl(0,60%,65%)]">
-            ❌ 申请已被拒绝（7天后可重新申请）
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            申请已被拒绝（7天后可重新申请）
           </span>
         ) : (
           <button
             type="button"
             onClick={() => onRequestView(match.userId)}
-            className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400 transition-all hover:bg-purple-500/20"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-blue-1 px-3 py-1.5 text-xs font-medium text-brand-blue transition-all hover:bg-brand-blue/20"
           >
-            🔓 申请查看完整资料（QQ号+照片）
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+            </svg>
+            {match.currentUserHasPhotos
+              ? "申请查看完整资料（QQ号+照片）"
+              : "申请查看QQ号"}
           </button>
         )}
       </div>
@@ -362,13 +421,23 @@ export default function MutualMatchesPage() {
 
   return (
     <div ref={scrollRef} className="flex flex-col gap-5">
-      <h1 className="text-2xl font-bold">匹配结果</h1>
+      <h1 className="flex items-center gap-2 text-2xl font-bold">
+        <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+          <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+        </svg>
+        匹配结果
+      </h1>
 
       <MatchTabs />
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.1)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
+        <div className="flex items-center gap-2.5 rounded-xl border border-red-100 bg-white px-4 py-3.5 text-sm font-semibold text-red-500 shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
+          <svg viewBox="0 0 24 24" strokeWidth="2.5" className="h-5 w-5 shrink-0 fill-none stroke-current stroke-linecap-round stroke-linejoin-round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="13" />
+            <circle cx="12" cy="17" r="1.25" fill="currentColor" stroke="none" />
+          </svg>
           {error}
         </div>
       )}
@@ -396,7 +465,12 @@ export default function MutualMatchesPage() {
       {/* Empty state */}
       {!loading && !scoringPending && !error && matches.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
-          <div className="mb-3 text-5xl">🔍</div>
+          <div className="mb-3 text-[hsl(var(--muted-foreground))]">
+            <svg viewBox="0 0 24 24" className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </div>
           <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">
             暂无双向匹配
           </h2>
@@ -454,14 +528,35 @@ export default function MutualMatchesPage() {
       )}
 
       {/* View request confirmation modal */}
-      {confirmTarget && (
+      {confirmTarget && (() => {
+        const iHavePhotos = matches[0]?.currentUserHasPhotos ?? false;
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
-            <div className="mb-4 text-center text-3xl">🔓</div>
-            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">申请查看完整资料</h3>
+            <div className="mb-4 flex justify-center text-[hsl(var(--primary))]">
+              <svg viewBox="0 0 24 24" className="h-10 w-10 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+              </svg>
+            </div>
+            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">
+              {iHavePhotos ? "申请查看完整资料" : "申请查看QQ号"}
+            </h3>
             <p className="mb-5 text-center text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
-              申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号和照片</span>。
-              同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号和照片</span>。资料查看权限是双向的。
+              {iHavePhotos ? (
+                <>
+                  申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号和照片</span>。
+                  同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号和照片</span>。资料查看权限是双向的。
+                </>
+              ) : (
+                <>
+                  申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号</span>。
+                  同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号</span>。
+                  <span className="mt-1 block text-[hsl(var(--muted-foreground))]">
+                    注：您没有上传照片，无法查看对方照片和颜值评分。
+                  </span>
+                </>
+              )}
             </p>
             <div className="flex gap-3">
               <button
@@ -474,14 +569,15 @@ export default function MutualMatchesPage() {
               <button
                 type="button"
                 onClick={() => sendViewRequest(confirmTarget)}
-                className="flex-1 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="flex-1 rounded-lg bg-gradient-to-r from-[#1677ff] to-[#0958d9] py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
                 确认申请
               </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

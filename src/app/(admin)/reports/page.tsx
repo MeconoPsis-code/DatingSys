@@ -43,10 +43,10 @@ const STATUS_TABS = [
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  REVIEWING: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  ACCEPTED: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  REJECTED: "bg-red-500/15 text-red-400 border-red-500/30",
+  PENDING: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]",
+  REVIEWING: "bg-[#e6f4ff] text-[#0958d9] border-[#91caff]",
+  ACCEPTED: "bg-[#f6ffed] text-[#389e0d] border-[#b7eb8f]",
+  REJECTED: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]",
 };
 
 function formatDateTime(d: string | null) {
@@ -207,7 +207,7 @@ function ResolveModal({
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex-1 rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] disabled:opacity-50"
+            className="flex-1 rounded-lg bg-brand-blue py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] hover:bg-brand-blue/90 disabled:opacity-50"
           >
             {submitting ? "处理中..." : "确认处理"}
           </button>
@@ -261,7 +261,7 @@ export default function AdminReportsPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">🚨 举报管理</h1>
+      <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">举报管理</h1>
 
       {/* Status tabs */}
       <div className="flex flex-wrap gap-1 rounded-xl bg-[hsl(var(--secondary))] p-1">
@@ -348,7 +348,7 @@ export default function AdminReportsPage() {
                   <button
                     type="button"
                     onClick={() => setResolveTarget(r)}
-                    className="rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-1.5 text-xs font-semibold text-white transition-all hover:scale-[1.02]"
+                    className="rounded-lg bg-brand-blue px-4 py-1.5 text-xs font-semibold text-white transition-all hover:scale-[1.02] hover:bg-brand-blue/90"
                   >
                     处理举报
                   </button>
@@ -362,7 +362,14 @@ export default function AdminReportsPage() {
       {/* Empty */}
       {!loading && reports.length === 0 && !error && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
-          <div className="mb-3 text-4xl">📋</div>
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-brand-muted mb-3 [&_svg]:h-6 [&_svg]:w-6 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+            <svg viewBox="0 0 24 24">
+              <rect width="16" height="20" x="4" y="2" rx="2" />
+              <line x1="8" y1="6" x2="16" y2="6" />
+              <line x1="8" y1="10" x2="16" y2="10" />
+              <line x1="8" y1="14" x2="13" y2="14" />
+            </svg>
+          </span>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">暂无举报</p>
         </div>
       )}

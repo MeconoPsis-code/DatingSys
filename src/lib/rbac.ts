@@ -47,9 +47,22 @@ export const PERMISSIONS = {
 export type Permission = keyof typeof PERMISSIONS;
 
 /**
+ * Explicit permission exclusions — roles that should NOT have
+ * a specific permission despite hierarchical inheritance.
+ */
+const ROLE_EXCLUSIONS: Partial<Record<Permission, UserRole[]>> = {
+  // Super admins review scores, they don't submit them
+  SCORE_PHOTO: ["SUPER_ADMIN"],
+};
+
+/**
  * Check if a user's role has a specific permission.
  */
 export function can(userRole: UserRole, permission: Permission): boolean {
+  // Check exclusions first
+  const excluded = ROLE_EXCLUSIONS[permission];
+  if (excluded && excluded.includes(userRole)) return false;
+
   const requiredRole = PERMISSIONS[permission];
   return hasRole(userRole, requiredRole);
 }

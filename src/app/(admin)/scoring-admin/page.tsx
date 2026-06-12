@@ -123,17 +123,17 @@ interface ScoringTask {
 
 const STATUS_TABS = [
   { value: "", label: "全部" },
-  { value: "REVIEW", label: "⚠️ 待审核", superOnly: true },
+  { value: "REVIEW", label: "待审核", superOnly: true },
   { value: "PENDING", label: "待评分" },
   { value: "SCORING", label: "评分中" },
   { value: "COMPLETED", label: "已完成" },
 ] as const;
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "待评分", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-  SCORING: { label: "评分中", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
-  REVIEW: { label: "待审核", cls: "bg-orange-500/15 text-orange-400 border-orange-500/30" },
-  COMPLETED: { label: "已完成", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  PENDING: { label: "待评分", cls: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]" },
+  SCORING: { label: "评分中", cls: "bg-[#e6f4ff] text-[#0958d9] border-[#91caff]" },
+  REVIEW: { label: "待审核", cls: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]" },
+  COMPLETED: { label: "已完成", cls: "bg-[#f6ffed] text-[#389e0d] border-[#b7eb8f]" },
 };
 
 function formatDate(d: string) {
@@ -166,9 +166,13 @@ function OverrideScoreInput({ onSubmit }: { onSubmit: (score: number) => void })
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400 transition-all hover:bg-purple-500/20"
+        className="flex items-center rounded-lg border border-brand-blue/30 bg-blue-1 px-3 py-1.5 text-xs font-medium text-brand-blue transition-all hover:bg-brand-blue/20"
       >
-        ✏️ 直接设定分数
+        <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+        直接设定分数
       </button>
     );
   }
@@ -179,7 +183,7 @@ function OverrideScoreInput({ onSubmit }: { onSubmit: (score: number) => void })
         type="number"
         min="0"
         max="10"
-        step="0.5"
+        step="0.1"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         className="w-16 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs text-[hsl(var(--foreground))] focus:border-[hsl(var(--primary))] focus:outline-none"
@@ -197,7 +201,7 @@ function OverrideScoreInput({ onSubmit }: { onSubmit: (score: number) => void })
             setOpen(false);
           }
         }}
-        className="rounded-md bg-purple-500/20 px-2 py-1 text-xs font-medium text-purple-400 transition-all hover:bg-purple-500/30"
+        className="rounded-md bg-brand-blue/15 px-2 py-1 text-xs font-medium text-brand-blue transition-all hover:bg-brand-blue/30"
       >
         确认
       </button>
@@ -303,7 +307,7 @@ function TaskCard({
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-[hsl(var(--secondary))]">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] transition-all duration-500"
+            className="h-full rounded-full bg-brand-blue transition-all duration-500 shadow-sm shadow-brand-blue/20"
             style={{ width: `${progressPct}%` }}
           />
         </div>
@@ -376,9 +380,12 @@ function TaskCard({
                   onApprove(task.id);
                 }
               }}
-              className="rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/25"
+              className="flex items-center rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/25"
             >
-              ✅ 通过并发布
+              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              通过并发布
             </button>
             <button
               type="button"
@@ -387,9 +394,15 @@ function TaskCard({
                   onRescore(task.id);
                 }
               }}
-              className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20"
+              className="flex items-center rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20"
             >
-              🔄 重新评分
+              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 16h5v5" />
+              </svg>
+              重新评分
             </button>
             <OverrideScoreInput onSubmit={(score) => onOverride(task.id, score)} />
           </div>
@@ -406,9 +419,15 @@ function TaskCard({
                 onRescore(task.id);
               }
             }}
-            className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20"
+            className="flex items-center rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20"
           >
-            🔄 重新评分
+            <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+              <path d="M16 16h5v5" />
+            </svg>
+            重新评分
           </button>
           <OverrideScoreInput onSubmit={(score) => onOverride(task.id, score)} />
         </div>
@@ -505,10 +524,44 @@ export default function ScoringAdminPage() {
       alert(err instanceof Error ? err.message : "操作失败");
     }
   }
+  const [fixing, setFixing] = useState(false);
+
+  async function handleFixStuck() {
+    setFixing(true);
+    try {
+      const res = await fetch("/api/admin/scoring/fix-stuck", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "修复失败");
+      const result = data.data;
+      const debugStr = result.debug
+        ?.map((d: { taskId: string; status: string; snapshotLength: number; eligibleCount: number; scoredCount: number; promoted: boolean }) =>
+          `任务${d.taskId.slice(0, 6)}… 状态:${d.status} 快照:${d.snapshotLength} 有效:${d.eligibleCount} 已评:${d.scoredCount} → ${d.promoted ? '已修复' : '未修复'}`
+        )
+        .join('\n') || '';
+      alert(`${result.message}\n\n${debugStr}`);
+      fetchTasks();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "修复失败");
+    } finally {
+      setFixing(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">🎯 评分管理</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">评分管理</h1>
+        {isSuperAdmin && (
+          <button
+            type="button"
+            disabled={fixing}
+            onClick={handleFixStuck}
+            className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20 disabled:opacity-50"
+          >
+            {fixing ? "修复中..." : "修复卡住的任务"}
+          </button>
+        )}
+      </div>
 
       {/* Status tabs */}
       <div className="flex flex-wrap gap-1 rounded-xl bg-[hsl(var(--secondary))] p-1">
@@ -519,12 +572,19 @@ export default function ScoringAdminPage() {
             key={tab.value}
             type="button"
             onClick={() => { setStatusFilter(tab.value); setPage(1); }}
-            className={`rounded-lg px-4 py-2 text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium transition-all ${
               statusFilter === tab.value
                 ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
+            {tab.value === "REVIEW" && (
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-500">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <circle cx="12" cy="17" r="1" style={{ fill: "currentColor", stroke: "none" }} />
+              </svg>
+            )}
             {tab.label}
           </button>
         ))}
@@ -565,7 +625,13 @@ export default function ScoringAdminPage() {
       {/* Empty */}
       {!loading && tasks.length === 0 && !error && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
-          <div className="mb-3 text-4xl">🎯</div>
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-brand-muted mb-3 [&_svg]:h-6 [&_svg]:w-6 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="6" />
+              <circle cx="12" cy="12" r="2" />
+            </svg>
+          </span>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">暂无评分任务</p>
         </div>
       )}

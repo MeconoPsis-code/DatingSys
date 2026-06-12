@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Date System Mobile UI V2</title>
+  <style>
+    :root {
+      --blue: #1677ff;
+      --cyan: #13c2c2;
+      --green: #52c41a;
+      --gold: #faad14;
+      --rose: #eb2f96;
+      --red: #ff4d4f;
+      --ink: #192033;
+      --text: #262626;
+      --muted: #595959;
+      --subtle: #8c8c8c;
+      --line: #e9edf5;
+      --bg: #f5f7fb;
+      --card: #fff;
+      --blue-1: #e6f4ff;
+      --cyan-1: #e6fffb;
+      --green-1: #f6ffed;
+      --gold-1: #fffbe6;
+      --rose-1: #fff0f6;
+      --shadow: 0 20px 48px rgba(25, 32, 51, .09);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+      letter-spacing: 0;
+    }
+
+    .board {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      padding: 52px 64px 40px;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 30px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      background: var(--ink);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 30px;
+      line-height: 1;
+      font-weight: 760;
+      box-shadow: 0 14px 28px rgba(25, 32, 51, .18);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 40px;
+      font-weight: 730;
+    }
+
+    .desc {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 24px;
+      margin-top: 4px;
+    }
+
+    .note {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 15px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #d9d9d9;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .palette {
+      display: flex;
+      gap: 7px;
+    }
+
+    .palette span {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+    }
+
+    .stage {
+      height: 865px;
+      border-radius: 30px;
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid rgba(217, 217, 217, .85);
+      box-shadow: var(--shadow);
+      padding: 34px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 28px;
+    }
+
+    .phone {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 12px 30px rgba(25, 32, 51, .07);
+      min-width: 0;
+    }
+
+    .status {
+      height: 52px;
+      padding: 19px 22px 0;
+      display: flex;
+      justify-content: space-between;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 720;
+    }
+
+    .signal {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .signal span {
+      width: 5px;
+      height: 5px;
+      border-radius: 99px;
+      background: var(--ink);
+    }
+
+    .body {
+      flex: 1;
+      padding: 8px 22px 22px;
+      overflow: hidden;
+    }
+
+    .page-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .page-head h2 {
+      margin: 0;
+      font-size: 25px;
+      line-height: 34px;
+      font-weight: 760;
+    }
+
+    .page-head p {
+      margin: 3px 0 0;
+      color: var(--subtle);
+      font-size: 13px;
+      line-height: 21px;
+    }
+
+    .icon-button {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: #f5f7fb;
+      color: var(--blue);
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+
+    svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .login-hero {
+      min-height: 176px;
+      background: #f7faff;
+      border-color: #d6e4ff;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+    }
+
+    .login-hero .logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 15px;
+      font-size: 28px;
+      box-shadow: none;
+      margin-bottom: 16px;
+    }
+
+    .login-hero h2 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 36px;
+      font-weight: 760;
+    }
+
+    .login-hero p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 23px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 26px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-size: 12px;
+      line-height: 26px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .badge.blue { color: #0958d9; background: var(--blue-1); border-color: #91caff; }
+    .badge.cyan { color: #08979c; background: var(--cyan-1); border-color: #87e8de; }
+    .badge.green { color: #389e0d; background: var(--green-1); border-color: #b7eb8f; }
+    .badge.gold { color: #d48806; background: var(--gold-1); border-color: #ffe58f; }
+    .badge.rose { color: #c41d7f; background: var(--rose-1); border-color: #ffadd2; }
+    .badge.gray { color: var(--muted); background: #f5f5f5; border-color: #d9d9d9; }
+
+    .label {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 20px;
+      margin-bottom: 8px;
+      font-weight: 620;
+    }
+
+    .input {
+      height: 46px;
+      border-radius: 14px;
+      border: 1px solid #d9d9d9;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      color: #bfbfbf;
+      font-size: 14px;
+    }
+
+    .button {
+      height: 46px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 720;
+    }
+
+    .button.primary { background: var(--blue); color: #fff; box-shadow: 0 10px 20px rgba(22, 119, 255, .17); }
+    .button.outline { background: #fff; color: var(--blue); border-color: #91caff; }
+    .button.small { height: 34px; padding: 0 12px; font-size: 12px; }
+
+    .stack { display: grid; gap: 10px; }
+
+    .trust-list {
+      display: grid;
+      gap: 12px;
+      padding: 4px 0;
+    }
+
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 22px;
+    }
+
+    .round-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+
+    .round-icon.green { color: var(--green); background: var(--green-1); }
+    .round-icon.blue { color: var(--blue); background: var(--blue-1); }
+    .round-icon.cyan { color: var(--cyan); background: var(--cyan-1); }
+    .round-icon.gold { color: var(--gold); background: var(--gold-1); }
+    .round-icon.rose { color: var(--rose); background: var(--rose-1); }
+
+    .profile {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      margin-bottom: 16px;
+    }
+
+    .avatar {
+      width: 54px;
+      height: 54px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      background: var(--blue-1);
+      color: var(--blue);
+      font-size: 22px;
+      font-weight: 760;
+      flex: 0 0 auto;
+    }
+
+    .profile h3 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      line-height: 25px;
+      font-weight: 730;
+    }
+
+    .profile p {
+      margin: 0;
+      color: var(--subtle);
+      font-size: 12px;
+      line-height: 18px;
+    }
+
+    .metric {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .metric strong {
+      font-size: 34px;
+      line-height: 40px;
+      font-weight: 780;
+    }
+
+    .progress {
+      height: 8px;
+      border-radius: 99px;
+      background: #f0f2f5;
+      overflow: hidden;
+    }
+
+    .progress span {
+      display: block;
+      width: 92%;
+      height: 100%;
+      border-radius: 99px;
+      background: var(--cyan);
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .choice {
+      min-height: 112px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      background: #fff;
+    }
+
+    .choice.active {
+      border-color: #91caff;
+      background: #f7fbff;
+    }
+
+    .choice h4 {
+      margin: 10px 0 4px;
+      font-size: 15px;
+      line-height: 22px;
+      font-weight: 730;
+    }
+
+    .choice p {
+      margin: 0;
+      color: var(--subtle);
+      font-size: 12px;
+      line-height: 19px;
+    }
+
+    .action-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .notice {
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid #ffe58f;
+      background: var(--gold-1);
+      color: #ad6800;
+      font-size: 13px;
+      line-height: 21px;
+      margin-top: 14px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 16px 0 10px;
+      font-size: 14px;
+      line-height: 22px;
+      font-weight: 720;
+    }
+
+    .form-list {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .row {
+      min-height: 43px;
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      line-height: 20px;
+    }
+
+    .row:last-child { border-bottom: 0; }
+    .row span:first-child { color: var(--muted); }
+    .row span:last-child { color: var(--text); font-weight: 660; text-align: right; }
+
+    .consent {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: #fafafa;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 20px;
+      margin: 14px 0;
+    }
+
+    .checkbox {
+      width: 18px;
+      height: 18px;
+      border-radius: 6px;
+      background: var(--blue);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+      margin-top: 1px;
+    }
+
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 4px;
+      border-radius: 15px;
+      background: #f0f2f5;
+      margin-bottom: 14px;
+    }
+
+    .tab {
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .tab.active {
+      color: var(--blue);
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(25, 32, 51, .06);
+    }
+
+    .match-card {
+      display: flex;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: #fff;
+      margin-bottom: 12px;
+    }
+
+    .match-card .avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      font-size: 18px;
+    }
+
+    .match-main {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .match-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 3px;
+    }
+
+    .match-head strong {
+      font-size: 15px;
+      line-height: 22px;
+    }
+
+    .meta {
+      color: var(--subtle);
+      font-size: 12px;
+      line-height: 19px;
+      margin-bottom: 9px;
+    }
+
+    .tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .bottom-nav {
+      height: 62px;
+      border-top: 1px solid var(--line);
+      background: #fff;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .nav {
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 4px;
+      color: var(--subtle);
+      font-size: 11px;
+      line-height: 16px;
+    }
+
+    .nav.active {
+      color: var(--blue);
+      font-weight: 720;
+    }
+
+    .nav svg {
+      width: 21px;
+      height: 21px;
+    }
+
+    .footer {
+      position: absolute;
+      right: 64px;
+      bottom: 18px;
+      color: var(--subtle);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <header class="top">
+      <div class="brand">
+        <div class="logo">D</div>
+        <div>
+          <h1>Date System 用户端 UI</h1>
+          <div class="desc">Ant Design 组件语言 · 16:9 展示画布 · 当前项目功能重设计</div>
+        </div>
+      </div>
+      <div class="note">
+        <div class="palette">
+          <span style="background:#1677ff"></span><span style="background:#13c2c2"></span><span style="background:#52c41a"></span><span style="background:#faad14"></span><span style="background:#eb2f96"></span>
+        </div>
+        高级多色状态体系
+      </div>
+    </header>
+
+    <section class="stage">
+      <article class="phone">
+        <div class="status"><span>9:41</span><span class="signal"><span></span><span></span><span></span></span></div>
+        <div class="body">
+          <div class="card login-hero">
+            <div>
+              <div class="logo">D</div>
+              <h2>Date System</h2>
+              <p>仅限已完成认证的 QQ 群成员使用</p>
+            </div>
+            <span class="badge cyan">群成员认证</span>
+          </div>
+
+          <div class="card">
+            <div class="label">邀请码认证</div>
+            <div class="input">输入管理员发放的邀请码 <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></div>
+            <div class="stack" style="margin-top:12px">
+              <div class="button primary"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-4 10"/><path d="M14 14h6v6"/></svg>使用 QQ 登录</div>
+              <div class="button outline">提交邀请码认证</div>
+            </div>
+          </div>
+
+          <div class="trust-list">
+            <div class="trust-item"><span class="round-icon green"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span><span>认证通过后可填写资料</span></div>
+            <div class="trust-item"><span class="round-icon blue"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 5-3 8-7 9-4-1-7-4-7-9V7z"/></svg></span><span>资料仅在匹配后按规则展示</span></div>
+            <div class="trust-item"><span class="round-icon rose"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M7 7l1-3h8l1 3"/><rect x="5" y="7" width="14" height="13" rx="2"/></svg></span><span>照片只用于评分，不出现在结果页</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="phone">
+        <div class="status"><span>9:41</span><span class="signal"><span></span><span></span><span></span></span></div>
+        <div class="body">
+          <div class="page-head">
+            <div><h2>我的账号</h2><p>用户小红 · QQ 10001</p></div>
+            <div class="icon-button"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg></div>
+          </div>
+          <div class="card">
+            <div class="profile">
+              <div class="avatar">红</div>
+              <div><h3>用户小红</h3><p><span class="badge green">正常</span> <span class="badge blue">已认证</span></p></div>
+            </div>
+            <div class="metric">
+              <div><div class="label">资料完整度</div><strong>92%</strong></div>
+              <span class="badge cyan">可匹配</span>
+            </div>
+            <div class="progress"><span></span></div>
+          </div>
+          <div class="choice-grid">
+            <div class="choice active">
+              <span class="round-icon blue"><svg viewBox="0 0 24 24"><path d="M16 11c1.7 0 3-1.3 3-3s-1.3-3-3-3"/><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M2 20c.5-3 2.7-5 6-5s5.5 2 6 5"/><path d="M16 15c2.5.4 4.2 2.1 4.7 5"/></svg></span>
+              <h4>普通匹配版</h4><p>无需上传照片，进入普通匹配池</p>
+            </div>
+            <div class="choice">
+              <span class="round-icon rose"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M7 7l1-3h8l1 3"/><rect x="5" y="7" width="14" height="13" rx="2"/><path d="M9 13h6"/></svg></span>
+              <h4>颜值评分版</h4><p>评分完成后进入独立评分池</p>
+            </div>
+          </div>
+          <div class="action-grid">
+            <div class="button primary">双向匹配</div>
+            <div class="button outline">单项匹配</div>
+          </div>
+          <div class="notice">评分中，请耐心等待。评分组全部完成后展示结果。</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav active"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>资料</span></div>
+          <div class="nav"><svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M8 21H3v-5"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg><span>匹配</span></div>
+          <div class="nav"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg><span>申请</span></div>
+        </div>
+      </article>
+
+      <article class="phone">
+        <div class="status"><span>9:41</span><span class="signal"><span></span><span></span><span></span></span></div>
+        <div class="body">
+          <div class="page-head">
+            <div><h2>编辑资料</h2><p>资料越完整，匹配越准确</p></div>
+            <span class="badge blue">编辑中</span>
+          </div>
+          <div class="section-title"><span class="round-icon blue"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/><path d="M4 22c.7-4 3.5-6 8-6s7.3 2 8 6"/></svg></span>基础信息</div>
+          <div class="form-list">
+            <div class="row"><span>出生年月日</span><span>1998-08-12</span></div>
+            <div class="row"><span>身高</span><span>178 cm</span></div>
+            <div class="row"><span>体重</span><span>68 kg</span></div>
+            <div class="row"><span>所在城市</span><span>广东 广州</span></div>
+            <div class="row"><span>属性</span><span>偏1</span></div>
+          </div>
+          <div class="section-title"><span class="round-icon cyan"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>期待条件</div>
+          <div class="form-list">
+            <div class="row"><span>期待年龄</span><span>22 - 32</span></div>
+            <div class="row"><span>期待身高</span><span>165 - 190 cm</span></div>
+            <div class="row"><span>期待体重</span><span>45 - 85 kg</span></div>
+            <div class="row"><span>期待所在地</span><span>广东省</span></div>
+            <div class="row"><span>期待属性</span><span>0、偏0</span></div>
+          </div>
+          <div class="consent"><span class="checkbox"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span><span>同意匹配成功后，向对方展示除照片外的资料。</span></div>
+          <div class="button primary">保存并发布资料</div>
+        </div>
+      </article>
+
+      <article class="phone">
+        <div class="status"><span>9:41</span><span class="signal"><span></span><span></span><span></span></span></div>
+        <div class="body">
+          <div class="page-head">
+            <div><h2>匹配结果</h2><p>双向直接展示，单项需申请查看</p></div>
+            <div class="icon-button"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+          </div>
+          <div class="tabs"><div class="tab active">双向匹配</div><div class="tab">单项匹配</div></div>
+          <div class="match-card">
+            <div class="avatar">森</div>
+            <div class="match-main">
+              <div class="match-head"><strong>森屿</strong><span class="badge green">双向</span></div>
+              <div class="meta">QQ 2849****16 · 广州</div>
+              <div class="tags"><span class="badge gray">24岁</span><span class="badge gray">176cm</span><span class="badge blue">偏1</span></div>
+            </div>
+          </div>
+          <div class="match-card">
+            <div class="avatar" style="background:var(--cyan-1);color:var(--cyan)">澈</div>
+            <div class="match-main">
+              <div class="match-head"><strong>澈白</strong><span class="badge green">双向</span></div>
+              <div class="meta">QQ 9173****42 · 深圳</div>
+              <div class="tags"><span class="badge gray">27岁</span><span class="badge gray">181cm</span><span class="badge cyan">1</span></div>
+            </div>
+          </div>
+          <div class="match-card">
+            <div class="avatar" style="background:var(--gold-1);color:var(--gold)">川</div>
+            <div class="match-main">
+              <div class="match-head"><strong>川流</strong><span class="badge gold">单项</span></div>
+              <div class="meta">需向对方申请资料查看权限</div>
+              <div class="button small outline" style="width:92px">申请查看</div>
+            </div>
+          </div>
+          <div class="notice" style="background:var(--cyan-1);border-color:#87e8de;color:#08979c">照片不展示；评分池遵循 7 分线规则。</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>资料</span></div>
+          <div class="nav active"><svg viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M8 21H3v-5"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg><span>匹配</span></div>
+          <div class="nav"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg><span>申请</span></div>
+        </div>
+      </article>
+    </section>
+
+    <div class="footer">图片仅供参考，实际以上线产品为准</div>
+  </main>
+</body>
+</html>

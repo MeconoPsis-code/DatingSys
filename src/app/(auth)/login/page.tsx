@@ -67,8 +67,8 @@ function LoginContent() {
         {/* Logo */}
         <div className="mb-6 text-center">
           <h1 className="text-3xl font-bold">
-            <span className="bg-gradient-to-r from-[hsl(262,83%,68%)] via-[hsl(290,70%,65%)] to-[hsl(320,70%,60%)] bg-clip-text text-transparent">
-              Date System
+            <span className="text-brand-blue font-extrabold tracking-[-0.5px]">
+              TenMatch
             </span>
           </h1>
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
@@ -118,7 +118,7 @@ function LoginContent() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-gradient-to-r from-[hsl(262,83%,58%)] to-[hsl(290,70%,55%)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[hsl(262,83%,58%)/0.25] transition-all hover:scale-[1.02] hover:shadow-xl active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
+            className="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
           >
             {loading ? "登录中..." : "登 录"}
           </button>

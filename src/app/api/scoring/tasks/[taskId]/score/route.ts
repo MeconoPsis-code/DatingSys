@@ -5,16 +5,16 @@ import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
 
-// Valid scores: 0, 0.5, 1, 1.5, ..., 10
+// Valid scores: 0, 0.1, 0.2, ..., 10
 function isValidScore(score: number): boolean {
-  return score >= 0 && score <= 10 && score * 2 === Math.round(score * 2);
+  return score >= 0 && score <= 10 && score * 10 === Math.round(score * 10);
 }
 
 /**
  * POST /api/scoring/tasks/[taskId]/score
  *
  * Submit a score for a rating task.
- * Body: { score: number } — 0-10 in 0.5 steps
+ * Body: { score: number } — 0-10 in 0.1 steps
  */
 export async function POST(
   req: Request,
@@ -42,7 +42,7 @@ export async function POST(
   }
 
   if (!isValidScore(score)) {
-    return error("VALIDATION_ERROR", "评分必须在 0-10 之间，步长 0.5", 422);
+    return error("VALIDATION_ERROR", "评分必须在 0-10 之间，步长 0.1", 422);
   }
 
   // Find the task
@@ -88,66 +88,39 @@ export async function POST(
     });
   }
 
-  // Check if all scorers have scored
+  // Check if all eligible scorers have scored
+  // Filter out SUPER_ADMIN and the rated user from snapshot
+  const eligibleScorers = await db.user.findMany({
+    where: {
+      id: { in: scorerSnapshot, not: task.ratedUserId },
+      role: { in: ["SCORER", "ADMIN"] },
+    },
+    select: { id: true },
+  });
+  const eligibleCount = eligibleScorers.length;
   const totalScored = task.scores.length + 1; // +1 for the one we just created
-  const allDone = totalScored >= scorerSnapshot.length;
+  const allDone = totalScored >= eligibleCount;
 
   if (allDone) {
-    // Compute average
-    const allScores = await db.ratingScore.findMany({
-      where: { ratingTaskId: taskId },
-      select: { score: true },
+    // All scorers done — move to REVIEW for super admin approval
+    await db.ratingTask.update({
+      where: { id: taskId },
+      data: {
+        status: "REVIEW",
+        completedAt: new Date(),
+      },
     });
 
-    const avg =
-      allScores.reduce((sum, s) => sum + s.score, 0) / allScores.length;
-    const finalScore = Math.round(avg * 10) / 10; // round to 1 decimal
-
-    if (finalScore <= 6) {
-      // Low score — hold for super admin review before publishing
-      await db.ratingTask.update({
-        where: { id: taskId },
-        data: {
-          status: "REVIEW",
-          completedAt: new Date(),
-        },
-      });
-
-      await db.ratingProfile.upsert({
-        where: { userId: task.ratedUserId },
-        create: {
-          userId: task.ratedUserId,
-          ratingStatus: "REVIEW",
-        },
-        update: {
-          ratingStatus: "REVIEW",
-        },
-      });
-    } else {
-      // Score > 6 — publish directly
-      await db.ratingTask.update({
-        where: { id: taskId },
-        data: {
-          status: "COMPLETED",
-          completedAt: new Date(),
-        },
-      });
-
-      await db.ratingProfile.upsert({
-        where: { userId: task.ratedUserId },
-        create: {
-          userId: task.ratedUserId,
-          ratingStatus: "COMPLETED",
-          finalScore,
-          scoreCompletedAt: new Date(),
-        },
-        update: {
-          ratingStatus: "COMPLETED",
-          finalScore,
-          scoreCompletedAt: new Date(),
-        },
-      });
-    }
+    await db.ratingProfile.upsert({
+      where: { userId: task.ratedUserId },
+      create: {
+        userId: task.ratedUserId,
+        ratingStatus: "REVIEW",
+      },
+      update: {
+        ratingStatus: "REVIEW",
+      },
+    });
   }
 
   // Audit log
@@ -170,7 +143,7 @@ export async function POST(
     allDone,
     progress: {
       scored: totalScored,
-      total: scorerSnapshot.length,
+      total: eligibleCount,
     },
   });
 }

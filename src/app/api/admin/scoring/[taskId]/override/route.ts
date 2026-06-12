@@ -5,7 +5,7 @@ import { success, error } from '@/lib/api-response';
 /**
  * POST /api/admin/scoring/[taskId]/override
  * Super admin directly sets a custom final score, bypassing individual scorer scores.
- * Body: { score: number } — 0-10, step 0.5
+ * Body: { score: number } — 0-10, step 0.1
  */
 export async function POST(
   req: Request,
@@ -22,8 +22,8 @@ export async function POST(
       return error('VALIDATION', '请提供评分', 400);
     }
 
-    if (score < 0 || score > 10 || score * 2 !== Math.round(score * 2)) {
-      return error('VALIDATION', '评分必须在 0-10 之间，步长 0.5', 400);
+    if (score < 0 || score > 10 || score * 10 !== Math.round(score * 10)) {
+      return error('VALIDATION', '评分必须在 0-10 之间，步长 0.1', 400);
     }
 
     const task = await db.ratingTask.findUnique({ where: { id: taskId } });

@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TenMatch - QQ 群成员资料匹配系统 (Mobile)</title>
+  <!-- Google Fonts for premium typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #1677ff;
+      --primary-hover: #0958d9;
+      --primary-light: rgba(22, 119, 255, 0.08);
+      --primary-border: rgba(22, 119, 255, 0.15);
+      --text-dark: #1d2129;
+      --text-muted: #86909c;
+      --text-light: #f2f3f5;
+      --bg-white: #ffffff;
+      --font-outfit: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-inter);
+      background-color: #f0f3f8;
+      color: var(--text-dark);
+      min-height: 100vh;
+      width: 100vw;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+
+    /* Device frame wrapper for desktop previews */
+    .device-container {
+      position: relative;
+      width: 390px; /* Standard mobile width */
+      height: 844px; /* Standard mobile height (iPhone 13/14 equivalent) */
+      background-color: #ffffff;
+      border: 12px solid #1a1a1a; /* Sleek hardware bezel */
+      border-radius: 40px;
+      box-shadow: 0 32px 80px rgba(29, 33, 41, 0.2), 0 4px 16px rgba(29, 33, 41, 0.08);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      z-index: 1;
+    }
+
+    /* Ambient background circles inside the phone screen */
+    .bg-circle-tr {
+      position: absolute;
+      top: -100px;
+      right: -100px;
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      background-color: #ebf2ff;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .bg-circle-bl {
+      position: absolute;
+      bottom: -80px;
+      left: -100px;
+      width: 260px;
+      height: 260px;
+      border-radius: 50%;
+      background-color: #ebf2ff;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Mobile Status Bar */
+    .status-bar {
+      height: 44px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-dark);
+      z-index: 10;
+      background-color: transparent;
+      user-select: none;
+    }
+
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-icon {
+      width: 17px;
+      height: 17px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Header Navigation */
+    header {
+      height: 54px;
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 10;
+      background-color: transparent;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      height: 28px;
+      width: auto;
+      object-fit: contain;
+      mix-blend-mode: multiply;
+    }
+
+    .logo-text {
+      font-family: var(--font-outfit);
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--primary-color);
+      letter-spacing: -0.3px;
+    }
+
+    .header-more {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      transition: color 0.2s ease;
+    }
+
+    .header-more:hover {
+      color: var(--primary-color);
+    }
+
+    /* Main Content Area */
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 12px 20px 0;
+      z-index: 2;
+      overflow-y: auto;
+      /* Hide scrollbar for clean presentation */
+      scrollbar-width: none;
+    }
+    .content-area::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Verified Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      background-color: var(--primary-light);
+      border: 1px solid var(--primary-border);
+      border-radius: 100px;
+      color: var(--primary-color);
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: 0.1px;
+      margin-bottom: 16px;
+      animation: fadeInDown 0.6s ease-out;
+    }
+
+    .badge-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 13px;
+      height: 13px;
+    }
+
+    /* Typography */
+    .title-brand {
+      font-family: var(--font-outfit);
+      font-size: 52px;
+      font-weight: 900;
+      color: var(--primary-color);
+      line-height: 1.05;
+      letter-spacing: -1.5px;
+      margin-bottom: 6px;
+      text-align: center;
+      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .title-sub {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 4px;
+      text-align: center;
+      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+    }
+
+    .title-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-bottom: 20px;
+      text-align: center;
+      letter-spacing: 0.2px;
+      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+    }
+
+    /* Character & Orbit Scene */
+    .scene-container {
+      position: relative;
+      width: 100%;
+      height: 290px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+    }
+
+    /* Dashed Orbit Ring */
+    .orbit-ring {
+      position: absolute;
+      width: 320px;
+      height: 250px;
+      border: 1.5px dashed rgba(22, 119, 255, 0.25);
+      border-radius: 50%;
+      transform: rotate(-10deg);
+      z-index: 1;
+      pointer-events: none;
+      animation: orbitRotate 150s linear infinite;
+    }
+
+    /* Character Portrait */
+    .portrait-wrapper {
+      position: relative;
+      width: 250px;
+      height: 250px;
+      z-index: 2;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .portrait-image {
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 85%, rgba(0,0,0,0) 100%);
+      -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 85%, rgba(0,0,0,0) 100%);
+      animation: gentleFloat 6s ease-in-out infinite;
+    }
+
+    /* Floating Orbit Badges */
+    .orbit-badge {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #d3e5ff 0%, #b2d3ff 100%);
+      border: 1.5px solid #ffffff;
+      box-shadow: 0 6px 15px rgba(22, 119, 255, 0.14);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .orbit-badge svg {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+
+    .badge-speech {
+      top: 85px;
+      left: 18px;
+      animation: floatBadge1 4.5s ease-in-out infinite;
+    }
+
+    .badge-shield {
+      bottom: 60px;
+      left: 35px;
+      animation: floatBadge2 5s ease-in-out infinite;
+    }
+
+    .badge-users {
+      top: 140px;
+      right: 12px;
+      animation: floatBadge3 5.5s ease-in-out infinite;
+    }
+
+    /* Sparkling Stars */
+    .sparkle {
+      position: absolute;
+      color: rgba(22, 119, 255, 0.5);
+      fill: rgba(22, 119, 255, 0.5);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .sparkle-1 {
+      top: 45px;
+      left: 170px;
+      animation: twinkle 3s ease-in-out infinite;
+    }
+
+    .sparkle-2 {
+      top: 90px;
+      right: 25px;
+      animation: twinkle 4s ease-in-out infinite 1s;
+    }
+
+    .sparkle-3 {
+      bottom: 85px;
+      left: 10px;
+      animation: twinkle 3.5s ease-in-out infinite 0.5s;
+    }
+
+    .sparkle-4 {
+      bottom: 70px;
+      right: 65px;
+      animation: twinkle 4.5s ease-in-out infinite 1.5s;
+    }
+
+    /* Login & Agreement Section */
+    .action-container {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 24px;
+      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+    }
+
+    .btn-login {
+      width: 100%;
+      max-width: 320px;
+      height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background-color: var(--primary-color);
+      color: var(--bg-white);
+      font-size: 15.5px;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 8px 20px rgba(22, 119, 255, 0.22);
+      transition: all 0.2s ease;
+    }
+
+    .btn-login:hover {
+      background-color: var(--primary-hover);
+      box-shadow: 0 10px 24px rgba(22, 119, 255, 0.3);
+    }
+
+    .btn-icon {
+      width: 17px;
+      height: 17px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Interactive Agreement Checkbox Row */
+    .agreement-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-hidden {
+      display: none;
+    }
+
+    .custom-checkbox {
+      width: 15px;
+      height: 15px;
+      border: 1.5px solid #a6b9d0;
+      border-radius: 50%;
+      background-color: transparent;
+      display: inline-block;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .checkbox-hidden:checked + .custom-checkbox {
+      border-color: var(--primary-color);
+      background-color: var(--primary-color);
+    }
+
+    .checkbox-hidden:checked + .custom-checkbox::after {
+      content: '';
+      position: absolute;
+      left: 4.5px;
+      top: 1.5px;
+      width: 3px;
+      height: 6px;
+      border: solid #ffffff;
+      border-width: 0 1.5px 1.5px 0;
+      transform: rotate(45deg);
+    }
+
+    .agreement-text {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .agreement-link {
+      color: var(--primary-color);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .agreement-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Feature Grid Row */
+    .feature-grid {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      padding: 10px 0;
+      border-top: 1px solid rgba(22, 119, 255, 0.06);
+      margin-top: 8px;
+      animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both;
+    }
+
+    .feature-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .feature-icon-wrapper {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background-color: rgba(22, 119, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .feature-item:hover .feature-icon-wrapper {
+      background-color: rgba(22, 119, 255, 0.12);
+      transform: scale(1.05);
+    }
+
+    .feature-icon-wrapper svg {
+      width: 16px;
+      height: 16px;
+      color: var(--primary-color);
+    }
+
+    .feature-title {
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 2px;
+    }
+
+    .feature-desc {
+      font-size: 8.5px;
+      color: var(--text-muted);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    /* Footer & Home Bar */
+    footer {
+      width: 100%;
+      padding: 16px 0 10px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--text-muted);
+      z-index: 10;
+      background-color: transparent;
+      margin-top: auto;
+    }
+
+    .home-indicator {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 134px;
+      height: 5px;
+      background-color: #000000;
+      border-radius: 100px;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    /* Animations Keyframes */
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes orbitRotate {
+      from {
+        transform: rotate(-10deg);
+      }
+      to {
+        transform: rotate(350deg);
+      }
+    }
+
+    @keyframes gentleFloat {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-8px);
+      }
+    }
+
+    @keyframes floatBadge1 {
+      0%, 100% {
+        transform: translateY(0) scale(1);
+      }
+      50% {
+        transform: translateY(-8px) scale(1.02);
+      }
+    }
+
+    @keyframes floatBadge2 {
+      0%, 100% {
+        transform: translateY(0) scale(1);
+      }
+      50% {
+        transform: translateY(8px) scale(0.98);
+      }
+    }
+
+    @keyframes floatBadge3 {
+      0%, 100% {
+        transform: translateY(0) scale(1);
+      }
+      50% {
+        transform: translateY(-6px) scale(1.03);
+      }
+    }
+
+    @keyframes twinkle {
+      0%, 100% {
+        opacity: 0.25;
+        transform: scale(0.8);
+      }
+      50% {
+        opacity: 0.75;
+        transform: scale(1.15);
+      }
+    }
+
+    /* Mobile Responsive Rule (Fill screen on real mobile viewports) */
+    @media (max-width: 480px) {
+      body {
+        background-color: #ffffff;
+      }
+      .device-container {
+        width: 100vw;
+        height: 100vh;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .home-indicator {
+        display: none; /* Hide device simulator home bar on actual phone viewports */
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Phone Bezel Simulator -->
+  <div class="device-container">
+    
+    <!-- Ambient Background Accents -->
+    <div class="bg-circle-tr"></div>
+    <div class="bg-circle-bl"></div>
+
+    <!-- Phone Simulator Status Bar -->
+    <div class="status-bar">
+      <span>9:41</span>
+      <div class="status-icons">
+        <!-- Signal strength SVG -->
+        <svg class="status-icon" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="3" y="15" width="2.5" height="5" rx="0.5" />
+          <rect x="7" y="11" width="2.5" height="9" rx="0.5" />
+          <rect x="11" y="7" width="2.5" height="13" rx="0.5" />
+          <rect x="15" y="4" width="2.5" height="16" rx="0.5" />
+        </svg>
+        <!-- Wifi SVG -->
+        <svg class="status-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 21a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm-3.5-3.5a5 5 0 0 1 7 0l-1 1a3.6 3.6 0 0 0-5 0l-1-1zm-2-2a7.8 7.8 0 0 1 11 0l-1 1a6.4 6.4 0 0 0-9 0l-1-1zm-2-2a10.6 10.6 0 0 1 15 0l-1 1a9.2 9.2 0 0 0-13 0l-1-1z"/>
+        </svg>
+        <!-- Battery SVG -->
+        <svg class="status-icon" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="2" y="7" width="14" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
+          <rect x="4" y="9" width="10" height="6" rx="1" />
+          <path d="M17 10v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- App Header -->
+    <header>
+      <a href="#" class="logo-area">
+        <img src="./app_icon_dark.png" class="logo-icon" alt="TenMatch Icon">
+        <span class="logo-text">TenMatch</span>
+      </a>
+      <a href="#" class="header-more">了解更多 &gt;</a>
+    </header>
+
+    <!-- Scrollable content area inside the simulator -->
+    <main class="content-area">
+      <!-- Shield Badge -->
+      <div class="badge">
+        <span class="badge-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 13c0 5-3.5 7.5-7.66 9.7a1 1 0 0 1-.68 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 .76-.97l8-2a1 1 0 0 1 .48 0l8 2A1 1 0 0 1 20 6z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </span>
+        仅限指定 QQ 群认证成员
+      </div>
+
+      <!-- App Typography -->
+      <h1 class="title-brand">TenMatch</h1>
+      <h2 class="title-sub">QQ 群成员资料匹配系统</h2>
+      <p class="title-desc">填写资料 · 自动匹配 · 保护隐私</p>
+
+      <!-- Interactive Portrait Scene -->
+      <section class="scene-container">
+        <!-- Twinkling Sparkles -->
+        <svg class="sparkle sparkle-1" width="11" height="11" viewBox="0 0 24 24">
+          <path d="M12 0L14.8 9.2L24 12L14.8 14.8L12 24L9.2 14.8L0 12L9.2 9.2Z" />
+        </svg>
+        <svg class="sparkle sparkle-2" width="14" height="14" viewBox="0 0 24 24">
+          <path d="M12 0L14.8 9.2L24 12L14.8 14.8L12 24L9.2 14.8L0 12L9.2 9.2Z" />
+        </svg>
+        <svg class="sparkle sparkle-3" width="12" height="12" viewBox="0 0 24 24">
+          <path d="M12 0L14.8 9.2L24 12L14.8 14.8L12 24L9.2 14.8L0 12L9.2 9.2Z" />
+        </svg>
+        <svg class="sparkle sparkle-4" width="10" height="10" viewBox="0 0 24 24">
+          <path d="M12 0L14.8 9.2L24 12L14.8 14.8L12 24L9.2 14.8L0 12L9.2 9.2Z" />
+        </svg>
+
+        <!-- Dashed Orbit Ring -->
+        <div class="orbit-ring"></div>
+
+        <!-- Portrait Image wrapper -->
+        <div class="portrait-wrapper">
+          <img src="./portrait_transparent.png" class="portrait-image" alt="TenMatch Mascot">
+        </div>
+
+        <!-- Orbit Badge: Speech Bubble -->
+        <div class="orbit-badge badge-speech" title="聊天沟通">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="#1677ff" stroke="#1677ff" stroke-width="2" stroke-linejoin="round"/>
+            <circle cx="8" cy="10" r="1.5" fill="#ffffff"/>
+            <circle cx="12" cy="10" r="1.5" fill="#ffffff"/>
+            <circle cx="16" cy="10" r="1.5" fill="#ffffff"/>
+          </svg>
+        </div>
+
+        <!-- Orbit Badge: Shield Check -->
+        <div class="orbit-badge badge-shield" title="安全认证">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22C12 22 20 18 20 12V5L12 2L4 5V12C4 18 12 22 12 22Z" fill="#1677ff" stroke="#1677ff" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M9 11L11 13L15 9" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <!-- Orbit Badge: Users / Group Match -->
+        <div class="orbit-badge badge-users" title="成员匹配">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 8C17.66 8 19 6.66 19 5C19 3.34 17.66 2 16 2C14.34 2 13 3.34 13 5C13 6.66 14.34 8 16 8Z" fill="#1677ff" opacity="0.75"/>
+            <path d="M16 10C13.67 10 9 11.17 9 13.5V16H23V13.5C23 11.17 18.33 10 16 10Z" fill="#1677ff" opacity="0.75"/>
+            <path d="M8 8C9.66 8 11 6.66 11 5C11 3.34 9.66 2 8 2C6.34 2 5 3.34 5 5C5 6.66 6.34 8 8 8Z" fill="#1677ff"/>
+            <path d="M8 10C5.67 10 1 11.17 1 13.5V16H15V13.5C15 11.17 10.33 10 8 10Z" fill="#1677ff"/>
+          </svg>
+        </div>
+      </section>
+
+      <!-- CTA & Agreements -->
+      <section class="action-container">
+        <!-- QQ Login Button -->
+        <button class="btn-login">
+          <span class="btn-icon">
+            <!-- QQ Mascot Silhouette SVG in White -->
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 14.25c0-1.28-1.05-2.31-2.32-2.31h-.47c.51-.83.93-1.85.93-3.01C17.14 5.46 14.86 3.24 12 3.24S6.86 5.46 6.86 8.56c0 1.16.42 2.18.93 3.01h-.47C4.7 11.94 3.65 12.97 3.65 14.25c0 1.28 1.05 2.31 2.32 2.31h.47c0 2.04 1.67 3.7 3.71 3.7h3.71c2.04 0 3.71-1.66 3.71-3.7h.47c1.28 0 2.32-1.03 2.32-2.31z" />
+            </svg>
+          </span>
+          QQ 快捷登录
+        </button>
+
+        <!-- Interactive Checkbox agreement -->
+        <label class="agreement-wrapper" for="agree-checkbox">
+          <input type="checkbox" id="agree-checkbox" class="checkbox-hidden">
+          <span class="custom-checkbox"></span>
+          <span class="agreement-text">
+            登录即表示同意<a href="#" class="agreement-link">《用户协议》</a>和<a href="#" class="agreement-link">《隐私政策》</a>
+          </span>
+        </label>
+      </section>
+
+      <!-- Feature Grid Row -->
+      <section class="feature-grid">
+        <!-- Feature 1 -->
+        <div class="feature-item">
+          <div class="feature-icon-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </div>
+          <span class="feature-title">群认证专属</span>
+          <span class="feature-desc">仅限认证成员</span>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-item">
+          <div class="feature-icon-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+          </div>
+          <span class="feature-title">资料智能匹配</span>
+          <span class="feature-desc">快速找到同好</span>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-item">
+          <div class="feature-icon-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          </div>
+          <span class="feature-title">隐私有保障</span>
+          <span class="feature-desc">数据安全保护</span>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-item">
+          <div class="feature-icon-wrapper">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <span class="feature-title">资料自主可控</span>
+          <span class="feature-desc">随时修改资料</span>
+        </div>
+      </section>
+
+      <!-- Footer Info -->
+      <footer>
+        <p>© 2024 TenMatch. All rights reserved.</p>
+      </footer>
+    </main>
+
+    <!-- iOS Home Indicator bar -->
+    <div class="home-indicator"></div>
+
+  </div>
+
+</body>
+</html>

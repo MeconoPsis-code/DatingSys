@@ -73,7 +73,11 @@ export async function GET(req: Request) {
 
         const scorerSnapshot = task.scorerSnapshot as string[];
         const scoredCount = task.scores.length;
-        const totalScorers = scorerSnapshot.length;
+        // Exclude SUPER_ADMIN from total (they review, not score)
+        const eligibleInSnapshot = await db.user.count({
+          where: { id: { in: scorerSnapshot }, role: { in: ["SCORER", "ADMIN"] } },
+        });
+        const totalScorers = eligibleInSnapshot;
 
         return {
           id: task.id,
@@ -141,6 +145,10 @@ export async function GET(req: Request) {
         );
 
         const scorerSnapshot = s.ratingTask.scorerSnapshot as string[];
+        // Exclude SUPER_ADMIN from total
+        const eligibleTotal = await db.user.count({
+          where: { id: { in: scorerSnapshot }, role: { in: ["SCORER", "ADMIN"] } },
+        });
 
         return {
           id: s.ratingTask.id,
@@ -158,7 +166,7 @@ export async function GET(req: Request) {
             : null,
           progress: {
             scored: await db.ratingScore.count({ where: { ratingTaskId: s.ratingTaskId } }),
-            total: scorerSnapshot.length,
+            total: eligibleTotal,
           },
           profile: s.ratingTask.ratedUser.profile
             ? {

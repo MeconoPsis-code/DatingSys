@@ -64,10 +64,16 @@ export async function GET(
       return error('NOT_FOUND', '用户不存在或未完善资料', 404);
     }
 
-    // 3. Photos require an approved ViewRequest (even for mutual matches)
+    // 3. Check if current user has photos
+    const currentUserPhotoCount = await db.profilePhoto.count({
+      where: { profile: { userId: session.id } },
+    });
+    const currentUserHasPhotos = currentUserPhotoCount > 0;
+
+    // 4. Photos require an approved ViewRequest AND the requesting user must also have photos
     const photoApproved = !!approvedRequest;
     let photos: { id: string; url: string; order: number }[] = [];
-    if (photoApproved) {
+    if (photoApproved && currentUserHasPhotos) {
       photos = await Promise.all(
         (targetUser.profile.photos ?? []).map(async (p) => ({
           id: p.id,
@@ -77,13 +83,13 @@ export async function GET(
       );
     }
 
-    // 4. Build response
+    // 5. Build response — no-photo users cannot see appearance score
     const p = targetUser.profile;
     const age = ageFromDate(p.birthDate);
 
     return success({
       userId: targetUser.id,
-      qqNumber: targetUser.qqNumber,
+      qqNumber: approvedRequest ? targetUser.qqNumber : null,
       nickname: targetUser.authIdentities[0]?.nickname ?? null,
       age,
       heightCm: p.heightCm,
@@ -96,8 +102,8 @@ export async function GET(
       mbti: p.mbti,
       selfIntro: p.selfIntro,
       hasPhotos: (targetUser.profile.photos ?? []).length > 0,
-      photoApproved,
-      finalScore: targetUser.ratingProfile?.finalScore ?? null,
+      photoApproved: photoApproved && currentUserHasPhotos,
+      finalScore: currentUserHasPhotos ? (targetUser.ratingProfile?.finalScore ?? null) : null,
       photos,
     });
   } catch (err) {

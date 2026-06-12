@@ -202,7 +202,7 @@ export default function AuditLogPage() {
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">📋 审计日志</h1>
+      <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">审计日志</h1>
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
@@ -317,7 +317,14 @@ export default function AuditLogPage() {
       {/* Empty */}
       {!loading && logs.length === 0 && !error && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
-          <div className="mb-3 text-4xl">📋</div>
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-brand-muted mb-3 [&_svg]:h-6 [&_svg]:w-6 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+            <svg viewBox="0 0 24 24">
+              <rect width="16" height="20" x="4" y="2" rx="2" />
+              <line x1="8" y1="6" x2="16" y2="6" />
+              <line x1="8" y1="10" x2="16" y2="10" />
+              <line x1="8" y1="14" x2="13" y2="14" />
+            </svg>
+          </span>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">暂无日志记录</p>
         </div>
       )}
