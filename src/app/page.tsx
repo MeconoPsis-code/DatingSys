@@ -17,16 +17,16 @@ export default async function LandingPage() {
         <div className="pointer-events-none absolute -bottom-[180px] -left-[180px] z-0 h-[480px] w-[480px] rounded-full bg-[#ebf2ff]" />
 
         {/* Top Left Header Logo */}
-        <header className="absolute left-0 top-0 z-10 flex w-full items-center justify-between px-[80px] py-10">
-          <a href="#" className="logo-area flex items-center gap-3.5 no-underline">
+        <header className="absolute left-0 top-0 z-10 flex w-full items-center justify-between px-[80px] py-12">
+          <a href="#" className="logo-area flex items-center gap-4 no-underline">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/app_icon_dark.png" className="logo-icon h-[52px] w-auto object-contain mix-blend-multiply transition-transform duration-300 hover:scale-105" alt="TenMatch Icon" />
-            <span className="font-outfit text-[30px] font-extrabold tracking-[-0.5px] text-brand-blue">TenMatch</span>
+            <img src="/app_icon_dark.png" className="logo-icon h-[64px] w-auto object-contain mix-blend-multiply transition-transform duration-300 hover:scale-105" alt="TenMatch Icon" />
+            <span className="font-outfit text-[36px] font-extrabold tracking-[-0.5px] text-brand-blue">TenMatch</span>
           </a>
         </header>
 
         {/* Main Content Layout */}
-        <main className="main-container z-10 mt-[120px] grid flex-1 grid-cols-[1.2fr_1fr] items-end pb-[90px] pl-[100px] pr-[60px] w-full">
+        <main className="main-container z-10 mt-[80px] grid flex-1 grid-cols-[1.2fr_1fr] items-center pl-[120px] pr-[80px] w-full">
           {/* Left Hero Column */}
           <section className="content-left flex flex-col items-start max-w-[740px]">
             {/* Shield Badge */}
@@ -90,7 +90,7 @@ export default async function LandingPage() {
               <div className="orbit-ring landing-animate-orbit absolute z-0 h-[550px] w-[700px] -rotate-10 rounded-full border-[1.5px] border-dashed border-brand-blue/20" />
  
               {/* Character Portrait */}
-              <div className="portrait-container landing-animate-portrait absolute bottom-0 z-10 flex h-[650px] w-[650px] items-end justify-center overflow-hidden">
+              <div className="portrait-container landing-animate-portrait absolute bottom-[40px] z-10 flex h-[650px] w-[650px] items-end justify-center overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/portrait_transparent.png" className="landing-animate-float h-auto w-full object-contain [mask-image:linear-gradient(to_bottom,rgba(0,0,0,1)_85%,rgba(0,0,0,0)_100%)] [-webkit-mask-image:linear-gradient(to_bottom,rgba(0,0,0,1)_85%,rgba(0,0,0,0)_100%)]" alt="TenMatch Mascot" />
               </div>
