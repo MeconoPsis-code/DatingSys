@@ -13,6 +13,8 @@ const PUBLIC_PATHS = [
   "/forgot-passcode",
   "/api/auth",
   "/api/health",
+  "/api/bot",           // Bot webhook — uses X-Bot-Token auth
+  "/api/internal/bot",  // Internal bot APIs — uses X-Internal-Secret auth
 ];
 
 // Routes that require ADMIN+ role

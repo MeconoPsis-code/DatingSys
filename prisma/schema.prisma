@@ -30,6 +30,10 @@ enum MembershipStatus {
   EXPIRED
   REJECTED
   REVOKED
+  LEFT_PENDING_REVIEW
+  LEFT_CONFIRMED
+  RESTORED
+  REMOVED
 }
 
 
@@ -193,19 +197,29 @@ model AuthIdentity {
 
 /// Group membership verification status
 model GroupMembership {
-  id         String           @id @default(cuid())
-  userId     String           @unique
-  qqNumber   String
-  groupId    String           @default("default")
-  status     MembershipStatus @default(PENDING)
-  verifiedAt DateTime?
-  expiresAt  DateTime?
-  verifiedBy String?
-  revokedAt  DateTime?
-  revokedBy  String?
-  remark     String?
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  id              String           @id @default(cuid())
+  userId          String           @unique
+  qqNumber        String
+  groupId         String           @default("default")
+  status          MembershipStatus @default(PENDING)
+  verifiedAt      DateTime?
+  expiresAt       DateTime?
+  verifiedBy      String?
+  revokedAt       DateTime?
+  revokedBy       String?
+  remark          String?
+  // Bot leave-detection fields
+  leftDetectedAt  DateTime?        // When bot detected user left the group
+  leftConfirmedAt DateTime?        // When admin confirmed user left
+  restoredAt      DateTime?        // When admin restored user
+  removedAt       DateTime?        // When admin purged user data
+  leaveType       String?          // 'leave' | 'kick' | 'unknown'
+  reviewReason    String?          // Reason shown in admin review
+  reviewedBy      String?          // Admin who handled the review
+  reviewRemark    String?          // Admin notes
+  rawEvent        Json?            // Raw bot event that triggered status change
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   verifier User? @relation("MembershipVerifier", fields: [verifiedBy], references: [id])
@@ -433,4 +447,87 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ─── Bot Module Models ───────────────────────────────
+
+/// Bot identity — links QQ number to system user with bot-specific metadata
+model BotIdentity {
+  id                    String    @id @default(cuid())
+  userId                String?
+  qqNumber              String    @unique
+  qqEmail               String
+  qqNickname            String?
+  qqAvatarUrl           String?
+  qqAvatarSyncedAt      DateTime?
+  groupId               String
+  groupCard             String?
+  groupCardStatus       String?   // 'valid' | 'invalid_format' | etc.
+  groupCardSyncStatus   String?   // 'synced' | 'pending_sync' | 'sync_failed' | etc.
+  groupCardSyncedAt     DateTime?
+  registeredFromGroupId String
+  lastCommandAt         DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([groupId])
+  @@map("bot_identities")
+}
+
+/// Raw event log — every inbound NapCat/OneBot event
+model BotEventLog {
+  id           String   @id @default(cuid())
+  eventId      String?  // Deduplication key
+  platform     String   // 'napcat' | 'onebot' | 'other'
+  eventType    String   // 'group_message' | 'group_member_joined' | etc.
+  groupId      String?
+  qqNumber     String?
+  messageText  String?
+  rawPayload   Json
+  handled      Boolean  @default(false)
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([eventId])
+  @@index([groupId])
+  @@index([qqNumber])
+  @@map("bot_event_logs")
+}
+
+/// Outbound bot action log — messages sent, cards set, API calls
+model BotActionLog {
+  id           String   @id @default(cuid())
+  action       String   // 'send_group_msg' | 'set_group_card' | etc.
+  groupId      String?
+  qqNumber     String?
+  status       String   // 'success' | 'failed' | 'error'
+  request      Json?
+  response     Json?
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([action])
+  @@index([groupId])
+  @@index([qqNumber])
+  @@map("bot_action_logs")
+}
+
+/// Admin review for group membership anomalies
+model AdminReview {
+  id          String    @id @default(cuid())
+  type        String    // 'group_membership_left' | 'group_card_violation' | etc.
+  userId      String?
+  status      String    @default("pending") // 'pending' | 'resolved' | 'dismissed'
+  reason      String
+  metadata    Json?     // Additional context (qqNumber, groupId, leaveType, etc.)
+  handledBy   String?
+  handledAt   DateTime?
+  resolution  String?   // 'restored' | 'confirmed_left' | 'purged' | etc.
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([type])
+  @@index([userId])
+  @@index([status])
+  @@map("admin_reviews")
 }

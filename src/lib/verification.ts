@@ -10,7 +10,8 @@ const VERIFIED_TTL = 900; // 15 minutes to complete passcode setup
  * Returns the code string.
  */
 export async function generateAndStoreCode(qqNumber: string): Promise<string> {
-  const code = crypto.randomInt(100000, 999999).toString();
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const code = Array.from({ length: 6 }, () => chars[crypto.randomInt(chars.length)]).join("");
   const key = `auth:verify:${qqNumber}`;
 
   await redis.setex(key, CODE_TTL, code);
