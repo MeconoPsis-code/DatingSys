@@ -5,6 +5,8 @@
 完整产品与技术规格见：
 
 - [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md)
+- [docs/email-smtp.md](docs/emaol.md)
+- [docs/qqbot-napcat.md](docs/qqbot-napcat.md)
 
 ---
 
