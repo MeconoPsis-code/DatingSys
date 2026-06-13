@@ -5,7 +5,7 @@
 完整产品与技术规格见：
 
 - [项目核心架构](docs/PROJECT_SPEC.md)
-- [Email联动](docs/emial.md)
+- [Email联动](docs/email.md)
 - [Qbot联动](docs/qqbot-napcat.md)
 
 ---
