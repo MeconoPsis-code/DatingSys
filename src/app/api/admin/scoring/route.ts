@@ -107,6 +107,7 @@ export async function GET(req: Request) {
           completedAt: t.completedAt,
           createdAt: t.createdAt,
           finalScore: t.ratedUser.ratingProfile?.finalScore ?? null,
+          photoReports: (t.photoReports as Array<{ reporterId: string; reason: string; createdAt: string }>) || [],
         };
       })
     );

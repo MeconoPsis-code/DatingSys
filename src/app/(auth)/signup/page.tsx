@@ -7,7 +7,7 @@ type Step = "verify" | "passcode";
 
 /**
  * Sign-up page — multi-step flow:
- *  Step 1: Enter QQ号 + 验证码 (received via email after bot /signup command)
+ *  Step 1: Enter 验证码 (received via email after bot /signup command)
  *  Step 2: Set passcode
  */
 export default function SignupPage() {
@@ -15,8 +15,10 @@ export default function SignupPage() {
   const [step, setStep] = useState<Step>("verify");
 
   // Step 1 state
-  const [qqNumber, setQqNumber] = useState("");
   const [code, setCode] = useState("");
+
+  // Resolved from verify-code API response
+  const [qqNumber, setQqNumber] = useState("");
 
   // Step 2 state
   const [passcode, setPasscode] = useState("");
@@ -36,7 +38,7 @@ export default function SignupPage() {
       const res = await fetch("/api/auth/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qqNumber, code }),
+        body: JSON.stringify({ code }),
       });
 
       const data = await res.json();
@@ -46,6 +48,8 @@ export default function SignupPage() {
         return;
       }
 
+      // Save qqNumber returned from the API for the set-passcode step
+      setQqNumber(data.data.qqNumber);
       setStep("passcode");
     } catch {
       setError("网络错误，请稍后重试");
@@ -98,7 +102,7 @@ export default function SignupPage() {
           </h1>
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
             {step === "verify"
-              ? "输入 QQ 号和邮箱收到的验证码"
+              ? "输入邮箱收到的验证码"
               : "设置你的登录密码"}
           </p>
         </div>
@@ -143,25 +147,6 @@ export default function SignupPage() {
           <form onSubmit={handleVerify} className="space-y-4">
             <div>
               <label
-                htmlFor="qqNumber"
-                className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]"
-              >
-                QQ 号
-              </label>
-              <input
-                id="qqNumber"
-                type="text"
-                inputMode="numeric"
-                value={qqNumber}
-                onChange={(e) => setQqNumber(e.target.value)}
-                placeholder="请输入你的 QQ 号"
-                required
-                className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-              />
-            </div>
-
-            <div>
-              <label
                 htmlFor="code"
                 className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]"
               >
@@ -170,22 +155,23 @@ export default function SignupPage() {
               <input
                 id="code"
                 type="text"
-                inputMode="numeric"
+                inputMode="text"
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="请输入 6 位验证码"
                 maxLength={6}
                 required
+                autoFocus
                 className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] placeholder:tracking-normal placeholder:text-sm focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
               />
             </div>
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || code.length < 6}
               className="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
             >
-              {loading ? "验证中..." : "验证邮箱"}
+              {loading ? "验证中..." : "验证"}
             </button>
           </form>
         ) : (
@@ -210,6 +196,7 @@ export default function SignupPage() {
                 placeholder="至少 8 位，包含字母和数字"
                 required
                 minLength={8}
+                autoFocus
                 className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
               />
             </div>
@@ -274,7 +261,7 @@ export default function SignupPage() {
           </li>
           <li className="flex gap-2">
             <span className="font-mono text-[hsl(var(--primary))]">3.</span>
-            在此页面输入 QQ 号和验证码
+            在此页面输入验证码
           </li>
           <li className="flex gap-2">
             <span className="font-mono text-[hsl(var(--primary))]">4.</span>

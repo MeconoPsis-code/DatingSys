@@ -39,6 +39,7 @@ export async function GET() {
       status: session.status,
       qqNumber: session.qqNumber,
       nickname: session.nickname,
+      avatarUrl: session.avatarUrl,
       membershipStatus: session.membershipStatus,
       membershipExpiresAt: session.membershipExpiresAt,
       activePenalties,

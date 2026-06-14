@@ -14,6 +14,7 @@ datasource db {
 enum UserStatus {
   ACTIVE
   BANNED
+  PENDING_DELETE
   DELETED
 }
 
@@ -93,6 +94,7 @@ enum RatingTaskStatus {
   REVIEW
   COMPLETED
   NEEDS_RESCORE
+  REPORTED
 }
 
 enum ViewRequestStatus {
@@ -323,6 +325,7 @@ model RatingTask {
   photoObjectKey  String
   status          RatingTaskStatus @default(PENDING)
   scorerSnapshot  Json            // Array of scorer user IDs at task creation
+  photoReports    Json?           // Array of { reporterId, reason, createdAt }
   completedAt     DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt

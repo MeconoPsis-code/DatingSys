@@ -46,17 +46,21 @@ export async function POST(req: NextRequest) {
   // 3. Hash passcode
   const passwordHash = await hashPassword(passcode);
 
-  // 4. Retrieve bot context (groupId, nickname)
+  // 4. Retrieve bot context (groupId, nickname, avatarUrl, groupCard)
   const contextKey = `auth:context:${qqStr}`;
   const contextRaw = await redis.get(contextKey);
   const context = contextRaw ? JSON.parse(contextRaw) : {};
   await redis.del(contextKey);
 
+  // Avatar URL: use context or generate from QQ number
+  const avatarUrl = context.avatarUrl || `https://q1.qlogo.cn/g?b=qq&nk=${qqStr}&s=640`;
+  const nickname = context.nickname || null;
+
   // 5. Create or update user with credentials
   let user = await db.user.findFirst({ where: { qqNumber: qqStr } });
 
   if (!user) {
-    // New user — full creation
+    // New user — full creation with QQ portrait and nickname
     user = await db.user.create({
       data: {
         qqNumber: qqStr,
@@ -69,7 +73,8 @@ export async function POST(req: NextRequest) {
             provider: "qq_bot",
             providerUserId: qqStr,
             openid: `bot_${qqStr}`,
-            nickname: context.nickname || null,
+            nickname,
+            avatarUrl,
           },
         },
         groupMembership: {
@@ -85,7 +90,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } else {
-    // Existing user (e.g., seeded) — set password
+    // Existing user (e.g., seeded) — set password and update identity
     await db.user.update({
       where: { id: user.id },
       data: {
@@ -93,6 +98,41 @@ export async function POST(req: NextRequest) {
         lastLoginAt: new Date(),
       },
     });
+
+    // Upsert AuthIdentity with avatar and nickname
+    await db.authIdentity.upsert({
+      where: {
+        provider_openid: {
+          provider: "qq_bot",
+          openid: `bot_${qqStr}`,
+        },
+      },
+      update: {
+        nickname,
+        avatarUrl,
+      },
+      create: {
+        userId: user.id,
+        provider: "qq_bot",
+        providerUserId: qqStr,
+        openid: `bot_${qqStr}`,
+        nickname,
+        avatarUrl,
+      },
+    });
+  }
+
+  // 6. Update BotIdentity with nickname/card info
+  try {
+    await db.botIdentity.update({
+      where: { qqNumber: qqStr },
+      data: {
+        qqNickname: nickname,
+        groupCard: context.groupCard || null,
+      },
+    });
+  } catch {
+    // BotIdentity may not exist if avatar sync was skipped — non-critical
   }
 
   // 6. Create session

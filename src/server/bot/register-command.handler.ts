@@ -55,14 +55,28 @@ export async function handleRegisterCommand(
       return;
     }
 
-    // 3. Sync avatar (non-critical)
+    // 3. Fetch group member info (nickname, avatar) from NapCat
+    let nickname: string | null = null;
+    let avatarUrl: string | null = null;
+    let groupCard: string | null = null;
+    try {
+      const memberInfo = await botClient.getGroupMemberInfo(groupId, qqNumber);
+      nickname = memberInfo.card || memberInfo.nickname || null;
+      groupCard = memberInfo.card || null;
+      avatarUrl = memberInfo.avatarUrl || null;
+      log.info({ qqNumber, nickname, groupCard }, 'Fetched group member info');
+    } catch (err) {
+      log.warn({ err, qqNumber }, 'Failed to fetch group member info (non-critical)');
+    }
+
+    // 4. Sync avatar to BotIdentity (non-critical)
     try {
       await syncAvatar(qqNumber);
     } catch (err) {
       log.warn({ err, qqNumber }, 'Avatar sync failed (non-critical)');
     }
 
-    // 4. Check if already registered
+    // 5. Check if already registered
     const existingUser = await db.user.findFirst({
       where: { qqNumber },
     });
@@ -80,7 +94,7 @@ export async function handleRegisterCommand(
       return;
     }
 
-    // 5. Check existing verification rate limit (60s from verification module)
+    // 6. Check existing verification rate limit (60s from verification module)
     if (await isRateLimited(qqNumber)) {
       result = {
         success: false,
@@ -94,12 +108,12 @@ export async function handleRegisterCommand(
       return;
     }
 
-    // 6. Store bot context for later use during set-passcode
+    // 7. Store bot context for later use during set-passcode
     const contextKey = `auth:context:${qqNumber}`;
     await redis.setex(
       contextKey,
       900, // 15 min
-      JSON.stringify({ groupId, nickname: null })
+      JSON.stringify({ groupId, nickname, avatarUrl, groupCard })
     );
 
     // 7. Generate code and send email

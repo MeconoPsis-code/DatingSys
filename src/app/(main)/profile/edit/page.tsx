@@ -68,8 +68,8 @@ const INITIAL_FORM: FormState = {
   birthYear: "",
   birthMonth: "",
   birthDay: "",
-  heightCm: "",
-  weightKg: "",
+  heightCm: "170",
+  weightKg: "60",
   provinceCode: "",
   cityCode: "",
   locationType: "RESIDENCE",
@@ -472,36 +472,46 @@ export default function ProfileEditPage() {
           </div>
         </div>
 
-        {/* Height — number input */}
+        {/* Height — slider */}
         <div className="mb-4">
-          <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-            身高 (cm) <span className="text-[hsl(var(--destructive))]">*</span>
+          <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-[hsl(var(--foreground))]">
+            <span>身高 <span className="text-[hsl(var(--destructive))]">*</span></span>
+            <span className="tabular-nums text-[hsl(var(--primary))] font-semibold">{form.heightCm || "170"} cm</span>
           </label>
           <input
-            type="number"
+            type="range"
             min={100}
             max={250}
-            placeholder="请输入身高, 如 170"
-            value={form.heightCm}
+            step={1}
+            value={form.heightCm || "170"}
             onChange={(e) => updateField("heightCm", e.target.value)}
-            className="w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+            className="slider-input w-full"
           />
+          <div className="mt-1 flex justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
+            <span>100 cm</span>
+            <span>250 cm</span>
+          </div>
         </div>
 
-        {/* Weight — number input */}
+        {/* Weight — slider */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-            体重 (kg) <span className="text-[hsl(var(--destructive))]">*</span>
+          <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-[hsl(var(--foreground))]">
+            <span>体重 <span className="text-[hsl(var(--destructive))]">*</span></span>
+            <span className="tabular-nums text-[hsl(var(--primary))] font-semibold">{form.weightKg || "60"} kg = {Number(form.weightKg || "60") * 2} 斤</span>
           </label>
           <input
-            type="number"
+            type="range"
             min={30}
             max={200}
-            placeholder="请输入体重, 如 65"
-            value={form.weightKg}
+            step={1}
+            value={form.weightKg || "60"}
             onChange={(e) => updateField("weightKg", e.target.value)}
-            className="w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+            className="slider-input w-full"
           />
+          <div className="mt-1 flex justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
+            <span>30 kg</span>
+            <span>200 kg</span>
+          </div>
         </div>
       </section>
 
@@ -688,7 +698,7 @@ export default function ProfileEditPage() {
               <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
               <circle cx="12" cy="13" r="3" />
             </svg>
-            我想传照片
+            上传照片
           </button>
         </div>
 
@@ -704,63 +714,53 @@ export default function ProfileEditPage() {
             {/* Photo matching preference — only shown when user has photos */}
             {photos.length > 0 && (
               <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
-                <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-[hsl(var(--foreground))]">
-                  <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
-                    <circle cx="12" cy="12" r="10" />
-                    <circle cx="12" cy="12" r="6" />
-                    <circle cx="12" cy="12" r="2" />
-                  </svg>
-                  匹配偏好
-                </h3>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border))] px-4 py-3 cursor-pointer transition-all hover:border-[hsl(var(--primary)/0.5)]">
-                    <input
-                      type="radio"
-                      name="photoMatchPref"
-                      checked={form.photoMatchPref === "ALL"}
-                      onChange={() => updateField("photoMatchPref", "ALL")}
-                      className="h-4 w-4 accent-[hsl(var(--primary))]"
-                    />
-                    <div>
-                      <div className="text-sm font-medium text-[hsl(var(--foreground))]">与所有用户匹配</div>
-                      <div className="text-xs text-[hsl(var(--muted-foreground))]">包括有照片和无照片用户</div>
-                    </div>
-                  </label>
-                  <label className="flex items-center gap-3 rounded-lg border border-[hsl(var(--border))] px-4 py-3 cursor-pointer transition-all hover:border-[hsl(var(--primary)/0.5)]">
-                    <input
-                      type="radio"
-                      name="photoMatchPref"
-                      checked={form.photoMatchPref === "PHOTO_ONLY"}
-                      onChange={() => updateField("photoMatchPref", "PHOTO_ONLY")}
-                      className="h-4 w-4 accent-[hsl(var(--primary))]"
-                    />
-                    <div>
-                      <div className="text-sm font-medium text-[hsl(var(--foreground))]">仅与有照片用户匹配</div>
-                      <div className="text-xs text-[hsl(var(--muted-foreground))]">只匹配同样上传了照片的用户</div>
-                    </div>
-                  </label>
+              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-[hsl(var(--foreground))]">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" />
+                </svg>
+                匹配偏好
+              </h3>
+              <div className="space-y-2">
+                <label className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-all ${
+                  form.photoMatchPref === "ALL"
+                    ? "border-[hsl(var(--primary)/0.5)] bg-[hsl(var(--primary)/0.05)]"
+                    : "border-[hsl(var(--border))] hover:border-[hsl(var(--primary)/0.5)]"
+                }`}>
+                  <input
+                    type="radio"
+                    name="photoMatchPref"
+                    checked={form.photoMatchPref === "ALL"}
+                    onChange={() => updateField("photoMatchPref", "ALL")}
+                    className="h-4 w-4 accent-[hsl(var(--primary))]"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-[hsl(var(--foreground))]">与所有用户匹配</div>
+                    <div className="text-xs text-[hsl(var(--muted-foreground))]">包括有照片和无照片用户</div>
+                  </div>
+                </label>
+                <label className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-all ${
+                  form.photoMatchPref === "PHOTO_ONLY"
+                    ? "border-[hsl(var(--primary)/0.5)] bg-[hsl(var(--primary)/0.05)]"
+                    : "border-[hsl(var(--border))] hover:border-[hsl(var(--primary)/0.5)]"
+                }`}>
+                  <input
+                    type="radio"
+                    name="photoMatchPref"
+                    checked={form.photoMatchPref === "PHOTO_ONLY"}
+                    onChange={() => updateField("photoMatchPref", "PHOTO_ONLY")}
+                    className="h-4 w-4 accent-[hsl(var(--primary))]"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-[hsl(var(--foreground))]">仅与有照片用户匹配</div>
+                    <div className="text-xs text-[hsl(var(--muted-foreground))]">只匹配同样上传了照片的用户</div>
+                  </div>
+                </label>
 
-                  {/* High score only — nested under PHOTO_ONLY */}
-                  {form.photoMatchPref === "PHOTO_ONLY" && (
-                    <div className="ml-7 mt-1 rounded-lg border border-[hsl(var(--border)/0.5)] bg-[hsl(var(--secondary)/0.3)] px-4 py-3">
-                      <label className="flex items-center gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={form.highScoreOnly}
-                          onChange={(e) => updateField("highScoreOnly", e.target.checked)}
-                          className="h-4 w-4 rounded accent-[hsl(var(--primary))]"
-                        />
-                        <span className="text-sm text-[hsl(var(--foreground))]">
-                          仅与高分用户匹配（≥ 7.0 分）
-                        </span>
-                      </label>
-                      <p className="mt-1 ml-7 text-xs text-[hsl(var(--muted-foreground))]">
-                        只有你的评分也达到 7.0 分时此选项才会生效
-                      </p>
-                    </div>
-                  )}
-                </div>
+                {/* High score only — UI hidden, logic kept for future use */}
               </div>
+            </div>
             )}
           </>
         )}

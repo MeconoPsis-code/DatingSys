@@ -16,6 +16,10 @@ export async function generateAndStoreCode(qqNumber: string): Promise<string> {
 
   await redis.setex(key, CODE_TTL, code);
 
+  // Reverse mapping: code → qqNumber (so user only needs to enter the code)
+  const reverseKey = `auth:code-lookup:${code}`;
+  await redis.setex(reverseKey, CODE_TTL, qqNumber);
+
   // Set rate limit flag
   const rateKey = `auth:rate:${qqNumber}`;
   await redis.setex(rateKey, RATE_LIMIT_TTL, "1");
@@ -24,7 +28,7 @@ export async function generateAndStoreCode(qqNumber: string): Promise<string> {
 }
 
 /**
- * Validate a verification code.
+ * Validate a verification code (requires qqNumber).
  * On success: deletes the code (one-time use) and sets a "verified" flag.
  * Returns true if the code matches.
  */
@@ -37,14 +41,46 @@ export async function validateCode(
 
   if (!stored || stored !== code) return false;
 
-  // Delete the code (one-time use)
+  // Delete the code and reverse mapping (one-time use)
   await redis.del(key);
+  await redis.del(`auth:code-lookup:${code}`);
 
   // Set "verified" flag — user has 15min to set passcode
   const verifiedKey = `auth:verified:${qqNumber}`;
   await redis.setex(verifiedKey, VERIFIED_TTL, "1");
 
   return true;
+}
+
+/**
+ * Validate a verification code using only the code (no qqNumber needed).
+ * Looks up the qqNumber from the reverse mapping in Redis.
+ * On success: returns the qqNumber. On failure: returns null.
+ */
+export async function validateCodeOnly(
+  code: string
+): Promise<string | null> {
+  const normalizedCode = code.trim().toUpperCase();
+  const reverseKey = `auth:code-lookup:${normalizedCode}`;
+  const qqNumber = await redis.get(reverseKey);
+
+  if (!qqNumber) return null;
+
+  // Validate against the forward mapping to ensure consistency
+  const key = `auth:verify:${qqNumber}`;
+  const stored = await redis.get(key);
+
+  if (!stored || stored !== normalizedCode) return null;
+
+  // Delete the code and reverse mapping (one-time use)
+  await redis.del(key);
+  await redis.del(reverseKey);
+
+  // Set "verified" flag — user has 15min to set passcode
+  const verifiedKey = `auth:verified:${qqNumber}`;
+  await redis.setex(verifiedKey, VERIFIED_TTL, "1");
+
+  return qqNumber;
 }
 
 /**

@@ -19,6 +19,7 @@ interface MeData {
   status: string;
   qqNumber: string | null;
   nickname: string | null;
+  avatarUrl: string | null;
   membershipStatus: string | null;
   membershipExpiresAt: string | null;
   activePenalties: PenaltyInfo[];
@@ -196,14 +197,114 @@ function ChangePasscodeModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* ─── Clear Profile Modal ────────────────────────────── */
+/* ─── Delete Account Modal ───────────────────────────── */
 
-function ClearProfileModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+/* ─── Change Nickname Modal ──────────────────────────── */
+
+function ChangeNicknameModal({
+  currentNickname,
+  onClose,
+  onSuccess,
+}: {
+  currentNickname: string;
+  onClose: () => void;
+  onSuccess: (newNickname: string) => void;
+}) {
+  const [nickname, setNickname] = useState(currentNickname);
+  const [submitting, setSubmitting] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = nickname.trim();
+    if (!trimmed) return setMsg({ text: "请输入昵称", ok: false });
+    if (trimmed.length > 30) return setMsg({ text: "昵称不能超过30个字符", ok: false });
+    if (trimmed === currentNickname) return setMsg({ text: "昵称未变更", ok: false });
+
+    setSubmitting(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/account/nickname", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "操作失败");
+      setMsg({ text: data.data.message, ok: true });
+      setTimeout(() => onSuccess(trimmed), 800);
+    } catch (err) {
+      setMsg({ text: err instanceof Error ? err.message : "操作失败", ok: false });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const inputCls =
+    "w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-3 py-2.5 text-sm text-[hsl(var(--foreground))] outline-none focus:border-[hsl(var(--ring))] transition-colors";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl"
+      >
+        <h3 className="mb-5 flex items-center gap-1.5 text-base font-semibold text-[hsl(var(--foreground))]">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          修改昵称
+        </h3>
+
+        <div className="mb-3">
+          <label className="mb-1.5 block text-sm text-[hsl(var(--muted-foreground))]">新昵称</label>
+          <input
+            type="text"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            maxLength={30}
+            autoFocus
+            className={inputCls}
+          />
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+            修改后将同步更新 QQ 群名片
+          </p>
+        </div>
+
+        {msg && (
+          <p className={`mb-3 text-xs ${msg.ok ? "text-emerald-400" : "text-red-400"}`}>{msg.text}</p>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2.5 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))]"
+          >
+            取消
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="flex-1 rounded-lg bg-brand-blue py-2.5 text-sm font-semibold text-white transition-all hover:bg-brand-blue/90 disabled:opacity-50"
+          >
+            {submitting ? "保存中..." : "保存"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ─── Delete Account Modal ───────────────────────────── */
+
+function DeleteAccountModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [confirmation, setConfirmation] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const CONFIRM_TEXT = "确认清空我的资料";
+  const CONFIRM_TEXT = "确认删除账号";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -214,17 +315,17 @@ function ClearProfileModal({ onClose, onSuccess }: { onClose: () => void; onSucc
     setSubmitting(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/profile/clear", {
+      const res = await fetch("/api/account/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirmation }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || "清空失败");
-      setMsg({ text: "资料已清空", ok: true });
+      if (!res.ok) throw new Error(data.error?.message || "操作失败");
+      setMsg({ text: "账号删除请求已提交，即将退出登录", ok: true });
       setTimeout(onSuccess, 1500);
     } catch (err) {
-      setMsg({ text: err instanceof Error ? err.message : "清空失败", ok: false });
+      setMsg({ text: err instanceof Error ? err.message : "操作失败", ok: false });
     } finally {
       setSubmitting(false);
     }
@@ -242,11 +343,11 @@ function ClearProfileModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
-          清空资料
+          删除账号
         </h3>
         <p className="mb-4 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
-          此操作将<strong className="text-[hsl(0,60%,65%)]">永久删除</strong>您的个人资料和偏好设置。
-          清空后 <strong>30天内</strong>不能重新发布资料。
+          此操作将<strong className="text-[hsl(0,60%,65%)]">永久删除</strong>您的账号及所有数据。
+          删除请求提交后您将<strong>无法再登录</strong>，管理员审核通过后数据将被彻底清除。
         </p>
 
         <div className="mb-4">
@@ -279,7 +380,7 @@ function ClearProfileModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             disabled={submitting || confirmation !== CONFIRM_TEXT}
             className="flex-1 rounded-lg bg-[hsl(0,60%,45%)] py-2.5 text-sm font-semibold text-white transition-all hover:bg-[hsl(0,60%,50%)] disabled:opacity-40"
           >
-            {submitting ? "清空中..." : "确认清空"}
+            {submitting ? "提交中..." : "确认删除"}
           </button>
         </div>
       </form>
@@ -294,7 +395,8 @@ export default function MePage() {
   const [me, setMe] = useState<MeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showChangePasscode, setShowChangePasscode] = useState(false);
-  const [showClearProfile, setShowClearProfile] = useState(false);
+  const [showChangeNickname, setShowChangeNickname] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -398,13 +500,36 @@ export default function MePage() {
 
       {/* Header */}
       <div className="flex items-center gap-4 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#1677ff] to-[#0958d9] text-2xl font-bold text-white shadow-lg shadow-brand-blue/25">
+        {me.avatarUrl ? (
+          <img
+            src={me.avatarUrl}
+            alt={me.nickname || "头像"}
+            className="h-16 w-16 rounded-full object-cover shadow-lg shadow-brand-blue/25"
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              // Fallback to initial-letter circle on load error
+              const target = e.currentTarget;
+              target.style.display = "none";
+              target.nextElementSibling?.classList.remove("hidden");
+            }}
+          />
+        ) : null}
+        <div className={`flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#1677ff] to-[#0958d9] text-2xl font-bold text-white shadow-lg shadow-brand-blue/25 ${me.avatarUrl ? "hidden" : ""}`}>
           {(me.nickname || me.qqNumber || "?").charAt(0).toUpperCase()}
         </div>
         <div className="flex-1">
-          <h1 className="text-lg font-bold text-[hsl(var(--foreground))]">
-            {me.nickname || "未设置昵称"}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold text-[hsl(var(--foreground))]">
+              {me.nickname || "未设置昵称"}
+            </h1>
+            <button
+              type="button"
+              onClick={() => setShowChangeNickname(true)}
+              className="shrink-0 rounded-md border border-[hsl(var(--border))] px-2 py-0.5 text-[11px] font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:border-brand-blue hover:bg-brand-blue/10 hover:text-brand-blue"
+            >
+              编辑
+            </button>
+          </div>
           <div className="mt-1 flex items-center gap-2">
             <span className="rounded-md bg-[hsl(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[hsl(var(--muted-foreground))]">
               {ROLE_LABELS[me.role] || me.role}
@@ -583,22 +708,24 @@ export default function MePage() {
             <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
           </button>
 
-          {/* Clear profile */}
-          <button
-            type="button"
-            onClick={() => setShowClearProfile(true)}
-            className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(0,60%,65%)] transition-colors hover:bg-[hsl(0,60%,50%/0.08)]"
-          >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-500 shrink-0">
-              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-                <path d="M3 6h18" />
-                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-              </svg>
-            </div>
-            清空资料
-            <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
-          </button>
+          {/* Delete account — hidden for super admins */}
+          {me.role !== "SUPER_ADMIN" && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAccount(true)}
+              className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(0,60%,65%)] transition-colors hover:bg-[hsl(0,60%,50%/0.08)]"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-500 shrink-0">
+                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="15" y1="9" x2="9" y2="15" />
+                  <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+              </div>
+              删除账号
+              <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -616,12 +743,22 @@ export default function MePage() {
       {showChangePasscode && (
         <ChangePasscodeModal onClose={() => setShowChangePasscode(false)} />
       )}
-      {showClearProfile && (
-        <ClearProfileModal
-          onClose={() => setShowClearProfile(false)}
+      {showChangeNickname && (
+        <ChangeNicknameModal
+          currentNickname={me.nickname || ""}
+          onClose={() => setShowChangeNickname(false)}
+          onSuccess={(newNickname) => {
+            setMe({ ...me, nickname: newNickname });
+            setShowChangeNickname(false);
+          }}
+        />
+      )}
+      {showDeleteAccount && (
+        <DeleteAccountModal
+          onClose={() => setShowDeleteAccount(false)}
           onSuccess={() => {
-            setShowClearProfile(false);
-            router.push("/profile");
+            setShowDeleteAccount(false);
+            handleLogout();
           }}
         />
       )}

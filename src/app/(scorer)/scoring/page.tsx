@@ -36,13 +36,49 @@ export default function ScoringPage() {
   // Photo viewer within current task
   const [photoIndex, setPhotoIndex] = useState(0);
 
-  // Scoring state
-  const [scoreValue, setScoreValue] = useState(5.0);
+  // Scoring state — 5 sub-items
+  const [scores, setScores] = useState({
+    contour: 5,      // 轮廓与骨相
+    skin: 5,         // 皮肤状态
+    harmony: 5,      // 五官和谐度
+    styling: 5,      // 发型与造型
+    charisma: 5,     // 气质与眼缘
+  });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Weighted total: hardware (3 items avg) × 60% + software × 20% + subjective × 20%
+  const hardwareAvg = (scores.contour + scores.skin + scores.harmony) / 3;
+  const scoreValue = hardwareAvg * 0.6 + scores.styling * 0.2 + scores.charisma * 0.2;
+
   // Success flash
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Report state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState("");
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+
+  async function handleReport() {
+    if (!currentTask || !reportReason.trim()) return;
+    setReportSubmitting(true);
+    try {
+      const res = await fetch(`/api/scoring/tasks/${currentTask.id}/report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reportReason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "举报失败");
+      setShowReportModal(false);
+      setReportReason("");
+      alert("举报已提交，管理员将会审核");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "举报失败");
+    } finally {
+      setReportSubmitting(false);
+    }
+  }
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -62,7 +98,7 @@ export default function ScoringPage() {
       setTasks(fetched);
       setCurrentIndex(0);
       setPhotoIndex(0);
-      setScoreValue(5.0);
+      setScores({ contour: 5, skin: 5, harmony: 5, styling: 5, charisma: 5 });
       setSubmitError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
@@ -86,7 +122,7 @@ export default function ScoringPage() {
       const res = await fetch(`/api/scoring/tasks/${currentTask.id}/score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ score: scoreValue }),
+        body: JSON.stringify({ score: Math.round(scoreValue * 10) / 10 }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -103,7 +139,7 @@ export default function ScoringPage() {
         setTasks(remaining);
         setCurrentIndex(0);
         setPhotoIndex(0);
-        setScoreValue(5.0);
+        setScores({ contour: 5, skin: 5, harmony: 5, styling: 5, charisma: 5 });
         setSubmitError(null);
       } else {
         // No more tasks — refresh from API
@@ -295,54 +331,91 @@ export default function ScoringPage() {
               )}
 
               {/* Scoring controls */}
-              <div className="p-5 space-y-4">
-                {/* Score display */}
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-[hsl(var(--primary))]">
-                    {scoreValue.toFixed(1)}
+              <div className="p-5 space-y-5">
+
+                {/* ── Hardware scores (60%) ── */}
+                <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4 space-y-4">
+                  <div className="text-xs font-semibold text-[hsl(var(--foreground))]">硬件分</div>
+
+                  {/* 轮廓与骨相 */}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="text-[hsl(var(--foreground))]">轮廓与骨相</span>
+                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.contour.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={10} step={0.1}
+                      value={scores.contour}
+                      onChange={(e) => setScores(s => ({ ...s, contour: Number(e.target.value) }))}
+                      className="slider-input w-full"
+                    />
                   </div>
-                  <div className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-                    评分
+
+                  {/* 皮肤状态 */}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="text-[hsl(var(--foreground))]">皮肤状态</span>
+                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.skin.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={10} step={0.1}
+                      value={scores.skin}
+                      onChange={(e) => setScores(s => ({ ...s, skin: Number(e.target.value) }))}
+                      className="slider-input w-full"
+                    />
+                  </div>
+
+                  {/* 五官和谐度 */}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="text-[hsl(var(--foreground))]">五官和谐度</span>
+                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.harmony.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={10} step={0.1}
+                      value={scores.harmony}
+                      onChange={(e) => setScores(s => ({ ...s, harmony: Number(e.target.value) }))}
+                      className="slider-input w-full"
+                    />
                   </div>
                 </div>
 
-                {/* Score slider */}
-                <div className="space-y-1">
-                  <input
-                    type="range"
-                    min={0}
-                    max={10}
-                    step={0.1}
-                    value={scoreValue}
-                    onChange={(e) => setScoreValue(Number(e.target.value))}
-                    className="w-full accent-[hsl(var(--primary))] h-2"
-                  />
-                  <div className="flex justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
-                    <span>0</span>
-                    <span>2</span>
-                    <span>4</span>
-                    <span>6</span>
-                    <span>8</span>
-                    <span>10</span>
+                {/* ── Software score (20%) ── */}
+                <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4 space-y-4">
+                  <div className="text-xs font-semibold text-[hsl(var(--foreground))]">软件分</div>
+
+                  {/* 发型与造型 */}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="text-[hsl(var(--foreground))]">发型与造型</span>
+                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.styling.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={10} step={0.1}
+                      value={scores.styling}
+                      onChange={(e) => setScores(s => ({ ...s, styling: Number(e.target.value) }))}
+                      className="slider-input w-full"
+                    />
                   </div>
                 </div>
 
-                {/* Quick select buttons */}
-                <div className="flex justify-center gap-1.5">
-                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setScoreValue(s)}
-                      className={`h-9 w-9 rounded-lg border text-xs font-semibold transition-all ${
-                        Math.floor(scoreValue) === s
-                          ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.2)] text-[hsl(var(--primary))]"
-                          : "border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.5)]"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
+                {/* ── Subjective score (20%) ── */}
+                <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4 space-y-4">
+                  <div className="text-xs font-semibold text-[hsl(var(--foreground))]">主观分</div>
+
+                  {/* 气质与眼缘 */}
+                  <div>
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="text-[hsl(var(--foreground))]">气质与眼缘</span>
+                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.charisma.toFixed(1)}</span>
+                    </div>
+                    <input
+                      type="range" min={0} max={10} step={0.1}
+                      value={scores.charisma}
+                      onChange={(e) => setScores(s => ({ ...s, charisma: Number(e.target.value) }))}
+                      className="slider-input w-full"
+                    />
+                  </div>
                 </div>
 
                 {submitError && (
@@ -356,8 +429,58 @@ export default function ScoringPage() {
                   disabled={submitting}
                   className="w-full rounded-xl bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-4 py-3 text-base font-bold text-white shadow-lg shadow-brand-blue/25 transition-all hover:scale-[1.01] hover:shadow-xl active:scale-[0.99] disabled:opacity-50"
                 >
-                  {submitting ? "提交中..." : `提交评分 ${scoreValue.toFixed(1)} 分`}
+                  {submitting ? "提交中..." : "提交评分"}
                 </button>
+
+                {/* Report button */}
+                <button
+                  type="button"
+                  onClick={() => setShowReportModal(true)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(0,60%,65%)]"
+                >
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                    <line x1="4" y1="22" x2="4" y2="15" />
+                  </svg>
+                  举报异常照片
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Report modal */}
+          {showReportModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowReportModal(false)}>
+              <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <h3 className="mb-1 text-base font-semibold text-[hsl(var(--foreground))]">举报异常照片</h3>
+                <p className="mb-4 text-xs text-[hsl(var(--muted-foreground))]">
+                  请描述照片存在的问题（如非本人照片、不雅内容、截图等）
+                </p>
+                <textarea
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  maxLength={200}
+                  rows={3}
+                  placeholder="请输入举报原因..."
+                  className="mb-3 w-full resize-none rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowReportModal(false); setReportReason(""); }}
+                    className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReport}
+                    disabled={reportSubmitting || !reportReason.trim()}
+                    className="flex-1 rounded-lg bg-[hsl(0,60%,55%)] py-2 text-sm font-medium text-white transition-all hover:bg-[hsl(0,60%,50%)] disabled:opacity-50"
+                  >
+                    {reportSubmitting ? "提交中..." : "提交举报"}
+                  </button>
+                </div>
               </div>
             </div>
           )}

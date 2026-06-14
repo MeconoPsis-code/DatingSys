@@ -30,6 +30,7 @@ const ROLE_LABELS: Record<string, string> = {
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   ACTIVE: { label: "正常", cls: "bg-[#f6ffed] text-[#389e0d] border-[#b7eb8f]" },
   BANNED: { label: "封禁", cls: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]" },
+  PENDING_DELETE: { label: "待删除", cls: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]" },
   DELETED: { label: "注销", cls: "bg-[#f5f5f5] text-[#595959] border-[#d9d9d9]" },
 };
 
@@ -182,21 +183,31 @@ function ActionModal({
   const [err, setErr] = useState<string | null>(null);
 
   const actions = [
-    { value: "warn", label: "⚠️ 警告", show: user.status !== "BANNED" },
+    { value: "warn", label: "⚠️ 警告", show: user.status !== "BANNED" && user.status !== "PENDING_DELETE" },
     {
       value: "ban",
       label: "🚫 封禁",
-      show: user.status !== "BANNED",
+      show: user.status !== "BANNED" && user.status !== "PENDING_DELETE",
     },
     {
       value: "revoke_warn",
       label: "↩️ 撤销警告",
-      show: user.penaltyCount > 0 && user.status !== "BANNED",
+      show: user.penaltyCount > 0 && user.status !== "BANNED" && user.status !== "PENDING_DELETE",
     },
     {
       value: "revoke_ban",
       label: "↩️ 撤销封禁",
       show: user.status === "BANNED",
+    },
+    {
+      value: "approve_delete",
+      label: "✓ 批准删除",
+      show: user.status === "PENDING_DELETE",
+    },
+    {
+      value: "cancel_delete",
+      label: "↩️ 撤销删除",
+      show: user.status === "PENDING_DELETE",
     },
   ].filter((a) => a.show);
 
@@ -489,6 +500,7 @@ export default function AdminUsersPage() {
           <option value="">全部状态</option>
           <option value="ACTIVE">正常</option>
           <option value="BANNED">封禁</option>
+          <option value="PENDING_DELETE">待删除</option>
         </select>
 
         <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">

@@ -13,6 +13,7 @@ export interface SessionUser {
   status: UserStatus;
   qqNumber: string | null;
   nickname: string | null;
+  avatarUrl: string | null;
   membershipStatus: MembershipStatus | null;
   membershipExpiresAt: Date | null;
 }
@@ -28,7 +29,7 @@ export async function getSession(): Promise<SessionUser | null> {
   const user = await db.user.findUnique({
     where: { id: payload.sub },
     include: {
-      authIdentities: { select: { nickname: true }, take: 1 },
+      authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
       groupMembership: {
         select: { qqNumber: true, status: true, expiresAt: true },
       },
@@ -43,6 +44,7 @@ export async function getSession(): Promise<SessionUser | null> {
     status: user.status,
     qqNumber: user.qqNumber ?? null,
     nickname: user.authIdentities[0]?.nickname ?? null,
+    avatarUrl: user.authIdentities[0]?.avatarUrl ?? null,
     membershipStatus: user.groupMembership?.status ?? null,
     membershipExpiresAt: user.groupMembership?.expiresAt ?? null,
   };
@@ -55,6 +57,8 @@ export async function requireAuth(): Promise<SessionUser> {
   const session = await getSession();
   if (!session) throw new AppError("UNAUTHORIZED");
   if (session.status === "BANNED") throw new AppError("FORBIDDEN", "账号已被封禁");
+  if (session.status === "PENDING_DELETE") throw new AppError("FORBIDDEN", "账号已申请删除，无法继续使用");
+  if (session.status === "DELETED") throw new AppError("FORBIDDEN", "账号已被删除");
   return session;
 }
 

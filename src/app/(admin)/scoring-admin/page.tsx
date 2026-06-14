@@ -101,6 +101,12 @@ interface TaskPhoto {
   url: string;
 }
 
+interface PhotoReport {
+  reporterId: string;
+  reason: string;
+  createdAt: string;
+}
+
 interface ScoringTask {
   id: string;
   ratedUserId: string;
@@ -117,6 +123,7 @@ interface ScoringTask {
   completedAt: string | null;
   createdAt: string;
   finalScore: number | null;
+  photoReports: PhotoReport[];
 }
 
 /* ─── Constants ──────────────────────────────────────── */
@@ -124,6 +131,7 @@ interface ScoringTask {
 const STATUS_TABS = [
   { value: "", label: "全部" },
   { value: "REVIEW", label: "待审核", superOnly: true },
+  { value: "REPORTED", label: "被举报" },
   { value: "PENDING", label: "待评分" },
   { value: "SCORING", label: "评分中" },
   { value: "COMPLETED", label: "已完成" },
@@ -134,6 +142,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   SCORING: { label: "评分中", cls: "bg-[#e6f4ff] text-[#0958d9] border-[#91caff]" },
   REVIEW: { label: "待审核", cls: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]" },
   COMPLETED: { label: "已完成", cls: "bg-[#f6ffed] text-[#389e0d] border-[#b7eb8f]" },
+  REPORTED: { label: "被举报", cls: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]" },
 };
 
 function formatDate(d: string) {
@@ -224,12 +233,14 @@ function TaskCard({
   onRescore,
   onApprove,
   onOverride,
+  onRevokePhotos,
 }: {
   task: ScoringTask;
   isSuperAdmin: boolean;
   onRescore: (taskId: string) => void;
   onApprove: (taskId: string) => void;
   onOverride: (taskId: string, score: number) => void;
+  onRevokePhotos: (taskId: string) => void;
 }) {
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const badge = STATUS_BADGE[task.status] || { label: task.status, cls: "" };
@@ -370,7 +381,7 @@ function TaskCard({
       {task.status === "REVIEW" && isSuperAdmin && (
         <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-500/10 px-4 py-3">
           <p className="mb-2 text-xs font-medium text-orange-400">
-            ⚠️ 该用户评分 ≤ 6.0，需要超级管理员审核后才会发布给用户
+            ⚠️ 该用户的评分已完成，需要超级管理员审核后才会发布给用户
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -406,6 +417,46 @@ function TaskCard({
             </button>
             <OverrideScoreInput onSubmit={(score) => onOverride(task.id, score)} />
           </div>
+        </div>
+      )}
+
+      {/* Photo reports alert */}
+      {task.photoReports.length > 0 && isSuperAdmin && (
+        <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
+          <p className="mb-2 text-xs font-medium text-red-400 flex items-center gap-1">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+              <line x1="4" y1="22" x2="4" y2="15" />
+            </svg>
+            照片被举报 ({task.photoReports.length} 条)
+          </p>
+          <div className="space-y-1.5 mb-3">
+            {task.photoReports.map((r, i) => {
+              const info = task.scorerNames?.[r.reporterId];
+              const name = info?.nickname || info?.qq || r.reporterId.slice(0, 8);
+              return (
+                <div key={i} className="rounded-md bg-red-500/5 px-3 py-2 text-xs">
+                  <span className="font-medium text-[hsl(var(--foreground))]">{name}:</span>
+                  <span className="ml-1.5 text-[hsl(var(--muted-foreground))]">{r.reason}</span>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm("确定要撤销该用户的照片吗？照片将被删除，用户需要重新上传。")) {
+                onRevokePhotos(task.id);
+              }
+            }}
+            className="flex items-center rounded-lg bg-red-500/15 border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:bg-red-500/25"
+          >
+            <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+            撤销照片并要求重新上传
+          </button>
         </div>
       )}
 
@@ -524,6 +575,19 @@ export default function ScoringAdminPage() {
       alert(err instanceof Error ? err.message : "操作失败");
     }
   }
+
+  async function handleRevokePhotos(taskId: string) {
+    try {
+      const res = await fetch(`/api/admin/scoring/${taskId}/revoke-photos`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "操作失败");
+      alert("照片已撤销，用户需要重新上传");
+      fetchTasks();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "操作失败");
+    }
+  }
+
   const [fixing, setFixing] = useState(false);
 
   async function handleFixStuck() {
@@ -617,6 +681,7 @@ export default function ScoringAdminPage() {
               onRescore={handleRescore}
               onApprove={handleApprove}
               onOverride={handleOverride}
+              onRevokePhotos={handleRevokePhotos}
             />
           ))}
         </div>
