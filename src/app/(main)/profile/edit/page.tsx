@@ -8,6 +8,7 @@ import { LOCATION_TYPE_OPTIONS } from "@/data/location-types";
 import { MBTI_OPTIONS } from "@/data/mbti";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { PhotoUploader } from "@/components/profile/photo-uploader";
+import { DualRangeSlider } from "@/components/DualRangeSlider";
 
 interface PhotoItem {
   id: string;
@@ -775,25 +776,15 @@ export default function ProfileEditPage() {
           <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
             期望年龄 (岁)
           </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={18}
-              max={99}
-              value={form.ageMin}
-              onChange={(e) => updateField("ageMin", e.target.value)}
-              className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-            />
-            <span className="shrink-0 text-sm text-[hsl(var(--muted-foreground))]">~</span>
-            <input
-              type="number"
-              min={18}
-              max={99}
-              value={form.ageMax}
-              onChange={(e) => updateField("ageMax", e.target.value)}
-              className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-            />
-          </div>
+          <DualRangeSlider
+            min={18}
+            max={60}
+            valueMin={Number(form.ageMin) || 18}
+            valueMax={Number(form.ageMax) || 30}
+            onChangeMin={(v) => updateField("ageMin", String(v))}
+            onChangeMax={(v) => updateField("ageMax", String(v))}
+            formatValue={(v) => `${v} 岁`}
+          />
         </div>
 
         {/* Height range */}
@@ -801,25 +792,15 @@ export default function ProfileEditPage() {
           <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
             期望身高 (cm)
           </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={100}
-              max={250}
-              value={form.heightMinCm}
-              onChange={(e) => updateField("heightMinCm", e.target.value)}
-              className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-            />
-            <span className="shrink-0 text-sm text-[hsl(var(--muted-foreground))]">~</span>
-            <input
-              type="number"
-              min={100}
-              max={250}
-              value={form.heightMaxCm}
-              onChange={(e) => updateField("heightMaxCm", e.target.value)}
-              className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-            />
-          </div>
+          <DualRangeSlider
+            min={140}
+            max={210}
+            valueMin={Number(form.heightMinCm) || 155}
+            valueMax={Number(form.heightMaxCm) || 185}
+            onChangeMin={(v) => updateField("heightMinCm", String(v))}
+            onChangeMax={(v) => updateField("heightMaxCm", String(v))}
+            formatValue={(v) => `${v} cm`}
+          />
         </div>
 
         {/* Weight range */}
@@ -827,25 +808,15 @@ export default function ProfileEditPage() {
           <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
             期望体重 (kg)
           </label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={30}
-              max={200}
-              value={form.weightMinKg}
-              onChange={(e) => updateField("weightMinKg", e.target.value)}
-              className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-            />
-            <span className="shrink-0 text-sm text-[hsl(var(--muted-foreground))]">~</span>
-            <input
-              type="number"
-              min={30}
-              max={200}
-              value={form.weightMaxKg}
-              onChange={(e) => updateField("weightMaxKg", e.target.value)}
-              className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-            />
-          </div>
+          <DualRangeSlider
+            min={35}
+            max={150}
+            valueMin={Number(form.weightMinKg) || 45}
+            valueMax={Number(form.weightMaxKg) || 80}
+            onChangeMin={(v) => updateField("weightMinKg", String(v))}
+            onChangeMax={(v) => updateField("weightMaxKg", String(v))}
+            formatValue={(v) => `${v}kg = ${v * 2}斤`}
+          />
         </div>
 
         {/* Location scope */}

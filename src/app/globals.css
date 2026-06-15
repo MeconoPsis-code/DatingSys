@@ -404,7 +404,7 @@ body {
 .slider-input {
   -webkit-appearance: none;
   appearance: none;
-  height: 6px;
+  height: 8px;
   border-radius: 999px;
   background: hsl(var(--border));
   outline: none;
@@ -422,6 +422,7 @@ body {
   border: 3px solid hsl(var(--card));
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
   cursor: pointer;
+  margin-top: -7px;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -450,7 +451,7 @@ body {
 }
 
 .slider-input::-moz-range-track {
-  height: 6px;
+  height: 8px;
   border-radius: 999px;
   background: hsl(var(--border));
 }
@@ -459,3 +460,114 @@ body {
   outline: 2px solid hsl(var(--ring));
   outline-offset: 2px;
 }
+
+/* ── Dual Range Slider ── */
+.dual-range-container {
+  position: relative;
+  height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.dual-range-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(var(--border));
+  pointer-events: none;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 0;
+}
+
+.dual-range-fill {
+  position: absolute;
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  pointer-events: none;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+.dual-range-input {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
+  outline: none;
+}
+
+/* Make native slider tracks transparent so they don't render over thumbs */
+.dual-range-input::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: transparent !important;
+}
+
+.dual-range-input::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: transparent !important;
+}
+
+/* Thumbs — both inputs get interactive thumbs */
+.dual-range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  border: 3px solid hsl(var(--card));
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  pointer-events: all;
+  position: relative;
+  margin-top: -7px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dual-range-input::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.dual-range-input::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+}
+
+.dual-range-input::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  border: 3px solid hsl(var(--card));
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  pointer-events: all;
+  transition: transform 0.15s ease;
+}
+
+.dual-range-input::-moz-range-thumb:hover {
+  transform: scale(1.15);
+}
+
+.dual-range-input:focus-visible {
+  outline: none;
+}
+
+.dual-range-input:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
