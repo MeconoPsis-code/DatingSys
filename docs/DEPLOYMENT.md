@@ -30,16 +30,16 @@ cp .env.example .env
 
 Edit `.env` and fill in the required values:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `BOT_QQ_NUMBER` | Bot's QQ number | `3450526668` |
-| `BOT_TARGET_GROUP_ID` | Target QQ group number | `922673885` |
-| `BOT_WEBHOOK_TOKEN` | Token for NapCat webhook HMAC signature | `your-random-token` |
-| `NAPCAT_ACCESS_TOKEN` | Token for calling NapCat HTTP API | `your-random-token` |
-| `JWT_SECRET` | Secret for JWT authentication | `random-32-byte-string` |
-| `SMTP_USER` | QQ email address for sending codes | `your-email@qq.com` |
-| `SMTP_PASS` | QQ SMTP authorization code (not your password) | `abcdefghijklmnop` |
-| `SMTP_FROM` | Sender email address | `your-email@qq.com` |
+| Variable              | Description                                    | Example                 |
+| --------------------- | ---------------------------------------------- | ----------------------- |
+| `BOT_QQ_NUMBER`       | Bot's QQ number                                | `3450526668`            |
+| `BOT_TARGET_GROUP_ID` | Target QQ group number                         | `922673885`             |
+| `BOT_WEBHOOK_TOKEN`   | Token for NapCat webhook HMAC signature        | `your-random-token`     |
+| `NAPCAT_ACCESS_TOKEN` | Token for calling NapCat HTTP API              | `your-random-token`     |
+| `JWT_SECRET`          | Secret for JWT authentication                  | `random-32-byte-string` |
+| `SMTP_USER`           | QQ email address for sending codes             | `your-email@qq.com`     |
+| `SMTP_PASS`           | QQ SMTP authorization code (not your password) | `abcdefghijklmnop`      |
+| `SMTP_FROM`           | Sender email address                           | `your-email@qq.com`     |
 
 > **How to get QQ SMTP authorization code:**
 > QQ Mail → Settings (设置) → Account (账户) → POP3/SMTP service → Enable → Generate authorization code.
@@ -54,12 +54,12 @@ docker compose up -d
 
 This starts 4 containers:
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| `postgres` | 5432 | Database |
-| `redis` | 6379 | Cache, rate limiting, verification codes |
-| `minio` | 9000 / 9001 | Photo storage (S3-compatible) |
-| `napcat` | 3001 / 6099 | QQ Bot (OneBot v11) |
+| Service    | Port        | Purpose                                  |
+| ---------- | ----------- | ---------------------------------------- |
+| `postgres` | 5432        | Database                                 |
+| `redis`    | 6379        | Cache, rate limiting, verification codes |
+| `minio`    | 9000 / 9001 | Photo storage (S3-compatible)            |
+| `napcat`   | 3001 / 6099 | QQ Bot (OneBot v11)                      |
 
 Verify all containers are running:
 
@@ -72,8 +72,14 @@ docker compose ps
 ## Step 4: Login to NapCat
 
 1. Open **http://localhost:6099** in your browser
-2. Scan the QR code with the **bot's QQ account** on your phone
-3. Wait for "Login successful" status
+2. Use below command to get **your-webui-token**
+
+```bash
+docker logs date-napcat 2>&1 | Select-String "WebUi Token"
+```
+
+3. Scan the QR code with the **bot's QQ account** on your phone
+4. Wait for "Login successful" status
 
 ---
 
@@ -83,25 +89,25 @@ In the NapCat WebUI (http://localhost:6099), go to **网络配置** and add **2 
 
 ### Adapter 1: HTTP Server
 
-| Setting | Value |
-|---------|-------|
-| 启用 | ✅ ON |
-| 名称 | `http-api` |
-| Host | `0.0.0.0` |
-| Port | `3001` |
-| Token | Same value as `NAPCAT_ACCESS_TOKEN` in your `.env` |
+| Setting | Value                                              |
+| ------- | -------------------------------------------------- |
+| 启用    | ✅ ON                                              |
+| 名称    | `http-api`                                         |
+| Host    | `0.0.0.0`                                          |
+| Port    | `3001`                                             |
+| Token   | Same value as `NAPCAT_ACCESS_TOKEN` in your `.env` |
 
 > ⚠️ Host **must** be `0.0.0.0` (not `127.0.0.1`) since NapCat runs inside Docker.
 
 ### Adapter 2: HTTP Client (Webhook)
 
-| Setting | Value |
-|---------|-------|
-| 启用 | ✅ ON |
-| 名称 | `webhook-to-app` |
-| URL | `http://host.docker.internal:3000/api/bot/napcat/webhook` |
-| 上报自身消息 | ❌ OFF |
-| Token | Same value as `BOT_WEBHOOK_TOKEN` in your `.env` |
+| Setting      | Value                                                     |
+| ------------ | --------------------------------------------------------- |
+| 启用         | ✅ ON                                                     |
+| 名称         | `webhook-to-app`                                          |
+| URL          | `http://host.docker.internal:3000/api/bot/napcat/webhook` |
+| 上报自身消息 | ❌ OFF                                                    |
+| Token        | Same value as `BOT_WEBHOOK_TOKEN` in your `.env`          |
 
 Click **保存** after each adapter.
 

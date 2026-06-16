@@ -24,6 +24,7 @@ function LoginContent() {
   const [qqNumber, setQqNumber] = useState("");
   const [passcode, setPasscode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   async function handleLogin(e: React.FormEvent) {
@@ -45,12 +46,31 @@ function LoginContent() {
         return;
       }
 
+      // Show fullscreen loading overlay during navigation
+      setLoggingIn(true);
       router.push("/profile");
     } catch {
       setFormError("网络错误，请稍后重试");
     } finally {
-      setLoading(false);
+      if (!loggingIn) setLoading(false);
     }
+  }
+
+  // Fullscreen loading overlay
+  if (loggingIn) {
+    return (
+      <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[hsl(var(--background))]">
+        {/* Spinner */}
+        <div className="relative mb-6">
+          <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-[hsl(var(--border))] border-t-brand-blue" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="h-5 w-5 rounded-full bg-brand-blue/10" />
+          </div>
+        </div>
+        <p className="text-sm font-medium text-[hsl(var(--foreground))]">登录成功</p>
+        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">正在加载，请稍候...</p>
+      </div>
+    );
   }
 
   return (

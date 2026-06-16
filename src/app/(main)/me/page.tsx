@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getCityName } from "@/data/regions";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -23,6 +24,11 @@ interface MeData {
   membershipStatus: string | null;
   membershipExpiresAt: string | null;
   activePenalties: PenaltyInfo[];
+  profile: {
+    birthDate: string;
+    provinceCode: string;
+    cityCode: string;
+  } | null;
 }
 
 /* ─── Constants ──────────────────────────────────────── */
@@ -88,29 +94,16 @@ function ChangePasscodeModal({ onClose }: { onClose: () => void }) {
     setSubmitting(true);
     setMsg(null);
     try {
-      // Verify current passcode via login check
-      const meRes = await fetch("/api/auth/me");
-      const meData = await meRes.json();
-      const qqNumber = meData.data?.qqNumber;
-      if (!qqNumber) throw new Error("无法获取QQ号");
-
-      // Use reset-passcode flow: we'll do a direct password change
-      // Since there's no dedicated change-passcode API, we verify by re-logging in
-      const loginRes = await fetch("/api/auth/login", {
+      const res = await fetch("/api/account/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qqNumber, passcode: currentPasscode }),
+        body: JSON.stringify({
+          currentPassword: currentPasscode,
+          newPassword: newPasscode,
+        }),
       });
-      if (!loginRes.ok) throw new Error("当前密码错误");
-
-      // Now set the new passcode
-      const setRes = await fetch("/api/auth/set-passcode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qqNumber, passcode: newPasscode }),
-      });
-      const setData = await setRes.json();
-      if (!setRes.ok) throw new Error(setData.error?.message || "修改失败");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "修改失败");
 
       setMsg({ text: "密码修改成功", ok: true });
       setTimeout(onClose, 1500);
@@ -155,7 +148,7 @@ function ChangePasscodeModal({ onClose }: { onClose: () => void }) {
             type="password"
             value={newPasscode}
             onChange={(e) => setNewPasscode(e.target.value)}
-            placeholder="至少6位"
+            placeholder="至少8位，包含字母和数字"
             className={inputCls}
             autoComplete="new-password"
           />
@@ -197,22 +190,46 @@ function ChangePasscodeModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* ─── Delete Account Modal ───────────────────────────── */
-
 /* ─── Change Nickname Modal ──────────────────────────── */
+
+function computeAge(birthDate: string): number {
+  const bd = new Date(birthDate);
+  const today = new Date();
+  let age = today.getFullYear() - bd.getFullYear();
+  const monthDiff = today.getMonth() - bd.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bd.getDate())) {
+    age--;
+  }
+  return age;
+}
+
+function buildGroupCard(nickname: string, profile: MeData["profile"]): string {
+  if (!profile || !nickname) return nickname || "";
+  const age = computeAge(profile.birthDate);
+  const cityName = getCityName(profile.provinceCode, profile.cityCode).replace(/市$/, "");
+  return `${age}-${cityName}-${nickname}`;
+}
 
 function ChangeNicknameModal({
   currentNickname,
+  profile,
   onClose,
   onSuccess,
 }: {
   currentNickname: string;
+  profile: MeData["profile"];
   onClose: () => void;
   onSuccess: (newNickname: string) => void;
 }) {
   const [nickname, setNickname] = useState(currentNickname);
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  // Live preview of the full group card
+  const groupCardPreview = useMemo(
+    () => buildGroupCard(nickname.trim(), profile),
+    [nickname, profile]
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -254,11 +271,11 @@ function ChangeNicknameModal({
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
-          修改昵称
+          修改群名片
         </h3>
 
         <div className="mb-3">
-          <label className="mb-1.5 block text-sm text-[hsl(var(--muted-foreground))]">新昵称</label>
+          <label className="mb-1.5 block text-sm text-[hsl(var(--muted-foreground))]">昵称（仅可修改此部分）</label>
           <input
             type="text"
             value={nickname}
@@ -267,10 +284,19 @@ function ChangeNicknameModal({
             autoFocus
             className={inputCls}
           />
-          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
-            修改后将同步更新 QQ 群名片
-          </p>
         </div>
+
+        {/* Live preview */}
+        <div className="mb-4 rounded-lg bg-[hsl(var(--secondary))] px-3 py-2">
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">群名片预览：</span>
+          <span className="ml-1 text-sm font-semibold text-[hsl(var(--primary))]">
+            {groupCardPreview || "—"}
+          </span>
+        </div>
+
+        <p className="mb-3 text-[11px] text-[hsl(var(--muted-foreground))]">
+          群名片格式为「年龄-城市-昵称」，年龄和城市从你的个人资料自动获取
+        </p>
 
         {msg && (
           <p className={`mb-3 text-xs ${msg.ok ? "text-emerald-400" : "text-red-400"}`}>{msg.text}</p>
@@ -280,7 +306,7 @@ function ChangeNicknameModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2.5 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))]"
+            className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2.5 text-sm font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
           >
             取消
           </button>
@@ -520,7 +546,7 @@ export default function MePage() {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h1 className="text-lg font-bold text-[hsl(var(--foreground))]">
-              {me.nickname || "未设置昵称"}
+              {buildGroupCard(me.nickname || "", me.profile) || "未设置群名片"}
             </h1>
             <button
               type="button"
@@ -566,8 +592,8 @@ export default function MePage() {
               </svg>
             </div>
           }
-          label="昵称"
-          value={me.nickname}
+          label="群名片"
+          value={buildGroupCard(me.nickname || "", me.profile) || "未设置"}
         />
         <InfoRow
           icon={
@@ -746,6 +772,7 @@ export default function MePage() {
       {showChangeNickname && (
         <ChangeNicknameModal
           currentNickname={me.nickname || ""}
+          profile={me.profile}
           onClose={() => setShowChangeNickname(false)}
           onSuccess={(newNickname) => {
             setMe({ ...me, nickname: newNickname });

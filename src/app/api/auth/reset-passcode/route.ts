@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { consumeVerifiedFlag } from "@/lib/verification";
-import { validatePasscode, hashPassword } from "@/lib/password";
+import { validatePasscode, hashPassword, verifyPassword } from "@/lib/password";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 
 /**
@@ -53,7 +53,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 4. Update password
+  // 4. Check new password is not the same as old
+  if (user.passwordHash) {
+    const isSame = await verifyPassword(newPasscode, user.passwordHash);
+    if (isSame) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "新密码不能与旧密码相同" } },
+        { status: 422 }
+      );
+    }
+  }
+
+  // 5. Update password
   const passwordHash = await hashPassword(newPasscode);
   await db.user.update({
     where: { id: user.id },

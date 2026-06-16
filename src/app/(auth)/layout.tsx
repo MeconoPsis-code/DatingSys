@@ -10,7 +10,7 @@ export default function AuthLayout({
         className="fixed inset-0 -z-10 bg-cover bg-center bg-no-repeat blur-[60px] scale-110 opacity-[0.65] dark:opacity-[0.55] transition-opacity duration-500 pointer-events-none"
         style={{ backgroundImage: "url('/portrait.png')" }}
       />
-      <div className="relative z-10 w-full max-w-md">{children}</div>
+      <div className="relative z-10 w-full max-w-2xl py-8">{children}</div>
     </div>
   );
 }

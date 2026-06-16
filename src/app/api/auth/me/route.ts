@@ -17,6 +17,15 @@ export async function GET() {
     );
   }
 
+  const user = await db.user.findUnique({
+    where: { id: session.id },
+    include: {
+      profile: {
+        select: { birthDate: true, provinceCode: true, cityCode: true },
+      },
+    },
+  });
+
   // Query active (unrevoked) penalties for this user
   const activePenalties = await db.penalty.findMany({
     where: {
@@ -43,6 +52,11 @@ export async function GET() {
       membershipStatus: session.membershipStatus,
       membershipExpiresAt: session.membershipExpiresAt,
       activePenalties,
+      profile: user?.profile ? {
+        birthDate: user.profile.birthDate,
+        provinceCode: user.profile.provinceCode,
+        cityCode: user.profile.cityCode,
+      } : null,
     },
   });
 }

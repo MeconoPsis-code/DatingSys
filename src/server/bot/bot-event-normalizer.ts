@@ -19,6 +19,7 @@ import type {
   BotGroupMemberJoinedEvent,
   BotGroupMemberLeftEvent,
 } from './bot.types';
+import type { GroupCardChangedEvent } from './group-card-changed.handler';
 import { createLogger } from '@/lib/logger';
 import crypto from 'crypto';
 
@@ -29,6 +30,7 @@ export type NormalizedEvent =
   | { type: 'group_message'; event: BotGroupMessageEvent }
   | { type: 'group_member_joined'; event: BotGroupMemberJoinedEvent }
   | { type: 'group_member_left'; event: BotGroupMemberLeftEvent }
+  | { type: 'group_card_changed'; event: GroupCardChangedEvent }
   | { type: 'ignored'; reason: string };
 
 /**
@@ -126,6 +128,26 @@ export function normalizeEvent(raw: OneBotRawEvent): NormalizedEvent {
             leaveType,
             timestamp: notice.time,
             rawEvent: raw,
+          },
+        };
+      }
+
+      if (notice.notice_type === 'group_card') {
+        const cardNew = (notice as Record<string, unknown>).card_new as string || '';
+        const cardOld = (notice as Record<string, unknown>).card_old as string || '';
+
+        log.debug(
+          { eventId, groupId: notice.group_id, userId: notice.user_id, cardOld, cardNew },
+          'Normalized group card changed event',
+        );
+
+        return {
+          type: 'group_card_changed',
+          event: {
+            groupId: String(notice.group_id),
+            qqNumber: String(notice.user_id),
+            cardNew,
+            cardOld,
           },
         };
       }

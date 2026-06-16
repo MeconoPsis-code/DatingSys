@@ -21,6 +21,7 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 /**
  * Photo upload component — supports up to 6 photos.
  * Displays a grid of thumbnails with upload/delete functionality.
+ * Requires user consent before the first upload.
  */
 export function PhotoUploader({
   photos,
@@ -32,7 +33,26 @@ export function PhotoUploader({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Consent gate: skip if user already has photos (they've previously consented)
+  const [hasConsented, setHasConsented] = useState(photos.length > 0);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+
   const canUpload = photos.length < maxPhotos && !uploading;
+
+  function handleUploadClick() {
+    if (!hasConsented) {
+      setShowConsentModal(true);
+      return;
+    }
+    fileRef.current?.click();
+  }
+
+  function handleConsentAgree() {
+    setHasConsented(true);
+    setShowConsentModal(false);
+    // Trigger file picker after consent
+    setTimeout(() => fileRef.current?.click(), 100);
+  }
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,7 +196,7 @@ export function PhotoUploader({
         {canUpload && (
           <button
             type="button"
-            onClick={() => fileRef.current?.click()}
+            onClick={handleUploadClick}
             disabled={uploading}
             className="group flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.5)] text-[hsl(var(--muted-foreground))] transition-all hover:border-[hsl(var(--primary)/0.5)] hover:bg-[hsl(var(--primary)/0.05)] hover:text-[hsl(var(--primary))] disabled:opacity-50"
           >
@@ -223,6 +243,59 @@ export function PhotoUploader({
         onChange={handleFileSelect}
         className="hidden"
       />
+
+      {/* ─── Photo Consent Modal ─── */}
+      {showConsentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
+            <div className="mb-4 flex items-center gap-2">
+              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-400">
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">
+                照片上传须知
+              </h3>
+            </div>
+
+            <div className="mb-5 space-y-3 text-sm text-[hsl(var(--muted-foreground))]">
+              <p>在上传照片前，请确认你了解并同意以下事项：</p>
+              <ul className="space-y-2 pl-1">
+                <li className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-brand-blue">•</span>
+                  <span>你的照片将对群内的<strong className="text-[hsl(var(--foreground))]">其他用户可见</strong>，可能出现在匹配结果中</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-brand-blue">•</span>
+                  <span>你的照片将由<strong className="text-[hsl(var(--foreground))]">评分官进行评分</strong>，评分结果将影响匹配排序</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="mt-0.5 shrink-0 text-brand-blue">•</span>
+                  <span>你可以随时在个人资料中<strong className="text-[hsl(var(--foreground))]">删除已上传的照片</strong></span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConsentModal(false)}
+                className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2.5 text-sm font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleConsentAgree}
+                className="flex-1 rounded-lg bg-brand-blue py-2.5 text-sm font-semibold text-white transition-all hover:bg-brand-blue/90"
+              >
+                我已了解，继续上传
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

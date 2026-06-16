@@ -6,6 +6,7 @@ import { handleRegisterCommand } from '@/server/bot/register-command.handler';
 import { handlePasswordResetCommand } from '@/server/bot/password-reset-command.handler';
 import { handleGroupMemberJoined } from '@/server/bot/group-member-joined.handler';
 import { handleGroupMemberLeft } from '@/server/bot/group-member-left.handler';
+import { handleGroupCardChanged } from '@/server/bot/group-card-changed.handler';
 import { napcatClient } from '@/server/bot/clients/napcat.client';
 import { redis } from '@/lib/redis';
 import { createLogger } from '@/lib/logger';
@@ -75,8 +76,8 @@ export async function POST(req: NextRequest) {
   // 4. Normalize event
   const normalized = normalizeEvent(rawEvent);
 
-  // 4. Log raw event
-  if (normalized.type !== 'ignored') {
+  // 4b. Log raw event (group_card_changed doesn't have eventId on the event)
+  if (normalized.type !== 'ignored' && normalized.type !== 'group_card_changed') {
     await logBotEvent({
       eventId: normalized.event.eventId,
       platform: 'napcat',
@@ -96,8 +97,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: 'ok' });
   }
 
-  // 6. Deduplication check
-  const eventId = normalized.event.eventId;
+  // 6. Deduplication check (group_card_changed uses groupId+qqNumber+cardNew)
+  let eventId: string;
+  if (normalized.type === 'group_card_changed') {
+    const { createHash } = await import('crypto');
+    const e = normalized.event;
+    eventId = 'card_' + createHash('sha256')
+      .update(`${e.groupId}:${e.qqNumber}:${e.cardNew}:${rawEvent.time}`)
+      .digest('hex')
+      .slice(0, 16);
+  } else {
+    eventId = normalized.event.eventId;
+  }
   const dedupKey = `bot:dedup:${eventId}`;
   const isDuplicate = await redis.set(dedupKey, '1', 'EX', DEDUP_TTL, 'NX');
   if (isDuplicate === null) {
@@ -130,6 +141,9 @@ export async function POST(req: NextRequest) {
         break;
       case 'group_member_left':
         await handleGroupMemberLeft(normalized.event, napcatClient);
+        break;
+      case 'group_card_changed':
+        await handleGroupCardChanged(normalized.event, napcatClient);
         break;
     }
   } catch (err) {

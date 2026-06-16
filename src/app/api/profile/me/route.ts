@@ -8,6 +8,11 @@ import {
 } from "@/lib/validations/profile";
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
+import { napcatClient } from "@/server/bot/clients/napcat.client";
+import { getCityName } from "@/data/regions";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api:profile-me");
 
 /* ── Helpers ─────────────────────────────────────────── */
 
@@ -259,7 +264,67 @@ export async function PUT(req: Request) {
     }
   }
 
-  // 7. Audit log
+  // 7. Sync QQ group card in "age-city-nickname" format
+  if (session.qqNumber) {
+    try {
+      // Get user's nickname from AuthIdentity
+      const identity = await db.authIdentity.findFirst({
+        where: { userId: session.id },
+        select: { nickname: true },
+      });
+
+      const nickname = identity?.nickname || "";
+
+      if (nickname) {
+        // Compute age from profile birthDate
+        const bd = new Date(profileData.birthDate);
+        const today = new Date();
+        let age = today.getFullYear() - bd.getFullYear();
+        const monthDiff = today.getMonth() - bd.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bd.getDate())) {
+          age--;
+        }
+
+        // Resolve city name
+        const cityName = getCityName(profileData.provinceCode, profileData.cityCode).replace(/市$/, "");
+
+        const groupCard = `${age}-${cityName}-${nickname}`;
+
+        // Find group membership
+        const membership = await db.groupMembership.findUnique({
+          where: { userId: session.id },
+          select: { groupId: true },
+        });
+
+        if (membership && membership.groupId && membership.groupId !== "default") {
+          await napcatClient.setGroupCard(
+            membership.groupId,
+            session.qqNumber,
+            groupCard
+          );
+          log.info(
+            { qqNumber: session.qqNumber, groupCard },
+            "Group card synced after profile update"
+          );
+        }
+
+        // Update BotIdentity
+        try {
+          await db.botIdentity.update({
+            where: { qqNumber: session.qqNumber },
+            data: { groupCard },
+          });
+        } catch {
+          // BotIdentity may not exist — non-critical
+        }
+      }
+    } catch (err) {
+      // Group card sync is best-effort, don't fail the request
+      log.warn({ err, qqNumber: session.qqNumber }, "Failed to sync group card after profile update");
+    }
+  }
+
+  // 8. Audit log
   await logAudit({
     actorId: session.id,
     action: AUDIT_ACTIONS.PROFILE_UPDATE,
