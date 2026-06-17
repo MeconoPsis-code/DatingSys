@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getCityName } from "@/data/regions";
+import { getProvinceName } from "@/data/regions";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -29,6 +29,15 @@ interface MeData {
     provinceCode: string;
     cityCode: string;
   } | null;
+}
+
+interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 /* ─── Constants ──────────────────────────────────────── */
@@ -206,8 +215,8 @@ function computeAge(birthDate: string): number {
 function buildGroupCard(nickname: string, profile: MeData["profile"]): string {
   if (!profile || !nickname) return nickname || "";
   const age = computeAge(profile.birthDate);
-  const cityName = getCityName(profile.provinceCode, profile.cityCode).replace(/市$/, "");
-  return `${age}-${cityName}-${nickname}`;
+  const provinceName = getProvinceName(profile.provinceCode).replace(/省$|市$|自治区$|特别行政区$|壮族自治区$|回族自治区$|维吾尔自治区$/, "");
+  return `${age}-${provinceName}-${nickname}`;
 }
 
 function ChangeNicknameModal({
@@ -424,6 +433,50 @@ export default function MePage() {
   const [showChangeNickname, setShowChangeNickname] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [showAllNotifs, setShowAllNotifs] = useState(false);
+
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setNotifLoading(true);
+      const res = await fetch("/api/notifications?pageSize=50");
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.data?.notifications || []);
+        setUnreadCount(data.data?.unreadCount || 0);
+      }
+    } catch { /* ignore */ } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  async function handleMarkAllRead() {
+    try {
+      await fetch("/api/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch { /* ignore */ }
+  }
+
+  async function handleMarkRead(id: string) {
+    try {
+      await fetch("/api/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [id] }),
+      });
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+      );
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     async function fetchMe() {
@@ -442,7 +495,8 @@ export default function MePage() {
       }
     }
     fetchMe();
-  }, [router]);
+    fetchNotifications();
+  }, [router, fetchNotifications]);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -647,6 +701,84 @@ export default function MePage() {
             label="认证到期"
             value={new Date(me.membershipExpiresAt).toLocaleDateString("zh-CN")}
           />
+        )}
+      </div>
+
+      {/* Notifications */}
+      <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-[hsl(var(--foreground))]">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
+            系统通知
+            {unreadCount > 0 && (
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                {unreadCount}
+              </span>
+            )}
+          </h2>
+          {unreadCount > 0 && (
+            <button
+              type="button"
+              onClick={handleMarkAllRead}
+              className="text-xs text-brand-blue hover:underline"
+            >
+              全部已读
+            </button>
+          )}
+        </div>
+
+        {notifLoading && notifications.length === 0 ? (
+          <div className="flex justify-center py-4">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent" />
+          </div>
+        ) : notifications.length === 0 ? (
+          <p className="py-4 text-center text-xs text-[hsl(var(--muted-foreground))]">暂无通知</p>
+        ) : (
+          <div className="space-y-1">
+            {(showAllNotifs ? notifications : notifications.slice(0, 5)).map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => { if (!n.isRead) handleMarkRead(n.id); }}
+                className={`flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-[hsl(var(--secondary))] ${
+                  !n.isRead ? "bg-[hsl(var(--primary)/0.04)]" : ""
+                }`}
+              >
+                <div className="mt-0.5 shrink-0">
+                  {!n.isRead ? (
+                    <span className="inline-block h-2 w-2 rounded-full bg-brand-blue" />
+                  ) : (
+                    <span className="inline-block h-2 w-2" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-medium ${!n.isRead ? "text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"}`}>
+                      {n.title}
+                    </span>
+                    <span className="ml-auto shrink-0 text-[10px] text-[hsl(var(--muted-foreground))]">
+                      {new Date(n.createdAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
+                    {n.message}
+                  </p>
+                </div>
+              </button>
+            ))}
+            {notifications.length > 5 && (
+              <button
+                type="button"
+                onClick={() => setShowAllNotifs(!showAllNotifs)}
+                className="w-full rounded-lg py-1.5 text-center text-xs text-brand-blue hover:bg-[hsl(var(--secondary))] transition-colors"
+              >
+                {showAllNotifs ? "收起" : `查看全部 ${notifications.length} 条通知`}
+              </button>
+            )}
+          </div>
         )}
       </div>
 

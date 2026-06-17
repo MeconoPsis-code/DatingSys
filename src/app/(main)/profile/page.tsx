@@ -263,7 +263,7 @@ export default function ProfilePage() {
               颜值分: {ratingInfo.finalScore.toFixed(1)}
             </span>
           )}
-          {ratingInfo && ratingInfo.ratingStatus === "PENDING" && (
+          {ratingInfo && (ratingInfo.ratingStatus === "PENDING" || ratingInfo.ratingStatus === "SCORING" || ratingInfo.ratingStatus === "REVIEW") && (
             <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/15 px-3 py-1 text-xs font-medium text-blue-400">
               <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
                 <circle cx="12" cy="12" r="10" />

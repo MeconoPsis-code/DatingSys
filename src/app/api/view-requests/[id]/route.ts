@@ -1,6 +1,7 @@
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
+import { notify } from '@/lib/notifications';
 
 /**
  * PUT /api/view-requests/[id] — Approve or reject a view request
@@ -47,6 +48,18 @@ export async function PUT(
         respondedAt: new Date(),
       },
     });
+
+    // Notify the requester about the response
+    const targetIdentity = await db.authIdentity.findFirst({
+      where: { userId: session.id },
+      select: { nickname: true },
+    });
+    const targetName = targetIdentity?.nickname || "对方";
+    if (action === 'approve') {
+      await notify.viewRequestApproved(viewRequest.requesterId, targetName);
+    } else {
+      await notify.viewRequestRejected(viewRequest.requesterId, targetName);
+    }
 
     return success(updated);
   } catch (err) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { getProvinceName, getCityName } from "@/data/regions";
 import { ATTRIBUTE_LABELS } from "@/data/attributes";
 
@@ -205,6 +206,22 @@ function IncomingRequestCard({
       {request.respondedAt && (
         <div className="text-xs text-[hsl(var(--muted-foreground))]">
           处理于 {formatDate(request.respondedAt)}
+        </div>
+      )}
+
+      {/* View requester profile link for APPROVED requests */}
+      {request.status === "APPROVED" && (
+        <div className="mt-3">
+          <Link
+            href={`/matches/${request.requesterId}`}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            查看完整资料
+          </Link>
         </div>
       )}
     </div>

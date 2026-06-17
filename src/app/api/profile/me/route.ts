@@ -9,7 +9,7 @@ import {
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
 import { napcatClient } from "@/server/bot/clients/napcat.client";
-import { getCityName } from "@/data/regions";
+import { getProvinceName } from "@/data/regions";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("api:profile-me");
@@ -156,6 +156,8 @@ export async function PUT(req: Request) {
     cityCode: profileData.cityCode,
     locationType: profileData.locationType,
     attribute: profileData.attribute,
+    isSide: profileData.isSide ?? false,
+    isOther: profileData.isOther ?? false,
     customAttribute: profileData.customAttribute ?? null,
     mbti: profileData.mbti || null,
     selfIntro: profileData.selfIntro ?? null,
@@ -285,10 +287,10 @@ export async function PUT(req: Request) {
           age--;
         }
 
-        // Resolve city name
-        const cityName = getCityName(profileData.provinceCode, profileData.cityCode).replace(/市$/, "");
+        // Resolve province name
+        const provinceName = getProvinceName(profileData.provinceCode).replace(/省$|市$|自治区$|特别行政区$|壮族自治区$|回族自治区$|维吾尔自治区$/, "");
 
-        const groupCard = `${age}-${cityName}-${nickname}`;
+        const groupCard = `${age}-${provinceName}-${nickname}`;
 
         // Find group membership
         const membership = await db.groupMembership.findUnique({

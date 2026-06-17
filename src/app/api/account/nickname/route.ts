@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { napcatClient } from "@/server/bot/clients/napcat.client";
 import { createLogger } from "@/lib/logger";
-import { getCityName } from "@/data/regions";
+import { getProvinceName } from "@/data/regions";
 
 const log = createLogger("api:nickname");
 
@@ -28,12 +28,9 @@ function buildGroupCard(nickname: string, profile: { birthDate: Date; provinceCo
   if (!profile) return nickname;
 
   const age = computeAge(profile.birthDate);
-  const cityName = getCityName(profile.provinceCode, profile.cityCode);
+  const provinceName = getProvinceName(profile.provinceCode).replace(/省$|市$|自治区$|特别行政区$|壮族自治区$|回族自治区$|维吾尔自治区$/, "");
 
-  // Use short city name (remove common suffixes like 市)
-  const shortCity = cityName.replace(/市$/, "") || cityName;
-
-  return `${age}-${shortCity}-${nickname}`;
+  return `${age}-${provinceName}-${nickname}`;
 }
 
 /**

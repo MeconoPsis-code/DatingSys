@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { PROVINCES, getCities, isOverseas } from "@/data/regions";
-import { ATTRIBUTE_OPTIONS } from "@/data/attributes";
+import { MAIN_ATTRIBUTE_OPTIONS, ATTRIBUTE_OPTIONS } from "@/data/attributes";
 import { LOCATION_TYPE_OPTIONS } from "@/data/location-types";
 import { MBTI_OPTIONS } from "@/data/mbti";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
@@ -43,6 +43,8 @@ interface FormState {
   locationType: LocationType;
   // Attribute
   attribute: Attribute | "";
+  isSide: boolean;
+  isOther: boolean;
   customAttribute: string;
   // MBTI
   mbti: string;
@@ -75,6 +77,8 @@ const INITIAL_FORM: FormState = {
   cityCode: "",
   locationType: "RESIDENCE",
   attribute: "",
+  isSide: false,
+  isOther: false,
   customAttribute: "",
   mbti: "",
   selfIntro: "",
@@ -175,6 +179,8 @@ export default function ProfileEditPage() {
             cityCode: profile.cityCode || "",
             locationType: profile.locationType || "RESIDENCE",
             attribute: profile.attribute || "",
+            isSide: profile.isSide ?? false,
+            isOther: profile.isOther ?? false,
             customAttribute: profile.customAttribute || "",
             mbti: profile.mbti || "",
             selfIntro: profile.selfIntro || "",
@@ -257,8 +263,6 @@ export default function ProfileEditPage() {
     if (!form.provinceCode) return "请选择地区";
     if (!form.cityCode) return isOverseas(form.provinceCode) ? "请选择国家" : "请选择城市";
     if (!form.attribute) return "请选择属性";
-    if (form.attribute === "OTHER" && !form.customAttribute.trim()) return "请输入自定义属性";
-    if (form.attribute === "OTHER" && form.customAttribute.length > 20) return "自定义属性不能超过 20 个字";
 
     // Age >= 18
     const bd = new Date(
@@ -289,10 +293,6 @@ export default function ProfileEditPage() {
 
     if (form.expectedAttributes.length === 0) return "请至少选择一个期望属性";
 
-    // Photo users with > 0 photos must set a matching preference
-    if (status === "ACTIVE" && photos.length > 0 && !form.photoMatchPref) {
-      return "有照片用户发布时请选择匹配偏好";
-    }
 
     if (status === "ACTIVE" && !form.consent) return "发布资料需要勾选同意条款";
 
@@ -316,13 +316,15 @@ export default function ProfileEditPage() {
         cityCode: form.cityCode,
         locationType: form.locationType,
         attribute: form.attribute,
-        customAttribute: form.attribute === "OTHER" ? form.customAttribute.trim() : null,
+        isSide: form.isSide,
+        isOther: form.isOther,
+        customAttribute: null,
         mbti: form.mbti || null,
         selfIntro: form.selfIntro || null,
         consentProfileVisibility: form.consent,
         status,
-        photoMatchPref: photos.length > 0 ? (form.photoMatchPref || "ALL") : null,
-        highScoreOnly: photos.length > 0 ? form.highScoreOnly : false,
+        photoMatchPref: null,
+        highScoreOnly: false,
       },
       preference: {
         ageMin: Number(form.ageMin),
@@ -598,15 +600,14 @@ export default function ProfileEditPage() {
         <h2 className="mb-5 text-base font-semibold text-[hsl(var(--foreground))]">
           属性 <span className="text-[hsl(var(--destructive))]">*</span>
         </h2>
+
+        {/* Main attribute (single-select) */}
         <div className="flex flex-wrap gap-2">
-          {ATTRIBUTE_OPTIONS.map((opt) => (
+          {MAIN_ATTRIBUTE_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               type="button"
-              onClick={() => {
-                updateField("attribute", opt.value);
-                if (opt.value !== "OTHER") updateField("customAttribute", "");
-              }}
+              onClick={() => updateField("attribute", opt.value)}
               className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
                 form.attribute === opt.value
                   ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"
@@ -618,27 +619,35 @@ export default function ProfileEditPage() {
           ))}
         </div>
 
-        {/* Custom text input for OTHER */}
-        {form.attribute === "OTHER" && (
-          <div className="mt-4">
-            <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-              请输入自定义属性 <span className="text-[hsl(var(--destructive))]">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                maxLength={20}
-                value={form.customAttribute}
-                onChange={(e) => updateField("customAttribute", e.target.value)}
-                placeholder="输入你的属性描述"
-                className="w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--muted-foreground))]">
-                {form.customAttribute.length}/20
-              </span>
-            </div>
-          </div>
-        )}
+        {/* Extra tags (toggleable) */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => updateField("isSide", !form.isSide)}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+              form.isSide
+                ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"
+                : "border-[hsl(var(--border))] text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--primary))]"
+            }`}
+          >
+            <span className="mr-1">{form.isSide ? "✓" : "+"}</span>side
+          </button>
+          <button
+            type="button"
+            onClick={() => updateField("isOther", !form.isOther)}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+              form.isOther
+                ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"
+                : "border-[hsl(var(--border))] text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--primary))]"
+            }`}
+          >
+            <span className="mr-1">{form.isOther ? "✓" : "+"}</span>其他
+          </button>
+        </div>
+
+        <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+          上方选择主属性，side 和其他可以同时勾选
+        </p>
       </section>
 
       {/* Section 4: Self Intro */}
@@ -671,7 +680,22 @@ export default function ProfileEditPage() {
         <div className="mb-4 flex gap-2">
           <button
             type="button"
-            onClick={() => setWantPhotos(false)}
+            onClick={async () => {
+              // Delete all already-uploaded photos before switching off
+              if (photos.length > 0) {
+                await Promise.all(
+                  photos.map((p) =>
+                    fetch("/api/profile/photos", {
+                      method: "DELETE",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ photoId: p.id }),
+                    }).catch(() => {})
+                  )
+                );
+                setPhotos([]);
+              }
+              setWantPhotos(false);
+            }}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
               !wantPhotos
                 ? "bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))] border border-[hsl(var(--primary)/0.3)]"
@@ -712,57 +736,7 @@ export default function ProfileEditPage() {
               maxPhotos={6}
             />
 
-            {/* Photo matching preference — only shown when user has photos */}
-            {photos.length > 0 && (
-              <div className="mt-5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-[hsl(var(--foreground))]">
-                <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
-                  <circle cx="12" cy="12" r="10" />
-                  <circle cx="12" cy="12" r="6" />
-                  <circle cx="12" cy="12" r="2" />
-                </svg>
-                匹配偏好
-              </h3>
-              <div className="space-y-2">
-                <label className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-all ${
-                  form.photoMatchPref === "ALL"
-                    ? "border-[hsl(var(--primary)/0.5)] bg-[hsl(var(--primary)/0.05)]"
-                    : "border-[hsl(var(--border))] hover:border-[hsl(var(--primary)/0.5)]"
-                }`}>
-                  <input
-                    type="radio"
-                    name="photoMatchPref"
-                    checked={form.photoMatchPref === "ALL"}
-                    onChange={() => updateField("photoMatchPref", "ALL")}
-                    className="h-4 w-4 accent-[hsl(var(--primary))]"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-[hsl(var(--foreground))]">与所有用户匹配</div>
-                    <div className="text-xs text-[hsl(var(--muted-foreground))]">包括有照片和无照片用户</div>
-                  </div>
-                </label>
-                <label className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer transition-all ${
-                  form.photoMatchPref === "PHOTO_ONLY"
-                    ? "border-[hsl(var(--primary)/0.5)] bg-[hsl(var(--primary)/0.05)]"
-                    : "border-[hsl(var(--border))] hover:border-[hsl(var(--primary)/0.5)]"
-                }`}>
-                  <input
-                    type="radio"
-                    name="photoMatchPref"
-                    checked={form.photoMatchPref === "PHOTO_ONLY"}
-                    onChange={() => updateField("photoMatchPref", "PHOTO_ONLY")}
-                    className="h-4 w-4 accent-[hsl(var(--primary))]"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-[hsl(var(--foreground))]">仅与有照片用户匹配</div>
-                    <div className="text-xs text-[hsl(var(--muted-foreground))]">只匹配同样上传了照片的用户</div>
-                  </div>
-                </label>
 
-                {/* High score only — UI hidden, logic kept for future use */}
-              </div>
-            </div>
-            )}
           </>
         )}
       </section>
@@ -868,27 +842,7 @@ export default function ProfileEditPage() {
             })}
           </div>
 
-          {/* Custom text input for OTHER in expected attributes */}
-          {form.expectedAttributes.includes("OTHER" as Attribute) && (
-            <div className="mt-3">
-              <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-                自定义期望属性描述
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  maxLength={20}
-                  value={form.expectedCustomAttribute}
-                  onChange={(e) => updateField("expectedCustomAttribute", e.target.value)}
-                  placeholder="输入你期望的属性描述"
-                  className="w-full rounded-lg border border-[hsl(var(--input))] bg-[hsl(var(--card))] px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[hsl(var(--muted-foreground))]">
-                  {form.expectedCustomAttribute.length}/20
-                </span>
-              </div>
-            </div>
-          )}
+
         </div>
       </section>
 

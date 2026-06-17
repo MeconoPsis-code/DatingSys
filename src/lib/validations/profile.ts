@@ -62,6 +62,9 @@ export const profileSchema = z.object({
     Object.values(Attribute) as [string, ...string[]]
   ) as z.ZodType<Attribute>,
 
+  isSide: z.boolean().optional().default(false),
+  isOther: z.boolean().optional().default(false),
+
   customAttribute: z
     .string()
     .max(20, "自定义属性不能超过 20 个字")

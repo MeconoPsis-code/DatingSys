@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
+import { notify } from '@/lib/notifications';
 
 /**
  * POST /api/admin/scoring/[taskId]/override
@@ -56,6 +57,8 @@ export async function POST(
         scoreCompletedAt: new Date(),
       },
     });
+
+    await notify.scoringComplete(task.ratedUserId, score);
 
     // Audit log
     await db.auditLog.create({

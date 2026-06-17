@@ -17,6 +17,7 @@ interface MutualMatch {
   provinceCode: string;
   cityCode: string;
   locationType: string;
+  locationScope: string;
   attribute: string;
   customAttribute: string | null;
   mbti: string | null;
@@ -186,6 +187,13 @@ function MutualMatchCard({
             {match.mbti}
           </span>
         )}
+        <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+            <circle cx="12" cy="10" r="3" />
+            <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7Z" />
+          </svg>
+          {match.locationScope === "CITY" ? "同市" : match.locationScope === "PROVINCE" ? "同省" : "不限"}
+        </span>
         {match.finalScore !== null && match.currentUserHasPhotos && (
           <span className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs text-amber-400">
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-amber-500 stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-500">
@@ -307,6 +315,7 @@ export default function MutualMatchesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scoringPending, setScoringPending] = useState(false);
+  const [preferencePending, setPreferencePending] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
@@ -333,6 +342,15 @@ export default function MutualMatchesPage() {
       // Check scoring pending state
       if (data.data?.status === "scoring_pending") {
         setScoringPending(true);
+        setPreferencePending(false);
+        setMatches([]);
+        return;
+      }
+
+      // Check preference pending state
+      if (data.data?.status === "preference_pending") {
+        setPreferencePending(true);
+        setScoringPending(false);
         setMatches([]);
         return;
       }
@@ -455,6 +473,25 @@ export default function MutualMatchesPage() {
         </div>
       )}
 
+      {/* Preference pending */}
+      {preferencePending && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
+          <div className="mb-4 text-5xl">🎯</div>
+          <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">
+            评分已完成，请设置匹配偏好
+          </h2>
+          <p className="mt-2 max-w-xs text-center text-sm text-[hsl(var(--muted-foreground))]">
+            选择你的匹配方式后即可进入匹配池，查看匹配结果。
+          </p>
+          <a
+            href="/match-preferences"
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02]"
+          >
+            设置匹配偏好
+          </a>
+        </div>
+      )}
+
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-16">
@@ -463,7 +500,7 @@ export default function MutualMatchesPage() {
       )}
 
       {/* Empty state */}
-      {!loading && !scoringPending && !error && matches.length === 0 && (
+      {!loading && !scoringPending && !preferencePending && !error && matches.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
           <div className="mb-3 text-[hsl(var(--muted-foreground))]">
             <svg viewBox="0 0 24 24" className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">

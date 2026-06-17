@@ -2,6 +2,7 @@ import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { hasRole } from '@/lib/rbac';
+import { notify } from '@/lib/notifications';
 
 // ── POST /api/admin/users/:id/action ────────────────────
 
@@ -52,6 +53,7 @@ export async function POST(
             createdBy: session.id,
           },
         });
+        await notify.penaltyWarning(id, reason.trim());
 
         // Auto-ban if active warnings > 3
         const activeWarnings = await db.penalty.count({
@@ -83,6 +85,7 @@ export async function POST(
             },
           });
           autoBanned = true;
+          await notify.accountBanned(id, autoBanReason);
         }
         break;
       }
@@ -103,6 +106,7 @@ export async function POST(
             data: { status: 'BANNED' },
           }),
         ]);
+        await notify.accountBanned(id, reason.trim());
         break;
       }
 

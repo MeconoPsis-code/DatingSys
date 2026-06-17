@@ -13,7 +13,7 @@
  */
 
 import { db } from "@/lib/db";
-import { getCityName } from "@/data/regions";
+import { getProvinceName } from "@/data/regions";
 import { createLogger } from "@/lib/logger";
 import type { QQBotClient } from "./clients/qqbot-client.interface";
 
@@ -137,11 +137,10 @@ export async function handleGroupCardChanged(
   // Build the correct card from the user's profile
   if (user.profile) {
     const age = computeAge(user.profile.birthDate);
-    const cityName = getCityName(
+    const provinceName = getProvinceName(
       user.profile.provinceCode,
-      user.profile.cityCode,
-    ).replace(/市$/, "");
-    correctCard = `${age}-${cityName}-${newNickname}`;
+    ).replace(/省$|市$|自治区$|特别行政区$|壮族自治区$|回族自治区$|维吾尔自治区$/, "");
+    correctCard = `${age}-${provinceName}-${newNickname}`;
   } else {
     // No profile → just use the nickname as-is
     correctCard = newNickname;

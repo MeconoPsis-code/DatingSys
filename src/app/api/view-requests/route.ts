@@ -1,6 +1,7 @@
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error, paginated } from '@/lib/api-response';
+import { notify } from '@/lib/notifications';
 
 const REJECTION_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -72,6 +73,13 @@ export async function POST(req: Request) {
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });
+
+    // Get requester nickname for notification
+    const requesterIdentity = await db.authIdentity.findFirst({
+      where: { userId: session.id },
+      select: { nickname: true },
+    });
+    await notify.viewRequestReceived(targetUserId, requesterIdentity?.nickname || "匿名用户");
 
     return success(request, 201);
   } catch (err) {

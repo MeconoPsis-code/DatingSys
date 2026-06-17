@@ -65,11 +65,26 @@ export async function GET(req: Request) {
       profile.photos.length > 0 &&
       ratingProfile &&
       (ratingProfile.ratingStatus === 'PENDING' ||
-        ratingProfile.ratingStatus === 'SCORING')
+        ratingProfile.ratingStatus === 'SCORING' ||
+        ratingProfile.ratingStatus === 'REVIEW')
     ) {
       return success({
         status: 'scoring_pending',
         message: '评分中，请耐心等待',
+      });
+    }
+
+    // 4b. Match-preference-pending guard: scored photo users must select preference first
+    if (
+      profile.photos.length > 0 &&
+      ratingProfile &&
+      ratingProfile.ratingStatus === 'COMPLETED' &&
+      !profile.photoMatchPref
+    ) {
+      return success({
+        status: 'preference_pending',
+        message: '评分已完成，请先设置匹配偏好',
+        finalScore: ratingProfile.finalScore,
       });
     }
 
@@ -129,6 +144,27 @@ export async function GET(req: Request) {
 
     for (const c of candidates) {
       if (!c.profile || !c.preference) continue;
+
+      // Skip candidates whose photos are still pending scoring
+      if (
+        c.profile.photos.length > 0 &&
+        c.ratingProfile &&
+        (c.ratingProfile.ratingStatus === 'PENDING' ||
+          c.ratingProfile.ratingStatus === 'SCORING' ||
+          c.ratingProfile.ratingStatus === 'REVIEW')
+      ) {
+        continue;
+      }
+
+      // Skip candidates who completed scoring but haven't set match preference
+      if (
+        c.profile.photos.length > 0 &&
+        c.ratingProfile &&
+        c.ratingProfile.ratingStatus === 'COMPLETED' &&
+        !c.profile.photoMatchPref
+      ) {
+        continue;
+      }
 
       const candidateUser: MatchCandidate = {
         userId: c.id,
@@ -291,6 +327,7 @@ export async function GET(req: Request) {
         provinceCode: p.provinceCode,
         cityCode: p.cityCode,
         locationType: p.locationType,
+        locationScope: c.preference?.locationScope ?? "ANY",
         attribute: p.attribute,
         customAttribute: p.customAttribute,
         mbti: p.mbti,
