@@ -26,9 +26,6 @@ export interface CandidatePreference {
   heightMaxCm: number;
   weightMinKg: number;
   weightMaxKg: number;
-  locationScope: string; // "ANY" | "PROVINCE" | "CITY"
-  expectedProvinceCode: string | null;
-  expectedCityCode: string | null;
   expectedAttributes: string[]; // Array of Attribute enum values
 }
 
@@ -59,7 +56,7 @@ function ageFromDate(birthDate: Date, referenceDate?: Date): number {
 
 /**
  * Does user A's preferences accept user B's profile?
- * Checks age, height, weight, attribute, and location.
+ * Checks age, height, weight, and attribute.
  */
 export function accepts(a: MatchCandidate, b: MatchCandidate): boolean {
   // B must be active
@@ -88,19 +85,6 @@ export function accepts(a: MatchCandidate, b: MatchCandidate): boolean {
   if (!a.preference.expectedAttributes.includes(b.profile.attribute))
     return false;
 
-  // Location scope check
-  if (a.preference.locationScope === "CITY") {
-    // Must be same city
-    const targetCity =
-      a.preference.expectedCityCode || a.profile.cityCode;
-    if (b.profile.cityCode !== targetCity) return false;
-  } else if (a.preference.locationScope === "PROVINCE") {
-    // Must be same province
-    const targetProvince =
-      a.preference.expectedProvinceCode || a.profile.provinceCode;
-    if (b.profile.provinceCode !== targetProvince) return false;
-  }
-  // "ANY" → no location filter
 
   return true;
 }
@@ -198,12 +182,6 @@ export function computeRelevanceScore(
 ): number {
   let score = 0;
 
-  // Location proximity
-  if (a.profile.cityCode === b.profile.cityCode) {
-    score += 30;
-  } else if (a.profile.provinceCode === b.profile.provinceCode) {
-    score += 20;
-  }
 
   // Preference midpoint proximity (how close B is to the center of A's ranges)
   const ageMid = (a.preference.ageMin + a.preference.ageMax) / 2;

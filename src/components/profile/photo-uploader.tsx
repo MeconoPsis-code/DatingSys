@@ -247,37 +247,73 @@ export function PhotoUploader({
       {/* ─── Photo Consent Modal ─── */}
       {showConsentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
-            <div className="mb-4 flex items-center gap-2">
-              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-400">
-                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
+          <div className="w-full max-w-md rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-xl max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center gap-2 px-6 pt-6 pb-4">
+              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                <circle cx="12" cy="13" r="3" />
               </svg>
               <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">
                 照片上传须知
               </h3>
             </div>
 
-            <div className="mb-5 space-y-3 text-sm text-[hsl(var(--muted-foreground))]">
-              <p>在上传照片前，请确认你了解并同意以下事项：</p>
-              <ul className="space-y-2 pl-1">
-                <li className="flex gap-2">
-                  <span className="mt-0.5 shrink-0 text-brand-blue">•</span>
-                  <span>你的照片将对群内的<strong className="text-[hsl(var(--foreground))]">其他用户可见</strong>，可能出现在匹配结果中</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-0.5 shrink-0 text-brand-blue">•</span>
-                  <span>你的照片将由<strong className="text-[hsl(var(--foreground))]">评分官进行评分</strong>，评分结果将影响匹配排序</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="mt-0.5 shrink-0 text-brand-blue">•</span>
-                  <span>你可以随时在个人资料中<strong className="text-[hsl(var(--foreground))]">删除已上传的照片</strong></span>
-                </li>
-              </ul>
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto px-6 pb-2">
+              <p className="mb-4 text-sm text-[hsl(var(--muted-foreground))]">
+                上传照片前，请先了解以下几点：
+              </p>
+
+              {/* Section 1 */}
+              <div className="mb-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[hsl(var(--foreground))]">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[11px] font-bold text-brand-blue">1</span>
+                  上传即视为同意接受评分
+                </h4>
+                <div className="space-y-1.5 pl-7 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
+                  <p>我们会从五个维度（轮廓、皮肤、五官、造型、眼缘）进行评估。</p>
+                  <p>评分将展示在你的资料卡上。</p>
+                  <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-amber-600 dark:text-amber-400">
+                    如果你不想被评分，请勿上传照片，仍可使用基础匹配功能。
+                  </p>
+                </div>
+              </div>
+
+              {/* Section 2 */}
+              <div className="mb-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[hsl(var(--foreground))]">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[11px] font-bold text-brand-blue">2</span>
+                  照片要求
+                </h4>
+                <p className="mb-2 pl-7 text-xs text-[hsl(var(--muted-foreground))]">
+                  为了顺利通过审核，请确保：
+                </p>
+                <ul className="space-y-1.5 pl-7 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
+                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>本人正脸，面部清晰可见，无墨镜、口罩或大面积阴影遮挡</span></li>
+                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>单人照，无多人同框</span></li>
+                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>真实照片，非AI生成、非翻拍、非网图</span></li>
+                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>不过度修图或滤镜过重，保留真实肤质和五官细节</span></li>
+                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>光线自然，不逆光、不过暗</span></li>
+                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>内容合规，不涉及色情、暴力、政治敏感等违规内容</span></li>
+                </ul>
+              </div>
+
+              {/* Section 3 */}
+              <div className="mb-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[hsl(var(--foreground))]">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[11px] font-bold text-brand-blue">3</span>
+                  评分是为了帮你找到更合适的匹配视角
+                </h4>
+                <div className="space-y-1.5 pl-7 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
+                  <p>分数不是定义，只是看待魅力的其中一个角度。</p>
+                  <p>我们相信每个人都有自己独特的吸引力。</p>
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-3">
+            {/* Buttons */}
+            <div className="flex gap-3 px-6 pb-6 pt-3 border-t border-[hsl(var(--border))]">
               <button
                 type="button"
                 onClick={() => setShowConsentModal(false)}

@@ -20,7 +20,6 @@ interface PhotoItem {
 /* ─── Types ──────────────────────────────────────────── */
 
 type Attribute = "ONE" | "ZERO" | "HALF" | "LEAN_ONE" | "LEAN_ZERO" | "SIDE" | "OTHER";
-type LocationScope = "ANY" | "PROVINCE" | "CITY";
 type LocationType = "RESIDENCE" | "HOMETOWN" | "SCHOOL" | "WORK" | "TRAVEL" | "OTHER";
 type PhotoMatchPref = "PHOTO_ONLY" | "ALL";
 
@@ -60,7 +59,7 @@ interface FormState {
   heightMaxCm: string;
   weightMinKg: string;
   weightMaxKg: string;
-  locationScope: LocationScope;
+
   expectedAttributes: Attribute[];
   expectedCustomAttribute: string;
   // Consent
@@ -90,7 +89,7 @@ const INITIAL_FORM: FormState = {
   heightMaxCm: "200",
   weightMinKg: "40",
   weightMaxKg: "100",
-  locationScope: "ANY",
+
   expectedAttributes: [],
   expectedCustomAttribute: "",
   consent: false,
@@ -108,11 +107,7 @@ const YEARS = range(1960, 2008).reverse();
 const MONTHS = range(1, 12);
 const DAYS = range(1, 31);
 
-const LOCATION_SCOPE_OPTIONS: { value: LocationScope; label: string }[] = [
-  { value: "ANY", label: "不限" },
-  { value: "PROVINCE", label: "同省" },
-  { value: "CITY", label: "同市" },
-];
+
 
 /* ─── Component ──────────────────────────────────────── */
 
@@ -198,7 +193,7 @@ export default function ProfileEditPage() {
             heightMaxCm: String(pref.heightMaxCm ?? 200),
             weightMinKg: String(pref.weightMinKg ?? 40),
             weightMaxKg: String(pref.weightMaxKg ?? 100),
-            locationScope: pref.locationScope || "ANY",
+
             expectedAttributes: Array.isArray(pref.expectedAttributes)
               ? pref.expectedAttributes
               : [],
@@ -333,7 +328,7 @@ export default function ProfileEditPage() {
         heightMaxCm: Number(form.heightMaxCm),
         weightMinKg: Number(form.weightMinKg),
         weightMaxKg: Number(form.weightMaxKg),
-        locationScope: form.locationScope,
+
         expectedAttributes: form.expectedAttributes,
         expectedCustomAttribute: form.expectedAttributes.includes("OTHER" as Attribute)
           ? form.expectedCustomAttribute.trim() || null
@@ -793,28 +788,7 @@ export default function ProfileEditPage() {
           />
         </div>
 
-        {/* Location scope */}
-        <div className="mb-4">
-          <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-            地区偏好
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {LOCATION_SCOPE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => updateField("locationScope", opt.value)}
-                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
-                  form.locationScope === opt.value
-                    ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"
-                    : "border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--foreground))]"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
+
 
         {/* Expected attributes */}
         <div>

@@ -175,9 +175,6 @@ export async function PUT(req: Request) {
     heightMaxCm: prefData.heightMaxCm,
     weightMinKg: prefData.weightMinKg,
     weightMaxKg: prefData.weightMaxKg,
-    locationScope: prefData.locationScope,
-    expectedProvinceCode: prefData.expectedProvinceCode ?? null,
-    expectedCityCode: prefData.expectedCityCode ?? null,
     expectedAttributes: prefData.expectedAttributes as unknown as Prisma.InputJsonValue,
     expectedCustomAttribute: prefData.expectedCustomAttribute ?? null,
   };

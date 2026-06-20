@@ -17,7 +17,7 @@ interface MutualMatch {
   provinceCode: string;
   cityCode: string;
   locationType: string;
-  locationScope: string;
+
   attribute: string;
   customAttribute: string | null;
   mbti: string | null;
@@ -119,10 +119,29 @@ function MutualMatchCard({
   const [qqCopied, setQqCopied] = useState(false);
 
   function handleCopyQQ(qq: string) {
-    navigator.clipboard.writeText(qq).then(() => {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(qq).then(() => {
+        setQqCopied(true);
+        setTimeout(() => setQqCopied(false), 1500);
+      }).catch(() => fallbackCopy(qq));
+    } else {
+      fallbackCopy(qq);
+    }
+  }
+
+  function fallbackCopy(text: string) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
       setQqCopied(true);
       setTimeout(() => setQqCopied(false), 1500);
-    });
+    } catch { /* ignore */ }
+    document.body.removeChild(ta);
   }
 
   return (
@@ -187,13 +206,7 @@ function MutualMatchCard({
             {match.mbti}
           </span>
         )}
-        <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
-            <circle cx="12" cy="10" r="3" />
-            <path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 1 0-16 0c0 3 2.7 7 8 11.7Z" />
-          </svg>
-          {match.locationScope === "CITY" ? "同市" : match.locationScope === "PROVINCE" ? "同省" : "不限"}
-        </span>
+
         {match.finalScore !== null && match.currentUserHasPhotos && (
           <span className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs text-amber-400">
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-amber-500 stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-500">
@@ -322,6 +335,8 @@ export default function MutualMatchesPage() {
   const [viewRequestMap, setViewRequestMap] = useState<Record<string, string>>({});
   const [approvedDetails, setApprovedDetails] = useState<Record<string, { qqNumber: string | null }>>({});
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
+  const [provinceOnly, setProvinceOnly] = useState(false);
+  const [currentUserProvinceCode, setCurrentUserProvinceCode] = useState<string | null>(null);
   const pageSize = 20;
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -356,6 +371,9 @@ export default function MutualMatchesPage() {
       }
 
       setMatches(data.data || []);
+      if (data.currentUserProvinceCode) {
+        setCurrentUserProvinceCode(data.currentUserProvinceCode);
+      }
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
         setTotal(data.pagination.total);
@@ -448,6 +466,36 @@ export default function MutualMatchesPage() {
 
       <MatchTabs />
 
+      {/* Province filter toggle */}
+      {!loading && !scoringPending && !preferencePending && matches.length > 0 && (
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] p-0.5">
+            <button
+              type="button"
+              onClick={() => setProvinceOnly(false)}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                !provinceOnly
+                  ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
+                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              全部
+            </button>
+            <button
+              type="button"
+              onClick={() => setProvinceOnly(true)}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                provinceOnly
+                  ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
+                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              同省
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="flex items-center gap-2.5 rounded-xl border border-red-100 bg-white px-4 py-3.5 text-sm font-semibold text-red-500 shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
@@ -527,7 +575,10 @@ export default function MutualMatchesPage() {
       {/* Match cards */}
       {!loading && (
         <div className="space-y-4">
-          {matches.map((match) => (
+          {(provinceOnly && currentUserProvinceCode
+            ? matches.filter((m) => m.provinceCode === currentUserProvinceCode)
+            : matches
+          ).map((match) => (
             <MutualMatchCard
               key={match.userId}
               match={match}

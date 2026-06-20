@@ -89,10 +89,30 @@ export default function MatchDetailPage({
 
   function handleCopyQQ() {
     if (!detail?.qqNumber) return;
-    navigator.clipboard.writeText(detail.qqNumber).then(() => {
+    const qq = detail.qqNumber;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(qq).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }).catch(() => fallbackCopy(qq));
+    } else {
+      fallbackCopy(qq);
+    }
+  }
+
+  function fallbackCopy(text: string) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
-    });
+    } catch { /* ignore */ }
+    document.body.removeChild(ta);
   }
 
   async function handleRequestPhoto() {

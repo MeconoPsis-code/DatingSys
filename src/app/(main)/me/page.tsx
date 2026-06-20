@@ -478,6 +478,31 @@ export default function MePage() {
     } catch { /* ignore */ }
   }
 
+  const NOTIF_LINK_MAP: Record<string, string> = {
+    SCORING_COMPLETE: "/match-preferences",
+    VIEW_REQUEST_RECEIVED: "/requests",
+  };
+
+  function renderNotifMessage(n: NotificationItem) {
+    const link = NOTIF_LINK_MAP[n.type];
+    if (!link) return n.message;
+    const parts = n.message.split(/(「[^」]+」)/);
+    return parts.map((part, i) =>
+      /^「.+」$/.test(part) ? (
+        <a
+          key={i}
+          href={link}
+          onClick={(e) => e.stopPropagation()}
+          className="font-medium text-brand-blue underline decoration-brand-blue/30 underline-offset-2 hover:decoration-brand-blue"
+        >
+          {part}
+        </a>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
+  }
+
   useEffect(() => {
     async function fetchMe() {
       try {
@@ -764,7 +789,7 @@ export default function MePage() {
                     </span>
                   </div>
                   <p className="mt-0.5 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
-                    {n.message}
+                    {renderNotifMessage(n)}
                   </p>
                 </div>
               </button>

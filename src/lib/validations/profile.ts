@@ -1,5 +1,5 @@
 import { z } from "zod/v4";
-import { Attribute, LocationScope, LocationType, PhotoMatchPref, ProfileStatus } from "@prisma/client";
+import { Attribute, LocationType, PhotoMatchPref, ProfileStatus } from "@prisma/client";
 import { MBTI_TYPES } from "@/data/mbti";
 
 // ── Constants ───────────────────────────────────────────
@@ -124,12 +124,6 @@ export const preferenceSchema = z
       .int()
       .max(MAX_WEIGHT, `最高体重不能超过 ${MAX_WEIGHT}kg`),
 
-    locationScope: z.enum(
-      Object.values(LocationScope) as [string, ...string[]]
-    ) as z.ZodType<LocationScope>,
-
-    expectedProvinceCode: z.string().optional().nullable(),
-    expectedCityCode: z.string().optional().nullable(),
 
     expectedAttributes: z.array(
       z.enum(Object.values(Attribute) as [string, ...string[]]) as z.ZodType<Attribute>

@@ -9,6 +9,8 @@ type PhotoMatchPref = "ALL" | "PHOTO_ONLY";
 
 interface ProfileData {
   hasPhotos: boolean;
+  photoMatchPref: string | null;
+  highScoreOnly: boolean;
   ratingProfile: {
     ratingStatus: string;
     finalScore: number | null;
@@ -44,6 +46,8 @@ export default function MatchPreferencesPage() {
         const { data } = await res.json();
         setProfileData({
           hasPhotos: data.hasPhotos,
+          photoMatchPref: data.profile?.photoMatchPref ?? null,
+          highScoreOnly: data.profile?.highScoreOnly ?? false,
           ratingProfile: data.ratingProfile,
         });
       } catch (err) {
@@ -212,6 +216,85 @@ export default function MatchPreferencesPage() {
     if (s >= 7) return "bg-brand-blue/10";
     if (s >= 5) return "bg-amber-500/10";
     return "bg-[hsl(0,60%,50%/0.1)]";
+  }
+
+  /* ─── Already set — read-only view ────────────── */
+  const alreadySet = !!profileData?.photoMatchPref;
+
+  if (alreadySet) {
+    const pref = profileData!.photoMatchPref;
+    const isHighScore = profileData!.highScoreOnly;
+
+    const prefLabel =
+      pref === "PHOTO_ONLY"
+        ? isHighScore
+          ? "仅与高分用户匹配 (≥ 7.0)"
+          : "仅与有照片用户匹配"
+        : "与所有用户匹配";
+
+    const prefDesc =
+      pref === "PHOTO_ONLY"
+        ? isHighScore
+          ? "只匹配颜值评分 7.0 及以上的优质用户"
+          : "只与上传了照片的用户匹配"
+        : "包括没有上传照片的用户，获得最多的匹配机会";
+
+    return (
+      <div className="flex flex-col gap-5">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold">
+            <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            匹配偏好设置
+          </h1>
+          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
+            你已经完成了匹配偏好设置。
+          </p>
+        </div>
+
+        {/* Current preference card */}
+        <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-[hsl(var(--card))]">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 to-emerald-600" />
+          <div className="px-5 py-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10">
+                <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-emerald-500 stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[hsl(var(--foreground))]">
+                  {prefLabel}
+                </p>
+                <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
+                  {prefDesc}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Go to matches */}
+        <a
+          href="/matches/mutual"
+          className="flex items-center justify-center gap-2 rounded-xl bg-brand-blue py-3 text-sm font-semibold text-white shadow-brand-blue/20 transition-all hover:bg-brand-blue/95 hover:scale-[1.01] active:scale-[0.99]"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+          </svg>
+          前往匹配页面
+        </a>
+
+        <p className="text-center text-xs text-[hsl(var(--muted-foreground))]">
+          匹配偏好一经设置不可更改。
+        </p>
+      </div>
+    );
   }
 
   /* ─── Main UI ────────────────────────────────────── */
@@ -456,7 +539,7 @@ export default function MatchPreferencesPage() {
 
       {/* Info note */}
       <p className="text-center text-xs text-[hsl(var(--muted-foreground))]">
-        你可以随时在个人资料编辑页面中修改匹配偏好。
+        匹配偏好一经设置不可更改。
       </p>
     </div>
   );

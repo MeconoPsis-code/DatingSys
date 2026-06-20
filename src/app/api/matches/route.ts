@@ -1,6 +1,7 @@
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error, paginated } from '@/lib/api-response';
+import { NextResponse } from 'next/server';
 import {
   getMatchType,
   computeRelevanceScore,
@@ -124,9 +125,6 @@ export async function GET(req: Request) {
         heightMaxCm: preference.heightMaxCm,
         weightMinKg: preference.weightMinKg,
         weightMaxKg: preference.weightMaxKg,
-        locationScope: preference.locationScope,
-        expectedProvinceCode: preference.expectedProvinceCode,
-        expectedCityCode: preference.expectedCityCode,
         expectedAttributes: preference.expectedAttributes as string[],
       },
       hasPhotos: profile.photos.length > 0,
@@ -186,9 +184,6 @@ export async function GET(req: Request) {
           heightMaxCm: c.preference.heightMaxCm,
           weightMinKg: c.preference.weightMinKg,
           weightMaxKg: c.preference.weightMaxKg,
-          locationScope: c.preference.locationScope,
-          expectedProvinceCode: c.preference.expectedProvinceCode,
-          expectedCityCode: c.preference.expectedCityCode,
           expectedAttributes: c.preference.expectedAttributes as string[],
         },
         hasPhotos: c.profile.photos.length > 0,
@@ -284,31 +279,30 @@ export async function GET(req: Request) {
           p.attribute
         );
 
-        let locationMatch = true;
-        if (preference.locationScope === 'CITY') {
-          const targetCity =
-            preference.expectedCityCode || profile.cityCode;
-          locationMatch = p.cityCode === targetCity;
-        } else if (preference.locationScope === 'PROVINCE') {
-          const targetProv =
-            preference.expectedProvinceCode || profile.provinceCode;
-          locationMatch = p.provinceCode === targetProv;
-        }
 
         return {
           userId: m.userId,
           ageMatch,
           heightMatch,
           weightMatch,
-          locationMatch,
           attributeMatch,
           hasPhotos: p.photos.length > 0,
+          provinceCode: p.provinceCode,
           direction,
           relevanceScore: m.relevanceScore,
         };
       });
 
-      return paginated(data, total, page, pageSize);
+      return NextResponse.json({
+        data,
+        currentUserProvinceCode: profile.provinceCode,
+        pagination: {
+          total,
+          page,
+          pageSize,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      });
     }
 
     // Mutual match — full profile except qqNumber and photos
@@ -327,7 +321,7 @@ export async function GET(req: Request) {
         provinceCode: p.provinceCode,
         cityCode: p.cityCode,
         locationType: p.locationType,
-        locationScope: c.preference?.locationScope ?? "ANY",
+
         attribute: p.attribute,
         customAttribute: p.customAttribute,
         mbti: p.mbti,
@@ -341,7 +335,16 @@ export async function GET(req: Request) {
       };
     });
 
-    return paginated(data, total, page, pageSize);
+    return NextResponse.json({
+      data,
+      currentUserProvinceCode: profile.provinceCode,
+      pagination: {
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
   } catch (err) {
     console.error('[matches] GET error:', err);
     if (err && typeof err === 'object' && 'status' in err) {

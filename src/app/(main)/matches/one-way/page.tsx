@@ -11,9 +11,10 @@ interface OneWayMatch {
   ageMatch: boolean;
   heightMatch: boolean;
   weightMatch: boolean;
-  locationMatch: boolean;
+
   attributeMatch: boolean;
   hasPhotos: boolean;
+  provinceCode: string;
   direction: "i_like" | "likes_me";
   relevanceScore: number;
 }
@@ -92,7 +93,8 @@ function OneWayMatchCard({
   viewRequestStatus: string | null; // null, "PENDING", "APPROVED", "REJECTED"
 }) {
   const isILike = match.direction === "i_like";
-  const matchCount = [match.ageMatch, match.heightMatch, match.weightMatch, match.locationMatch, match.attributeMatch].filter(Boolean).length;
+  const matchCount = [match.ageMatch, match.heightMatch, match.weightMatch, match.attributeMatch].filter(Boolean).length;
+  const [showReport, setShowReport] = useState(false);
 
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 transition-all hover:border-[hsl(var(--primary)/0.3)]">
@@ -108,7 +110,7 @@ function OneWayMatchCard({
           {isILike ? "→ 我符合对方条件" : "← 对方符合我的条件"}
         </span>
         <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
-          {matchCount}/5 项符合我的偏好
+          {matchCount}/4 项符合我的偏好
         </span>
       </div>
 
@@ -159,16 +161,7 @@ function OneWayMatchCard({
           label="体重"
           match={match.weightMatch}
         />
-        <MatchBadge
-          icon={
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
-          }
-          label="地区"
-          match={match.locationMatch}
-        />
+
         <MatchBadge
           icon={
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
@@ -236,6 +229,31 @@ function OneWayMatchCard({
           </button>
         )}
       </div>
+
+      {/* Report */}
+      <div className="mt-3 flex items-center gap-2">
+        <div className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setShowReport(!showReport)}
+          className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))] transition-all hover:border-[hsl(0,60%,50%/0.5)] hover:text-[hsl(0,60%,65%)]"
+        >
+          举报
+        </button>
+      </div>
+
+      {/* Report section (expandable) */}
+      {showReport && (
+        <div className="mt-3 rounded-lg border border-[hsl(0,60%,50%/0.2)] bg-[hsl(0,60%,50%/0.05)] p-3">
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            如需举报，请前往
+            <Link href={`/report?target=${match.userId}`} className="ml-1 text-[hsl(var(--primary))] underline">
+              举报页面
+            </Link>
+            提交详细信息。
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -254,6 +272,8 @@ export default function OneWayMatchesPage() {
   const [requesting, setRequesting] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "i_like" | "likes_me">("all");
+  const [provinceOnly, setProvinceOnly] = useState(false);
+  const [currentUserProvinceCode, setCurrentUserProvinceCode] = useState<string | null>(null);
   const pageSize = 20;
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -278,6 +298,9 @@ export default function OneWayMatchesPage() {
       }
 
       setMatches(data.data || []);
+      if (data.currentUserProvinceCode) {
+        setCurrentUserProvinceCode(data.currentUserProvinceCode);
+      }
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
         setTotal(data.pagination.total);
@@ -356,10 +379,14 @@ export default function OneWayMatchesPage() {
     }
   }
 
-  const filteredMatches =
+  const dirFiltered =
     filter === "all"
       ? matches
       : matches.filter((m) => m.direction === filter);
+
+  const filteredMatches = provinceOnly && currentUserProvinceCode
+    ? dirFiltered.filter((m) => m.provinceCode === currentUserProvinceCode)
+    : dirFiltered;
 
   const iLikeCount = matches.filter((m) => m.direction === "i_like").length;
   const likesMeCount = matches.filter((m) => m.direction === "likes_me").length;
@@ -374,6 +401,36 @@ export default function OneWayMatchesPage() {
       </h1>
 
       <MatchTabs />
+
+      {/* Province filter toggle */}
+      {!loading && !scoringPending && matches.length > 0 && (
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] p-0.5">
+            <button
+              type="button"
+              onClick={() => setProvinceOnly(false)}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                !provinceOnly
+                  ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
+                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              全部
+            </button>
+            <button
+              type="button"
+              onClick={() => setProvinceOnly(true)}
+              className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+                provinceOnly
+                  ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
+                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              同省
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Error */}
       {error && (

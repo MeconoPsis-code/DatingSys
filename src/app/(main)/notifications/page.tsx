@@ -91,6 +91,32 @@ function formatTime(dateStr: string): string {
   return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
 }
 
+const NOTIF_LINK_MAP: Record<string, string> = {
+  SCORING_COMPLETE: "/match-preferences",
+  VIEW_REQUEST_RECEIVED: "/requests",
+};
+
+function renderMessage(n: NotificationItem) {
+  const link = NOTIF_LINK_MAP[n.type];
+  if (!link) return n.message;
+  // Split on 「...」 and make matched text a clickable link
+  const parts = n.message.split(/(「[^」]+」)/);
+  return parts.map((part, i) =>
+    /^「.+」$/.test(part) ? (
+      <a
+        key={i}
+        href={link}
+        onClick={(e) => e.stopPropagation()}
+        className="font-medium text-brand-blue underline decoration-brand-blue/30 underline-offset-2 hover:decoration-brand-blue"
+      >
+        {part}
+      </a>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  );
+}
+
 /* ─── Component ──────────────────────────────────────── */
 
 export default function NotificationsPage() {
@@ -229,7 +255,7 @@ export default function NotificationsPage() {
                     </span>
                   </div>
                   <p className="mt-1 text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
-                    {n.message}
+                    {renderMessage(n)}
                   </p>
                 </div>
               </button>

@@ -21,7 +21,6 @@ type Step = "verify" | "passcode" | "profile";
 /* ─── Profile Types ─────────────────────────────────── */
 
 type Attribute = "ONE" | "ZERO" | "HALF" | "LEAN_ONE" | "LEAN_ZERO" | "SIDE" | "OTHER";
-type LocationScope = "ANY" | "PROVINCE" | "CITY";
 type LocationType = "RESIDENCE" | "HOMETOWN" | "SCHOOL" | "WORK" | "TRAVEL" | "OTHER";
 type PhotoMatchPref = "PHOTO_ONLY" | "ALL";
 
@@ -51,7 +50,7 @@ interface ProfileFormState {
   heightMaxCm: string;
   weightMinKg: string;
   weightMaxKg: string;
-  locationScope: LocationScope;
+
   expectedAttributes: Attribute[];
   expectedCustomAttribute: string;
   photoMatchPref: PhotoMatchPref | "";
@@ -80,7 +79,7 @@ const INITIAL_PROFILE: ProfileFormState = {
   heightMaxCm: "200",
   weightMinKg: "40",
   weightMaxKg: "100",
-  locationScope: "ANY",
+
   expectedAttributes: [],
   expectedCustomAttribute: "",
   photoMatchPref: "",
@@ -98,11 +97,7 @@ const YEARS = range(1960, 2008).reverse();
 const MONTHS = range(1, 12);
 const DAYS = range(1, 31);
 
-const LOCATION_SCOPE_OPTIONS: { value: LocationScope; label: string }[] = [
-  { value: "ANY", label: "不限" },
-  { value: "PROVINCE", label: "同省" },
-  { value: "CITY", label: "同市" },
-];
+
 
 /**
  * Sign-up page — multi-step flow:
@@ -314,7 +309,7 @@ export default function SignupPage() {
         heightMaxCm: Number(profile.heightMaxCm),
         weightMinKg: Number(profile.weightMinKg),
         weightMaxKg: Number(profile.weightMaxKg),
-        locationScope: profile.locationScope,
+
         expectedAttributes: profile.expectedAttributes,
         expectedCustomAttribute: profile.expectedAttributes.includes("OTHER" as Attribute)
           ? profile.expectedCustomAttribute.trim() || null
@@ -963,28 +958,7 @@ function ProfileFormSection({
           />
         </div>
 
-        {/* Location scope */}
-        <div className="mb-4">
-          <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-            地区偏好
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {LOCATION_SCOPE_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => updateProfile("locationScope", opt.value)}
-                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
-                  profile.locationScope === opt.value
-                    ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"
-                    : "border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--foreground))]"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
+
 
         {/* Expected attributes */}
         <div>

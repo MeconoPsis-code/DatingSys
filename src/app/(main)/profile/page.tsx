@@ -12,7 +12,6 @@ import { LOCATION_TYPE_LABELS } from "@/data/location-types";
 type PoolType = never; // removed — single pool
 type ProfileStatus = "DRAFT" | "ACTIVE" | "CLEARED" | "HIDDEN" | "FROZEN";
 type Attribute = "ONE" | "ZERO" | "HALF" | "LEAN_ONE" | "LEAN_ZERO" | "SIDE" | "OTHER";
-type LocationScope = "ANY" | "PROVINCE" | "CITY";
 type LocationType = "RESIDENCE" | "HOMETOWN" | "SCHOOL" | "WORK" | "TRAVEL" | "OTHER";
 
 interface RatingInfo {
@@ -45,7 +44,7 @@ interface Preference {
   heightMaxCm: number;
   weightMinKg: number;
   weightMaxKg: number;
-  locationScope: LocationScope;
+
   expectedAttributes: Attribute[];
   expectedCustomAttribute: string | null;
 }
@@ -65,11 +64,7 @@ const STATUS_LABELS: Record<ProfileStatus, { label: string; color: string }> = {
   FROZEN: { label: "已冻结", color: "bg-red-500/15 text-red-400 border-red-500/30" },
 };
 
-const LOCATION_SCOPE_LABELS: Record<LocationScope, string> = {
-  ANY: "不限",
-  PROVINCE: "同省",
-  CITY: "同市",
-};
+
 
 function getAttrLabel(attr: Attribute, customText?: string | null): string {
   if (attr === "OTHER" && customText) return `其他: ${customText}`;
@@ -345,7 +340,7 @@ export default function ProfilePage() {
               <InfoRow label="年龄范围" value={`${preference.ageMin} ~ ${preference.ageMax} 岁`} />
               <InfoRow label="身高范围" value={`${preference.heightMinCm} ~ ${preference.heightMaxCm} cm`} />
               <InfoRow label="体重范围" value={`${preference.weightMinKg} ~ ${preference.weightMaxKg} kg`} />
-              <InfoRow label="地区偏好" value={LOCATION_SCOPE_LABELS[preference.locationScope]} />
+
               <InfoRow
                 label="期望属性"
                 value={
