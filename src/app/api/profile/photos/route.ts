@@ -184,6 +184,15 @@ export async function DELETE(req: Request) {
     return error("NOT_FOUND", "照片不存在", 404);
   }
 
+  // 1b. Block deletion if profile is ACTIVE — must go through publish or clear
+  if (photo.profile.status === "ACTIVE") {
+    return error(
+      "FORBIDDEN",
+      "已发布的资料不能直接删除照片。请通过「发布资料」或「清空资料」来修改。",
+      403
+    );
+  }
+
   // 2. Delete from MinIO
   try {
     await deleteFile(photo.storageKey);

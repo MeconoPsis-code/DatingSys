@@ -596,6 +596,7 @@ function ProfileFormSection({
   toggleExpectedAttr: (attr: Attribute) => void;
   onSubmit: () => void;
 }) {
+  const [showClearPhotosConfirm, setShowClearPhotosConfirm] = useState(false);
   return (
     <div className="flex flex-col gap-5">
       {/* Section 1: Basic Info */}
@@ -845,21 +846,12 @@ function ProfileFormSection({
         <div className="mb-4 flex gap-2">
           <button
             type="button"
-            onClick={async () => {
-              // Delete all already-uploaded photos before switching off
+            onClick={() => {
               if (photos.length > 0) {
-                await Promise.all(
-                  photos.map((p) =>
-                    fetch("/api/profile/photos", {
-                      method: "DELETE",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ photoId: p.id }),
-                    }).catch(() => {})
-                  )
-                );
-                onPhotosChange([]);
+                setShowClearPhotosConfirm(true);
+              } else {
+                onWantPhotosChange(false);
               }
-              onWantPhotosChange(false);
             }}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
               !wantPhotos
@@ -903,6 +895,56 @@ function ProfileFormSection({
 
 
           </>
+        )}
+
+        {/* Clear photos confirmation modal */}
+        {showClearPhotosConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
+              <div className="mb-4 flex justify-center text-amber-500">
+                <svg viewBox="0 0 24 24" className="h-10 w-10 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <circle cx="12" cy="17" r="1" style={{ fill: "currentColor", stroke: "none" }} />
+                </svg>
+              </div>
+              <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">
+                确定不上传照片吗？
+              </h3>
+              <p className="mb-5 text-center text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
+                你已上传的 <span className="font-medium text-[hsl(var(--foreground))]">{photos.length}</span> 张照片将被全部删除。若想再次上传照片，需重新添加。
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowClearPhotosConfirm(false)}
+                  className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))]"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowClearPhotosConfirm(false);
+                    await Promise.all(
+                      photos.map((p) =>
+                        fetch("/api/profile/photos", {
+                          method: "DELETE",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ photoId: p.id }),
+                        }).catch(() => {})
+                      )
+                    );
+                    onPhotosChange([]);
+                    onWantPhotosChange(false);
+                  }}
+                  className="flex-1 rounded-lg bg-[hsl(0,72%,51%)] py-2 text-sm font-semibold text-white transition-all hover:bg-[hsl(0,72%,45%)]"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </section>
 

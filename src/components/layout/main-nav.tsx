@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const userTabs = [
   {
@@ -104,6 +104,25 @@ const ROLE_WEIGHT: Record<UserRole, number> = {
 export function MainNav() {
   const pathname = usePathname();
   const [role, setRole] = useState<UserRole>("USER");
+  const [requestBadge, setRequestBadge] = useState(0);
+  const [notificationBadge, setNotificationBadge] = useState(0);
+
+  const fetchBadges = useCallback(async () => {
+    try {
+      const [reqRes, notiRes] = await Promise.all([
+        fetch("/api/view-requests?type=incoming&status=pending&pageSize=1"),
+        fetch("/api/notifications?pageSize=1"),
+      ]);
+      if (reqRes.ok) {
+        const data = await reqRes.json();
+        setRequestBadge(data.pagination?.total ?? 0);
+      }
+      if (notiRes.ok) {
+        const data = await notiRes.json();
+        setNotificationBadge(data.data?.unreadCount ?? 0);
+      }
+    } catch { /* non-critical */ }
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -115,6 +134,18 @@ export function MainNav() {
       })
       .catch(() => {});
   }, []);
+
+  // Fetch badge counts on mount and poll every 30s
+  useEffect(() => {
+    fetchBadges();
+    const interval = setInterval(fetchBadges, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBadges]);
+
+  // Refresh badges on navigation
+  useEffect(() => {
+    fetchBadges();
+  }, [pathname, fetchBadges]);
 
   // Build tabs based on role
   const tabs = [...userTabs];
@@ -137,10 +168,16 @@ export function MainNav() {
     return pathname.startsWith(href);
   };
 
+  const getBadge = (href: string) => {
+    if (href === "/requests") return requestBadge;
+    if (href === "/notifications") return notificationBadge;
+    return 0;
+  };
+
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-[246px] flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7">
+      <aside className="hidden md:flex w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7 overflow-y-auto">
         <div className="side-brand mb-6 flex h-[92px] items-center gap-3 bg-brand-blue rounded-b-[20px] px-[28px] text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]">
           <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.06)]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -153,11 +190,12 @@ export function MainNav() {
         <nav className="menu flex flex-col gap-2 px-[18px]">
           {tabs.map((tab) => {
             const active = isActive(tab.href);
+            const badge = getBadge(tab.href);
             return (
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`menu-item flex h-11 items-center gap-3 rounded-[13px] px-3.5 text-sm font-semibold transition-all duration-200 ${
+                className={`menu-item relative flex h-11 items-center gap-3 rounded-[13px] px-3.5 text-sm font-semibold transition-all duration-200 ${
                   active
                     ? "bg-brand-blue text-white shadow-[0_10px_22px_rgba(22,119,255,0.18)]"
                     : "text-brand-muted hover:bg-slate-100 hover:text-brand-text [&_svg]:stroke-brand-muted hover:[&_svg]:stroke-brand-text"
@@ -167,6 +205,11 @@ export function MainNav() {
                   {tab.icon}
                 </span>
                 {tab.label}
+                {badge > 0 && (
+                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(0,72%,51%)] px-1 text-[10px] font-bold text-white">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -177,18 +220,24 @@ export function MainNav() {
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-[#e9edf5] bg-white safe-bottom md:hidden">
         {tabs.map((tab) => {
           const active = isActive(tab.href);
+          const badge = getBadge(tab.href);
           return (
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex flex-1 flex-col items-center gap-1 py-2 text-xs font-semibold transition-colors ${
+              className={`relative flex flex-1 flex-col items-center gap-1 py-2 text-xs font-semibold transition-colors ${
                 active
                   ? "text-brand-blue"
                   : "text-brand-muted hover:text-brand-text"
               }`}
             >
-              <span className={`shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round`}>
+              <span className={`relative shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round`}>
                 {tab.icon}
+                {badge > 0 && (
+                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[hsl(0,72%,51%)] px-0.5 text-[9px] font-bold text-white">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
               </span>
               {tab.label}
             </Link>

@@ -8,7 +8,7 @@ export async function POST(req: Request) {
   try {
     const session = await requireAuth();
     const body = await req.json();
-    const { targetUserId, type, description } = body as {
+    const { targetUserId: targetQQ, type, description } = body as {
       targetUserId: string;
       type: string;
       description: string;
@@ -24,8 +24,8 @@ export async function POST(req: Request) {
       'MALICIOUS',
       'OTHER',
     ];
-    if (!targetUserId) {
-      return error('MISSING_TARGET', '请指定举报对象', 400);
+    if (!targetQQ) {
+      return error('MISSING_TARGET', '请输入被举报用户的QQ号', 400);
     }
     if (!validTypes.includes(type)) {
       return error('INVALID_TYPE', '无效的举报类型', 400);
@@ -37,15 +37,16 @@ export async function POST(req: Request) {
       return error('DESCRIPTION_TOO_LONG', '举报描述不能超过1000字', 400);
     }
 
+    // Look up user by QQ number
+    const target = await db.user.findUnique({ where: { qqNumber: targetQQ.trim() } });
+    if (!target) {
+      return error('NOT_FOUND', '未找到该QQ号对应的用户', 404);
+    }
+    const targetUserId = target.id;
+
     // Cannot report yourself
     if (targetUserId === session.id) {
       return error('SELF_REPORT', '不能举报自己', 400);
-    }
-
-    // Check target exists
-    const target = await db.user.findUnique({ where: { id: targetUserId } });
-    if (!target) {
-      return error('NOT_FOUND', '被举报用户不存在', 404);
     }
 
     // Check for duplicate pending report

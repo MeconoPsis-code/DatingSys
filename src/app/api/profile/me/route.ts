@@ -8,6 +8,7 @@ import {
 } from "@/lib/validations/profile";
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
+import { notify } from "@/lib/notifications";
 import { napcatClient } from "@/server/bot/clients/napcat.client";
 import { getProvinceName } from "@/data/regions";
 import { createLogger } from "@/lib/logger";
@@ -118,6 +119,37 @@ export async function PUT(req: Request) {
     include: { profile: true },
   });
 
+  // ─── DRAFT SAVE FOR ACTIVE PROFILES → store in draftData, don't touch published ───
+  if (profileStatus === "DRAFT" && user?.profile?.status === "ACTIVE") {
+    // Store the entire form body as draft data without modifying published profile
+    const draftPayload = {
+      profile: body.profile,
+      preference: body.preference,
+      deleteAllPhotos: body.deleteAllPhotos ?? false,
+    };
+
+    await db.profile.update({
+      where: { userId: session.id },
+      data: { draftData: draftPayload as Prisma.InputJsonValue },
+    });
+
+    await logAudit({
+      actorId: session.id,
+      action: AUDIT_ACTIONS.PROFILE_UPDATE,
+      targetType: "Profile",
+      targetId: user.profile.id,
+      metadata: { status: "DRAFT_SAVED" } as Prisma.InputJsonValue,
+      ip: getClientIp(req),
+      userAgent: req.headers.get("user-agent"),
+    });
+
+    return success({
+      profile: user.profile,
+      preference: await db.preference.findUnique({ where: { userId: session.id } }),
+      draftSaved: true,
+    });
+  }
+
   // 3a. Check 7-day edit cooldown (blocks re-publishing if previously published within cooldown)
   if (
     profileStatus === "ACTIVE" &&
@@ -166,6 +198,8 @@ export async function PUT(req: Request) {
     lastSubmittedAt: profileStatus === "ACTIVE" ? new Date() : undefined,
     photoMatchPref: profileData.photoMatchPref ?? null,
     highScoreOnly: profileData.highScoreOnly ?? false,
+    // Clear draft data when publishing
+    ...(profileStatus === "ACTIVE" ? { draftData: Prisma.DbNull } : {}),
   };
 
   const prefFields = {
@@ -193,7 +227,24 @@ export async function PUT(req: Request) {
     }),
   ]);
 
-  // 6. Auto-create rating task for photo users publishing as ACTIVE
+  // 6. Handle photo deletion if requested (only allowed through publish flow)
+  if (body.deleteAllPhotos && profileStatus === "ACTIVE") {
+    const photosToDelete = await db.profilePhoto.findMany({
+      where: { profileId: profile.id },
+      select: { id: true, storageKey: true },
+    });
+
+    // Delete from storage
+    const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
+    await Promise.all(
+      photosToDelete.map((p) => deleteStorageFile(p.storageKey).catch(() => {}))
+    );
+
+    // Delete from DB
+    await db.profilePhoto.deleteMany({ where: { profileId: profile.id } });
+  }
+
+  // 7. Auto-create rating task for photo users publishing as ACTIVE
   if (profileStatus === "ACTIVE") {
     const photoCount = await db.profilePhoto.count({
       where: { profileId: profile.id },
@@ -244,6 +295,16 @@ export async function PUT(req: Request) {
               ratingStatus: "PENDING",
             },
           });
+
+          // Count how many users are ahead in the scoring queue
+          const queueAhead = await db.ratingTask.count({
+            where: {
+              status: { in: ["PENDING", "SCORING"] },
+              ratedUserId: { not: session.id },
+              createdAt: { lt: new Date() },
+            },
+          });
+          await notify.scoringQueued(session.id, queueAhead);
         }
       }
     } else {
@@ -335,4 +396,28 @@ export async function PUT(req: Request) {
   });
 
   return success({ profile, preference });
+}
+
+/**
+ * DELETE /api/profile/me
+ *
+ * Discard saved draft data. Only clears the draftData column.
+ */
+export async function DELETE() {
+  const session = await requireAuth();
+
+  const profile = await db.profile.findUnique({
+    where: { userId: session.id },
+  });
+
+  if (!profile || !profile.draftData) {
+    return error("NOT_FOUND", "没有待处理的草稿", 404);
+  }
+
+  await db.profile.update({
+    where: { userId: session.id },
+    data: { draftData: Prisma.DbNull },
+  });
+
+  return success({ message: "草稿已丢弃" });
 }

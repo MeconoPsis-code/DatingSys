@@ -257,6 +257,7 @@ model Profile {
   // Photo matching preferences (only relevant when user has photos)
   photoMatchPref           PhotoMatchPref?  // null = no photos
   highScoreOnly            Boolean        @default(false) // only match ≥7.0
+  draftData                Json?          // Unpublished draft edits for ACTIVE profiles
   createdAt                DateTime       @default(now())
   updatedAt                DateTime       @updatedAt
 

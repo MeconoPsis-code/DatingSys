@@ -296,6 +296,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         data,
         currentUserProvinceCode: profile.provinceCode,
+        currentUserHasPhotos: profile.photos.length > 0,
         pagination: {
           total,
           page,

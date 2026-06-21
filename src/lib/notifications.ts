@@ -39,6 +39,20 @@ export const notify = {
     );
   },
 
+  /** Photo scoring task queued */
+  async scoringQueued(userId: string, queuePosition: number) {
+    const queueMsg =
+      queuePosition > 0
+        ? `目前排在你前面的有 ${queuePosition} 位用户，请耐心等待。`
+        : `你是当前队列中的第一位，评分将很快开始。`;
+    await create(
+      userId,
+      "SCORING_QUEUED",
+      "资料发布成功",
+      `你的资料已成功发布！照片已进入评分队列，评分员将按顺序对你的照片进行评分。${queueMsg}`
+    );
+  },
+
   /** Someone sent you a view request */
   async viewRequestReceived(userId: string, requesterName: string) {
     await create(

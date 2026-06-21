@@ -87,10 +87,12 @@ function OneWayMatchCard({
   match,
   onRequestView,
   viewRequestStatus,
+  currentUserHasPhotos,
 }: {
   match: OneWayMatch;
   onRequestView: (userId: string) => void;
-  viewRequestStatus: string | null; // null, "PENDING", "APPROVED", "REJECTED"
+  viewRequestStatus: string | null;
+  currentUserHasPhotos: boolean;
 }) {
   const isILike = match.direction === "i_like";
   const matchCount = [match.ageMatch, match.heightMatch, match.weightMatch, match.attributeMatch].filter(Boolean).length;
@@ -225,7 +227,9 @@ function OneWayMatchCard({
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 9.9-1" />
             </svg>
-            申请查看完整资料
+            {currentUserHasPhotos && match.hasPhotos
+              ? "申请查看完整资料"
+              : "申请查看QQ号"}
           </button>
         )}
       </div>
@@ -274,6 +278,7 @@ export default function OneWayMatchesPage() {
   const [filter, setFilter] = useState<"all" | "i_like" | "likes_me">("all");
   const [provinceOnly, setProvinceOnly] = useState(false);
   const [currentUserProvinceCode, setCurrentUserProvinceCode] = useState<string | null>(null);
+  const [currentUserHasPhotos, setCurrentUserHasPhotos] = useState(false);
   const pageSize = 20;
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -300,6 +305,9 @@ export default function OneWayMatchesPage() {
       setMatches(data.data || []);
       if (data.currentUserProvinceCode) {
         setCurrentUserProvinceCode(data.currentUserProvinceCode);
+      }
+      if (data.currentUserHasPhotos !== undefined) {
+        setCurrentUserHasPhotos(data.currentUserHasPhotos);
       }
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
@@ -530,6 +538,7 @@ export default function OneWayMatchesPage() {
               match={match}
               onRequestView={(userId) => setConfirmTarget(userId)}
               viewRequestStatus={viewRequestMap[match.userId] ?? null}
+              currentUserHasPhotos={currentUserHasPhotos}
             />
           ))}
         </div>
@@ -570,10 +579,24 @@ export default function OneWayMatchesPage() {
                 <path d="M7 11V7a5 5 0 0 1 9.9-1" />
               </svg>
             </div>
-            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">申请查看完整资料</h3>
+            <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">
+              {currentUserHasPhotos ? "申请查看完整资料" : "申请查看QQ号"}
+            </h3>
             <p className="mb-5 text-center text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
-              申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号和照片</span>。
-              同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号和照片</span>。资料查看权限是双向的。
+              {currentUserHasPhotos ? (
+                <>
+                  申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号和照片</span>。
+                  同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号和照片</span>。资料查看权限是双向的。
+                </>
+              ) : (
+                <>
+                  申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号</span>。
+                  同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号</span>。
+                  <span className="mt-1 block text-[hsl(var(--muted-foreground))]">
+                    注：您没有上传照片，无法查看对方照片和颜值评分。
+                  </span>
+                </>
+              )}
             </p>
             <div className="flex gap-3">
               <button

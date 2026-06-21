@@ -118,6 +118,7 @@ export default function ProfileEditPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExisting, setIsExisting] = useState(false); // whether profile already exists
+  const [originalProfileStatus, setOriginalProfileStatus] = useState<string>("DRAFT");
 
   // Cooldown state from API
   const [cooldowns, setCooldowns] = useState<{
@@ -134,6 +135,9 @@ export default function ProfileEditPage() {
   // Photo state
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [wantPhotos, setWantPhotos] = useState(false);
+  const [showClearPhotosConfirm, setShowClearPhotosConfirm] = useState(false);
+  const [deleteAllPhotos, setDeleteAllPhotos] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
 
   // Cities based on selected province
   const cities = useMemo(
@@ -143,6 +147,48 @@ export default function ProfileEditPage() {
 
   /* ── Fetch existing profile ── */
   useEffect(() => {
+    function populateForm(
+      profileSrc: Record<string, unknown>,
+      prefSrc: Record<string, unknown> | null
+    ) {
+      const bd = new Date(profileSrc.birthDate as string);
+      setForm((prev) => ({
+        ...prev,
+        birthYear: String(bd.getFullYear()),
+        birthMonth: String(bd.getMonth() + 1),
+        birthDay: String(bd.getDate()),
+        heightCm: String(profileSrc.heightCm),
+        weightKg: String(profileSrc.weightKg),
+        provinceCode: (profileSrc.provinceCode as string) || "",
+        cityCode: (profileSrc.cityCode as string) || "",
+        locationType: ((profileSrc.locationType as string) || "RESIDENCE") as LocationType,
+        attribute: ((profileSrc.attribute as string) || "") as Attribute,
+        isSide: (profileSrc.isSide as boolean) ?? false,
+        isOther: (profileSrc.isOther as boolean) ?? false,
+        customAttribute: (profileSrc.customAttribute as string) || "",
+        mbti: (profileSrc.mbti as string) || "",
+        selfIntro: (profileSrc.selfIntro as string) || "",
+        photoMatchPref: ((profileSrc.photoMatchPref as string) || "") as "" | PhotoMatchPref,
+        highScoreOnly: (profileSrc.highScoreOnly as boolean) ?? false,
+        consent: (profileSrc.consentProfileVisibility as boolean) ?? false,
+        ...(prefSrc
+          ? {
+              ageMin: String(prefSrc.ageMin ?? 18),
+              ageMax: String(prefSrc.ageMax ?? 35),
+              heightMinCm: String(prefSrc.heightMinCm ?? 150),
+              heightMaxCm: String(prefSrc.heightMaxCm ?? 200),
+              weightMinKg: String(prefSrc.weightMinKg ?? 40),
+              weightMaxKg: String(prefSrc.weightMaxKg ?? 100),
+              expectedAttributes: Array.isArray(prefSrc.expectedAttributes)
+                ? (prefSrc.expectedAttributes as Attribute[])
+                : [],
+              expectedCustomAttribute:
+                (prefSrc.expectedCustomAttribute as string) || "",
+            }
+          : {}),
+      }));
+    }
+
     async function load() {
       try {
         const res = await fetch("/api/profile/me");
@@ -162,46 +208,47 @@ export default function ProfileEditPage() {
 
         if (profile) {
           setIsExisting(true);
-          const bd = new Date(profile.birthDate);
-          setForm((prev) => ({
-            ...prev,
-            birthYear: String(bd.getFullYear()),
-            birthMonth: String(bd.getMonth() + 1),
-            birthDay: String(bd.getDate()),
-            heightCm: String(profile.heightCm),
-            weightKg: String(profile.weightKg),
-            provinceCode: profile.provinceCode || "",
-            cityCode: profile.cityCode || "",
-            locationType: profile.locationType || "RESIDENCE",
-            attribute: profile.attribute || "",
-            isSide: profile.isSide ?? false,
-            isOther: profile.isOther ?? false,
-            customAttribute: profile.customAttribute || "",
-            mbti: profile.mbti || "",
-            selfIntro: profile.selfIntro || "",
-            photoMatchPref: profile.photoMatchPref || "",
-            highScoreOnly: profile.highScoreOnly ?? false,
-            consent: profile.consentProfileVisibility ?? false,
-          }));
-        }
-        if (pref) {
-          setForm((prev) => ({
-            ...prev,
-            ageMin: String(pref.ageMin ?? 18),
-            ageMax: String(pref.ageMax ?? 35),
-            heightMinCm: String(pref.heightMinCm ?? 150),
-            heightMaxCm: String(pref.heightMaxCm ?? 200),
-            weightMinKg: String(pref.weightMinKg ?? 40),
-            weightMaxKg: String(pref.weightMaxKg ?? 100),
+          setOriginalProfileStatus(profile.status || "DRAFT");
 
-            expectedAttributes: Array.isArray(pref.expectedAttributes)
-              ? pref.expectedAttributes
-              : [],
-            expectedCustomAttribute: pref.expectedCustomAttribute || "",
-          }));
+          // Check if there's saved draft data for an ACTIVE profile
+          const draft = profile.draftData as {
+            profile?: Record<string, unknown>;
+            preference?: Record<string, unknown>;
+            deleteAllPhotos?: boolean;
+          } | null;
+
+          if (draft && profile.status === "ACTIVE" && draft.profile) {
+            // Load form from draft data
+            setHasDraft(true);
+            populateForm(draft.profile, draft.preference ?? null);
+            if (draft.deleteAllPhotos) {
+              setDeleteAllPhotos(true);
+              setWantPhotos(false);
+            }
+          } else {
+            // Load form from published profile
+            populateForm(profile, pref);
+          }
+
+          // Always load published preference if not loaded from draft
+          if (!draft?.preference && pref) {
+            setForm((prev) => ({
+              ...prev,
+              ageMin: String(pref.ageMin ?? 18),
+              ageMax: String(pref.ageMax ?? 35),
+              heightMinCm: String(pref.heightMinCm ?? 150),
+              heightMaxCm: String(pref.heightMaxCm ?? 200),
+              weightMinKg: String(pref.weightMinKg ?? 40),
+              weightMaxKg: String(pref.weightMaxKg ?? 100),
+              expectedAttributes: Array.isArray(pref.expectedAttributes)
+                ? pref.expectedAttributes
+                : [],
+              expectedCustomAttribute: pref.expectedCustomAttribute || "",
+            }));
+          }
         }
 
-        // Load photos if profile exists
+        // Load photos — always from server (published photos, not draft)
         if (profile) {
           try {
             const photoRes = await fetch("/api/profile/photos");
@@ -209,7 +256,7 @@ export default function ProfileEditPage() {
               const photoData = await photoRes.json();
               const loadedPhotos = photoData.data?.photos || [];
               setPhotos(loadedPhotos);
-              if (loadedPhotos.length > 0) setWantPhotos(true);
+              if (loadedPhotos.length > 0 && !deleteAllPhotos) setWantPhotos(true);
             }
           } catch {
             // Photos are optional, don't block on error
@@ -302,6 +349,7 @@ export default function ProfileEditPage() {
     const birthDate = `${form.birthYear}-${String(form.birthMonth).padStart(2, "0")}-${String(form.birthDay).padStart(2, "0")}`;
 
     const body = {
+      deleteAllPhotos,
       profile: {
         poolType: undefined, // removed — single pool
         birthDate,
@@ -400,13 +448,13 @@ export default function ProfileEditPage() {
 
       {/* Cooldown warnings */}
       {!cooldowns.canEdit && (
-        <div className="flex items-start gap-2 rounded-lg border border-[hsl(40,90%,50%/0.3)] bg-[hsl(40,90%,50%/0.08)] px-4 py-3 text-sm text-[hsl(40,90%,70%)]">
-          <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round mt-0.5">
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
+        <div className="flex items-start gap-2 rounded-xl border border-[hsl(var(--border))] bg-white px-4 py-3 text-sm text-amber-600 shadow-sm">
+          <svg viewBox="0 0 110 110" className="h-4 w-4 shrink-0 mt-0.5" fill="none">
+            <path d="M55 10L100 95H10L55 10Z" stroke="currentColor" strokeWidth={6} strokeLinejoin="round" />
+            <path d="M55 35V65" stroke="currentColor" strokeWidth={8} strokeLinecap="round" />
+            <circle cx="55" cy="80" r="4" fill="currentColor" />
           </svg>
-          <span>发布后 {7} 天内不能再次修改发布。还需等待 {cooldowns.editCooldownRemaining} 天。但仍可保存草稿。</span>
+          <span>发布后 {7} 天内不能再次修改发布。还需等待 {cooldowns.editCooldownRemaining} 天。可先保存草稿，草稿不影响已发布资料。</span>
         </div>
       )}
       {!cooldowns.canPublish && (
@@ -424,6 +472,32 @@ export default function ProfileEditPage() {
       {error && (
         <div className="rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.1)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
           {error}
+        </div>
+      )}
+
+      {/* Draft info banner — shown when editing from a saved draft */}
+      {hasDraft && originalProfileStatus === "ACTIVE" && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-[hsl(var(--border))] bg-white px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-2 text-sm font-medium text-blue-600">
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 100 100" fill="none">
+              <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth={6} />
+              <path d="M50 20V60" stroke="currentColor" strokeWidth={8} strokeLinecap="round" />
+              <circle cx="50" cy="78" r="4" fill="currentColor" />
+            </svg>
+            <span>当前显示的是未发布的草稿内容，已发布资料不受影响。</span>
+          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await fetch("/api/profile/me", { method: "DELETE" });
+                window.location.reload();
+              } catch { /* ignore */ }
+            }}
+            className="shrink-0 rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))]"
+          >
+            放弃草稿
+          </button>
         </div>
       )}
 
@@ -675,21 +749,12 @@ export default function ProfileEditPage() {
         <div className="mb-4 flex gap-2">
           <button
             type="button"
-            onClick={async () => {
-              // Delete all already-uploaded photos before switching off
+            onClick={() => {
               if (photos.length > 0) {
-                await Promise.all(
-                  photos.map((p) =>
-                    fetch("/api/profile/photos", {
-                      method: "DELETE",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ photoId: p.id }),
-                    }).catch(() => {})
-                  )
-                );
-                setPhotos([]);
+                setShowClearPhotosConfirm(true);
+              } else {
+                setWantPhotos(false);
               }
-              setWantPhotos(false);
             }}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
               !wantPhotos
@@ -729,10 +794,53 @@ export default function ProfileEditPage() {
               photos={photos}
               onPhotosChange={setPhotos}
               maxPhotos={6}
+              readOnly={originalProfileStatus === "ACTIVE"}
             />
 
 
           </>
+        )}
+
+        {/* Clear photos confirmation modal */}
+        {showClearPhotosConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
+              <div className="mb-4 flex justify-center text-amber-500">
+                <svg viewBox="0 0 24 24" className="h-10 w-10 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <circle cx="12" cy="17" r="1" style={{ fill: "currentColor", stroke: "none" }} />
+                </svg>
+              </div>
+              <h3 className="mb-2 text-center text-base font-semibold text-[hsl(var(--foreground))]">
+                确定不上传照片吗？
+              </h3>
+              <p className="mb-5 text-center text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
+                你已上传的 <span className="font-medium text-[hsl(var(--foreground))]">{photos.length}</span> 张照片将被全部删除。若想再次上传照片，需重新添加。
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowClearPhotosConfirm(false)}
+                  className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))]"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowClearPhotosConfirm(false);
+                    setDeleteAllPhotos(true);
+                    setPhotos([]);
+                    setWantPhotos(false);
+                  }}
+                  className="flex-1 rounded-lg bg-[hsl(0,72%,51%)] py-2 text-sm font-semibold text-white transition-all hover:bg-[hsl(0,72%,45%)]"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </section>
 
@@ -844,7 +952,7 @@ export default function ProfileEditPage() {
             disabled={submitting}
             className="flex-1 rounded-lg border border-[hsl(var(--border))] px-4 py-2.5 text-sm font-semibold text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] active:scale-[0.98] disabled:opacity-50"
           >
-            {submitting ? "保存中..." : "保存草稿"}
+            {submitting ? "保存中..." : originalProfileStatus === "ACTIVE" ? "保存草稿（不影响已发布资料）" : "保存草稿"}
           </button>
           <button
             type="button"

@@ -23,8 +23,17 @@ export async function POST(req: Request) {
     return error("NOT_FOUND", "没有资料可以清空", 404);
   }
 
-  // 2. Delete profile + preference, set clear timestamp on User
+  // 2. Delete profile + preference + rating data, set clear timestamp on User
   await db.$transaction([
+    // Clean up any pending/scoring rating tasks (scores cascade-deleted)
+    db.ratingTask.deleteMany({
+      where: {
+        ratedUserId: session.id,
+        status: { in: ["PENDING", "SCORING"] },
+      },
+    }),
+    // Remove rating profile
+    db.ratingProfile.deleteMany({ where: { userId: session.id } }),
     db.preference.deleteMany({ where: { userId: session.id } }),
     db.profile.delete({ where: { userId: session.id } }),
     db.user.update({

@@ -13,6 +13,7 @@ interface PhotoUploaderProps {
   photos: PhotoItem[];
   onPhotosChange: (photos: PhotoItem[]) => void;
   maxPhotos?: number;
+  readOnly?: boolean;
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -27,6 +28,7 @@ export function PhotoUploader({
   photos,
   onPhotosChange,
   maxPhotos = 6,
+  readOnly = false,
 }: PhotoUploaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -37,7 +39,7 @@ export function PhotoUploader({
   const [hasConsented, setHasConsented] = useState(photos.length > 0);
   const [showConsentModal, setShowConsentModal] = useState(false);
 
-  const canUpload = photos.length < maxPhotos && !uploading;
+  const canUpload = photos.length < maxPhotos && !uploading && !readOnly;
 
   function handleUploadClick() {
     if (!hasConsented) {
@@ -157,7 +159,8 @@ export function PhotoUploader({
               {photo.order + 1}
             </div>
 
-            {/* Delete button */}
+            {/* Delete button — hidden when readOnly (ACTIVE profile) */}
+            {!readOnly && (
             <button
               type="button"
               onClick={() => handleDelete(photo.id)}
@@ -182,6 +185,7 @@ export function PhotoUploader({
                 </svg>
               )}
             </button>
+            )}
 
             {/* Hover overlay */}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">

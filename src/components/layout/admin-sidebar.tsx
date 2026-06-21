@@ -94,7 +94,7 @@ export function AdminSidebar() {
   };
 
   return (
-    <aside className="flex w-[246px] flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7">
+    <aside className="flex w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7 overflow-y-auto">
       {/* Brand area */}
       <div className="side-brand mb-6 flex h-[92px] items-center gap-3 bg-brand-blue rounded-b-[20px] px-[28px] text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]">
         <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.06)]">

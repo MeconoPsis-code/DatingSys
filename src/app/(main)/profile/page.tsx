@@ -35,6 +35,7 @@ interface Profile {
   selfIntro: string | null;
   photoMatchPref: string | null;
   highScoreOnly: boolean;
+  draftData?: Record<string, unknown> | null;
 }
 
 interface Preference {
@@ -277,6 +278,24 @@ export default function ProfilePage() {
             </span>
           )}
         </div>
+
+        {/* Draft banner */}
+        {profile.draftData && profile.status === 'ACTIVE' && (
+          <div className="mb-5 flex items-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/10 p-3">
+            <svg viewBox="0 0 100 100" className="h-4 w-4 shrink-0 text-blue-400" fill="none">
+              <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth={6} />
+              <path d="M50 20V60" stroke="currentColor" strokeWidth={8} strokeLinecap="round" />
+              <circle cx="50" cy="78" r="4" fill="currentColor" />
+            </svg>
+            <span className="flex-1 text-xs text-blue-300">你有未发布的修改草稿</span>
+            <Link
+              href="/profile/edit"
+              className="shrink-0 text-xs font-medium text-blue-400 transition-colors hover:text-blue-300 hover:underline"
+            >
+              前往编辑
+            </Link>
+          </div>
+        )}
 
         {/* Fields */}
         <div className="space-y-4">

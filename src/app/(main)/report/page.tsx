@@ -61,7 +61,7 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!targetUserId.trim()) return setMsg({ text: "请输入被举报用户ID", ok: false });
+    if (!targetUserId.trim()) return setMsg({ text: "请输入被举报用户的QQ号", ok: false });
     if (!type) return setMsg({ text: "请选择举报类型", ok: false });
     if (description.trim().length < 5) return setMsg({ text: "描述至少5个字", ok: false });
 
@@ -101,17 +101,17 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
       {/* Target user */}
       <div className="mb-4">
         <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-          被举报用户ID <span className="text-[hsl(var(--destructive))]">*</span>
+          被举报用户QQ号 <span className="text-[hsl(var(--destructive))]">*</span>
         </label>
         <input
           type="text"
           value={targetUserId}
           onChange={(e) => setTargetUserId(e.target.value)}
-          placeholder="输入用户ID..."
+          placeholder="输入对方的QQ号..."
           className={inputCls}
         />
         <p className="mt-1 text-[11px] text-[hsl(var(--muted-foreground))]">
-          可从匹配详情页获取用户ID
+          可从匹配详情页或聊天中获取对方QQ号
         </p>
       </div>
 
