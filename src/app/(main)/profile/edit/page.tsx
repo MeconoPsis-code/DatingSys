@@ -9,6 +9,7 @@ import { MBTI_OPTIONS } from "@/data/mbti";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { PhotoUploader } from "@/components/profile/photo-uploader";
 import { DualRangeSlider } from "@/components/DualRangeSlider";
+import { AlertModal } from "@/components/ui/alert-modal";
 
 interface PhotoItem {
   id: string;
@@ -103,9 +104,24 @@ function range(start: number, end: number): number[] {
   return arr;
 }
 
-const YEARS = range(1960, 2008).reverse();
+const YEARS = range(1960, 2010).reverse();
 const MONTHS = range(1, 12);
 const DAYS = range(1, 31);
+
+function isUnder18(birthYear: number, birthMonth: number, birthDay: number): boolean {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1; // 1-indexed
+  const day = today.getDate();
+
+  const age = year - birthYear;
+  if (age < 18) return true;
+  if (age > 18) return false;
+
+  if (month < birthMonth) return true;
+  if (month > birthMonth) return false;
+  return day < birthDay;
+}
 
 
 
@@ -131,6 +147,7 @@ export default function ProfileEditPage() {
   // Confirm modal state
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<"DRAFT" | "ACTIVE">("DRAFT");
+  const [showAgeAlert, setShowAgeAlert] = useState(false);
 
   // Photo state
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
@@ -306,7 +323,7 @@ export default function ProfileEditPage() {
     if (!form.cityCode) return isOverseas(form.provinceCode) ? "请选择国家" : "请选择城市";
     if (!form.attribute) return "请选择属性";
 
-    // Age >= 18
+    // Age >= 18 (only validated for ACTIVE status)
     const bd = new Date(
       Number(form.birthYear),
       Number(form.birthMonth) - 1,
@@ -318,7 +335,7 @@ export default function ProfileEditPage() {
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bd.getDate())) {
       age--;
     }
-    if (age < 18) return "必须年满 18 岁";
+    if (status === "ACTIVE" && age < 18) return "必须年满 18 岁";
 
     // Preference ranges
     const ageMin = Number(form.ageMin);
@@ -407,6 +424,17 @@ export default function ProfileEditPage() {
 
   /* ── Request confirmation before submit ── */
   function handleSubmit(status: "DRAFT" | "ACTIVE") {
+    const under18 = isUnder18(
+      Number(form.birthYear),
+      Number(form.birthMonth),
+      Number(form.birthDay)
+    );
+
+    if (status === "ACTIVE" && under18) {
+      setShowAgeAlert(true);
+      return;
+    }
+
     const err = validate(status);
     if (err) {
       setError(err);
@@ -978,6 +1006,17 @@ export default function ProfileEditPage() {
         onConfirm={() => {
           setConfirmOpen(false);
           doSubmit(pendingStatus);
+        }}
+      />
+
+      {/* Age alert modal */}
+      <AlertModal
+        open={showAgeAlert}
+        title="年龄提示"
+        description="未满 18 周岁（未过 18 岁生日）的用户不允许使用此匹配系统。你的个人资料已被自动保存为草稿，在年满 18 周岁前无法发布。"
+        onConfirm={async () => {
+          setShowAgeAlert(false);
+          await doSubmit("DRAFT");
         }}
       />
     </div>

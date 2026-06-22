@@ -8,6 +8,7 @@ import { LOCATION_TYPE_OPTIONS } from "@/data/location-types";
 import { MBTI_OPTIONS } from "@/data/mbti";
 import { DualRangeSlider } from "@/components/DualRangeSlider";
 import { PhotoUploader } from "@/components/profile/photo-uploader";
+import { AlertModal } from "@/components/ui/alert-modal";
 
 interface PhotoItem {
   id: string;
@@ -93,9 +94,24 @@ function range(start: number, end: number): number[] {
   return arr;
 }
 
-const YEARS = range(1960, 2008).reverse();
+const YEARS = range(1960, 2010).reverse();
 const MONTHS = range(1, 12);
 const DAYS = range(1, 31);
+
+function isUnder18(birthYear: number, birthMonth: number, birthDay: number): boolean {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1; // 1-indexed
+  const day = today.getDate();
+
+  const age = year - birthYear;
+  if (age < 18) return true;
+  if (age > 18) return false;
+
+  if (month < birthMonth) return true;
+  if (month > birthMonth) return false;
+  return day < birthDay;
+}
 
 
 
@@ -130,6 +146,7 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [showAgeAlert, setShowAgeAlert] = useState(false);
 
   // Computed cities
   const cities = useMemo(
@@ -270,14 +287,7 @@ export default function SignupPage() {
     return null;
   }
 
-  async function handleSubmitProfile() {
-    const err = validateProfile();
-    if (err) {
-      setError(err);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-
+  async function doSubmitProfile(status: "ACTIVE" | "DRAFT") {
     setLoading(true);
     setError(null);
 
@@ -298,7 +308,7 @@ export default function SignupPage() {
         mbti: profile.mbti || null,
         selfIntro: profile.selfIntro || null,
         consentProfileVisibility: profile.consent,
-        status: "ACTIVE",
+        status,
         photoMatchPref: null,
         highScoreOnly: false,
       },
@@ -337,6 +347,28 @@ export default function SignupPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSubmitProfile() {
+    const err = validateProfile();
+    if (err) {
+      setError(err);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    const under18 = isUnder18(
+      Number(profile.birthYear),
+      Number(profile.birthMonth),
+      Number(profile.birthDay)
+    );
+
+    if (under18) {
+      setShowAgeAlert(true);
+      return;
+    }
+
+    await doSubmitProfile("ACTIVE");
   }
 
   /* ── Step indicator ── */
@@ -524,19 +556,31 @@ export default function SignupPage() {
 
       {/* Step 3: Profile form (full width, outside the card) */}
       {step === "profile" && !success && (
-        <ProfileFormSection
-          profile={profile}
-          cities={cities}
-          loading={loading}
-          photos={photos}
-          wantPhotos={wantPhotos}
-          onPhotosChange={setPhotos}
-          onWantPhotosChange={setWantPhotos}
-          updateProfile={updateProfile}
-          handleProvinceChange={handleProvinceChange}
-          toggleExpectedAttr={toggleExpectedAttr}
-          onSubmit={handleSubmitProfile}
-        />
+        <>
+          <ProfileFormSection
+            profile={profile}
+            cities={cities}
+            loading={loading}
+            photos={photos}
+            wantPhotos={wantPhotos}
+            onPhotosChange={setPhotos}
+            onWantPhotosChange={setWantPhotos}
+            updateProfile={updateProfile}
+            handleProvinceChange={handleProvinceChange}
+            toggleExpectedAttr={toggleExpectedAttr}
+            onSubmit={handleSubmitProfile}
+          />
+          {/* Age alert modal */}
+          <AlertModal
+            open={showAgeAlert}
+            title="年龄提示"
+            description="未满 18 周岁（未过 18 岁生日）的用户不允许使用此匹配系统。你的账号可以创建，但个人资料已被自动保存为草稿，在年满 18 周岁前无法发布。"
+            onConfirm={async () => {
+              setShowAgeAlert(false);
+              await doSubmitProfile("DRAFT");
+            }}
+          />
+        </>
       )}
 
       {/* Help card — only for steps 1 & 2 */}

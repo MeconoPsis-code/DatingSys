@@ -30,74 +30,84 @@ function ageFromDate(date: Date): number {
 
 // ── Profile Schema ──────────────────────────────────────
 
-export const profileSchema = z.object({
-  birthDate: z
-    .string()
-    .date()
-    .transform((s) => new Date(s))
-    .refine((d) => ageFromDate(d) >= MIN_AGE, {
-      message: `年龄不能小于 ${MIN_AGE} 岁`,
-    }),
+export const profileSchema = z
+  .object({
+    birthDate: z
+      .string()
+      .date()
+      .transform((s) => new Date(s)),
 
-  heightCm: z
-    .number()
-    .int()
-    .min(MIN_HEIGHT, `身高不能低于 ${MIN_HEIGHT}cm`)
-    .max(MAX_HEIGHT, `身高不能超过 ${MAX_HEIGHT}cm`),
+    heightCm: z
+      .number()
+      .int()
+      .min(MIN_HEIGHT, `身高不能低于 ${MIN_HEIGHT}cm`)
+      .max(MAX_HEIGHT, `身高不能超过 ${MAX_HEIGHT}cm`),
 
-  weightKg: z
-    .number()
-    .int()
-    .min(MIN_WEIGHT, `体重不能低于 ${MIN_WEIGHT}kg`)
-    .max(MAX_WEIGHT, `体重不能超过 ${MAX_WEIGHT}kg`),
+    weightKg: z
+      .number()
+      .int()
+      .min(MIN_WEIGHT, `体重不能低于 ${MIN_WEIGHT}kg`)
+      .max(MAX_WEIGHT, `体重不能超过 ${MAX_WEIGHT}kg`),
 
-  provinceCode: z.string().min(1, "请选择省份"),
-  cityCode: z.string().min(1, "请选择城市"),
+    provinceCode: z.string().min(1, "请选择省份"),
+    cityCode: z.string().min(1, "请选择城市"),
 
-  locationType: z.enum(
-    Object.values(LocationType) as [string, ...string[]]
-  ) as z.ZodType<LocationType>,
+    locationType: z.enum(
+      Object.values(LocationType) as [string, ...string[]]
+    ) as z.ZodType<LocationType>,
 
-  attribute: z.enum(
-    Object.values(Attribute) as [string, ...string[]]
-  ) as z.ZodType<Attribute>,
+    attribute: z.enum(
+      Object.values(Attribute) as [string, ...string[]]
+    ) as z.ZodType<Attribute>,
 
-  isSide: z.boolean().optional().default(false),
-  isOther: z.boolean().optional().default(false),
+    isSide: z.boolean().optional().default(false),
+    isOther: z.boolean().optional().default(false),
 
-  customAttribute: z
-    .string()
-    .max(20, "自定义属性不能超过 20 个字")
-    .optional()
-    .nullable(),
+    customAttribute: z
+      .string()
+      .max(20, "自定义属性不能超过 20 个字")
+      .optional()
+      .nullable(),
 
-  mbti: z
-    .string()
-    .refine(
-      (v) => v === "" || (MBTI_TYPES as readonly string[]).includes(v),
-      { message: "无效的 MBTI 类型" }
-    )
-    .optional()
-    .nullable(),
+    mbti: z
+      .string()
+      .refine(
+        (v) => v === "" || (MBTI_TYPES as readonly string[]).includes(v),
+        { message: "无效的 MBTI 类型" }
+      )
+      .optional()
+      .nullable(),
 
-  selfIntro: z
-    .string()
-    .max(MAX_SELF_INTRO, `自我介绍不能超过 ${MAX_SELF_INTRO} 个字`)
-    .optional()
-    .nullable(),
+    selfIntro: z
+      .string()
+      .max(MAX_SELF_INTRO, `自我介绍不能超过 ${MAX_SELF_INTRO} 个字`)
+      .optional()
+      .nullable(),
 
-  consentProfileVisibility: z.boolean(),
+    consentProfileVisibility: z.boolean(),
 
-  photoMatchPref: z.enum(
-    Object.values(PhotoMatchPref) as [string, ...string[]]
-  ).optional().nullable() as z.ZodType<PhotoMatchPref | null | undefined>,
+    photoMatchPref: z.enum(
+      Object.values(PhotoMatchPref) as [string, ...string[]]
+    ).optional().nullable() as z.ZodType<PhotoMatchPref | null | undefined>,
 
-  highScoreOnly: z.boolean().optional(),
+    highScoreOnly: z.boolean().optional(),
 
-  status: z
-    .enum(Object.values(ProfileStatus) as [string, ...string[]])
-    .optional() as z.ZodType<ProfileStatus | undefined>,
-});
+    status: z
+      .enum(Object.values(ProfileStatus) as [string, ...string[]])
+      .optional() as z.ZodType<ProfileStatus | undefined>,
+  })
+  .refine(
+    (d) => {
+      if (d.status === "ACTIVE") {
+        return ageFromDate(d.birthDate) >= MIN_AGE;
+      }
+      return true;
+    },
+    {
+      message: `未满 18 周岁（未过 18 岁生日）的用户不允许使用此匹配系统`,
+      path: ["birthDate"],
+    }
+  );
 
 // ── Preference Schema ───────────────────────────────────
 

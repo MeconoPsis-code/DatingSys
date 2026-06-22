@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { PhotoLightbox } from "./photo-lightbox";
 
 interface PhotoItem {
   id: string;
@@ -34,6 +35,7 @@ export function PhotoUploader({
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   // Consent gate: skip if user already has photos (they've previously consented)
   const [hasConsented, setHasConsented] = useState(photos.length > 0);
@@ -145,13 +147,14 @@ export function PhotoUploader({
         {photos.map((photo) => (
           <div
             key={photo.id}
-            className="group relative aspect-[3/4] overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary))]"
+            className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary))]"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={photo.url}
               alt={photo.originalName || "照片"}
-              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              onClick={() => setLightboxIdx(photos.findIndex((p) => p.id === photo.id))}
+              className="h-full w-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
             />
 
             {/* Order badge */}
@@ -202,7 +205,7 @@ export function PhotoUploader({
             type="button"
             onClick={handleUploadClick}
             disabled={uploading}
-            className="group flex aspect-[3/4] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.5)] text-[hsl(var(--muted-foreground))] transition-all hover:border-[hsl(var(--primary)/0.5)] hover:bg-[hsl(var(--primary)/0.05)] hover:text-[hsl(var(--primary))] disabled:opacity-50"
+            className="group flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.5)] text-[hsl(var(--muted-foreground))] transition-all hover:border-[hsl(var(--primary)/0.5)] hover:bg-[hsl(var(--primary)/0.05)] hover:text-[hsl(var(--primary))] disabled:opacity-50"
           >
             {uploading ? (
               <>
@@ -335,6 +338,15 @@ export function PhotoUploader({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Photo Lightbox for raw viewing */}
+      {lightboxIdx !== null && (
+        <PhotoLightbox
+          photos={photos}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
       )}
     </div>
   );

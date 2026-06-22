@@ -64,4 +64,12 @@ export interface QQBotClient {
    * @param message  - 消息体
    */
   sendPrivateMessage(qqNumber: string, message: BotMessage): Promise<void>;
+
+  /**
+   * 获取群成员列表
+   *
+   * @param groupId - 群号
+   * @returns 群成员信息数组
+   */
+  getGroupMemberList(groupId: string): Promise<GroupMemberInfo[]>;
 }

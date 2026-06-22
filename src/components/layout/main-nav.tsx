@@ -92,6 +92,7 @@ const adminTab = {
   ),
 };
 
+
 type UserRole = "USER" | "SCORER" | "ADMIN" | "SUPER_ADMIN";
 
 const ROLE_WEIGHT: Record<UserRole, number> = {
@@ -165,7 +166,9 @@ export function MainNav() {
     if (href === "/matches/mutual") {
       return pathname.startsWith("/matches");
     }
-    return pathname.startsWith(href);
+    // Exact match or match with trailing slash/segment to avoid
+    // /me matching /membership
+    return pathname === href || pathname.startsWith(href + "/");
   };
 
   const getBadge = (href: string) => {

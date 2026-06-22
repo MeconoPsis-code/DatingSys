@@ -28,7 +28,7 @@ const links = [
   },
   {
     label: "群认证",
-    href: "/users?status=VERIFIED", // maps to user table filtered
+    href: "/membership",
     icon: (
       <svg viewBox="0 0 24 24" className="h-5 w-5">
         <path d="M12 3l7 4v5c0 5-3 8-7 9-4-1-7-4-7-9V7z" />

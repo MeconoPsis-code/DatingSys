@@ -11,7 +11,7 @@ interface DashboardStats {
   bannedUsers: number;
   verifiedMembers: number;
   pendingMembers: number;
-  expiredMembers: number;
+
   pendingReports: number;
   reviewingReports: number;
   scoringInProgress: number;
@@ -130,15 +130,6 @@ const HourglassIcon = (
   </svg>
 );
 
-const CalendarIcon = (
-  <svg viewBox="0 0 24 24">
-    <rect width="18" height="18" x="3" y="4" rx="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-    <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
-  </svg>
-);
 
 const ShieldAlertIcon = (
   <svg viewBox="0 0 24 24">
@@ -257,13 +248,7 @@ export default function DashboardPage() {
             color="gold"
             desc="等待管理员核实信息"
           />
-          <StatCard
-            icon={CalendarIcon}
-            label="已过期"
-            value={stats.expiredMembers}
-            color="gray"
-            desc="群成员超过30天未验证"
-          />
+
         </div>
       </div>
 

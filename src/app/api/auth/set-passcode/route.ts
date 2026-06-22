@@ -83,7 +83,6 @@ export async function POST(req: NextRequest) {
             groupId: context.groupId || "default",
             status: "VERIFIED",
             verifiedAt: new Date(),
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             remark: "Auto-verified via bot signup",
           },
         },

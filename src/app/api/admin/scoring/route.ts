@@ -2,12 +2,16 @@ import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { error, paginated } from '@/lib/api-response';
 import { getSignedUrl } from '@/lib/storage';
+import { commitExpiredActions } from '@/lib/scoring-revocation';
 
 // ── GET /api/admin/scoring — admin scoring management ──
 
 export async function GET(req: Request) {
   try {
     await requireRole('ADMIN');
+
+    // Process any expired revocation windows first
+    await commitExpiredActions();
 
     const url = new URL(req.url);
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
@@ -108,6 +112,10 @@ export async function GET(req: Request) {
           createdAt: t.createdAt,
           finalScore: t.ratedUser.ratingProfile?.finalScore ?? null,
           photoReports: (t.photoReports as Array<{ reporterId: string; reason: string; createdAt: string }>) || [],
+          pendingActionType: t.pendingActionType,
+          pendingActionValue: t.pendingActionValue,
+          pendingActionExpiresAt: t.pendingActionExpiresAt ? t.pendingActionExpiresAt.toISOString() : null,
+          pendingActionActorId: t.pendingActionActorId,
         };
       })
     );

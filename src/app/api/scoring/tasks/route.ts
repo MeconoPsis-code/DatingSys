@@ -21,6 +21,10 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const statusFilter = searchParams.get("status") || "pending";
 
+  if (statusFilter !== "pending") {
+    return error("VALIDATION_ERROR", "无权访问评分历史记录", 403);
+  }
+
   if (statusFilter === "pending") {
     // Tasks not yet scored by this user
     const tasks = await db.ratingTask.findMany({
@@ -100,90 +104,4 @@ export async function GET(req: Request) {
 
     return success({ tasks: enriched });
   }
-
-  if (statusFilter === "completed") {
-    // Tasks already scored by this user
-    const scores = await db.ratingScore.findMany({
-      where: { scorerUserId: session.id },
-      include: {
-        ratingTask: {
-          include: {
-            ratedUser: {
-              include: {
-                profile: {
-                  select: {
-                    birthDate: true,
-                    heightCm: true,
-                    weightKg: true,
-                    attribute: true,
-                    customAttribute: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const enriched = await Promise.all(
-      scores.map(async (s) => {
-        const photos = await db.profilePhoto.findMany({
-          where: {
-            profile: { userId: s.ratingTask.ratedUserId },
-          },
-          orderBy: { order: "asc" },
-        });
-
-        const photosWithUrls = await Promise.all(
-          photos.map(async (p) => ({
-            id: p.id,
-            order: p.order,
-            url: await getSignedUrl(p.storageKey, 3600),
-          }))
-        );
-
-        const scorerSnapshot = s.ratingTask.scorerSnapshot as string[];
-        // Exclude SUPER_ADMIN from total
-        const eligibleTotal = await db.user.count({
-          where: { id: { in: scorerSnapshot }, role: { in: ["SCORER", "ADMIN"] } },
-        });
-
-        return {
-          id: s.ratingTask.id,
-          status: s.ratingTask.status,
-          createdAt: s.ratingTask.createdAt,
-          myScore: s.score,
-          scoredAt: s.createdAt,
-          finalScore: s.ratingTask.status === "COMPLETED"
-            ? await db.ratingScore
-                .aggregate({
-                  where: { ratingTaskId: s.ratingTaskId },
-                  _avg: { score: true },
-                })
-                .then((r) => r._avg.score)
-            : null,
-          progress: {
-            scored: await db.ratingScore.count({ where: { ratingTaskId: s.ratingTaskId } }),
-            total: eligibleTotal,
-          },
-          profile: s.ratingTask.ratedUser.profile
-            ? {
-                birthDate: s.ratingTask.ratedUser.profile.birthDate,
-                heightCm: s.ratingTask.ratedUser.profile.heightCm,
-                weightKg: s.ratingTask.ratedUser.profile.weightKg,
-                attribute: s.ratingTask.ratedUser.profile.attribute,
-                customAttribute: s.ratingTask.ratedUser.profile.customAttribute,
-              }
-            : null,
-          photos: photosWithUrls,
-        };
-      })
-    );
-
-    return success({ tasks: enriched });
-  }
-
-  return error("VALIDATION_ERROR", "无效的 status 参数", 422);
 }

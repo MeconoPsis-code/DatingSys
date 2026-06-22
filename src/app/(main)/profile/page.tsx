@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { PhotoLightbox } from "@/components/profile/photo-lightbox";
 import { ClearModal } from "@/components/profile/clear-modal";
 import { ATTRIBUTE_LABELS } from "@/data/attributes";
 import { getProvinceName, getCityName } from "@/data/regions";
@@ -92,6 +93,7 @@ interface PhotoItem {
 export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [preference, setPreference] = useState<Preference | null>(null);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [ratingInfo, setRatingInfo] = useState<RatingInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -335,13 +337,14 @@ export default function ProfilePage() {
               {photos.map((photo) => (
                 <div
                   key={photo.id}
-                  className="aspect-[3/4] overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary))]"
+                  className="aspect-[4/3] overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary))]"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={photo.url}
                     alt={photo.originalName || `照片 ${photo.order + 1}`}
-                    className="h-full w-full object-cover"
+                    onClick={() => setLightboxIdx(photos.findIndex((p) => p.id === photo.id))}
+                    className="h-full w-full object-cover cursor-pointer transition-transform hover:scale-105"
                   />
                 </div>
               ))}
@@ -404,6 +407,15 @@ export default function ProfilePage() {
         onConfirm={handleClear}
         loading={clearing}
       />
+
+      {/* Lightbox photo viewer */}
+      {lightboxIdx !== null && (
+        <PhotoLightbox
+          photos={photos}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
     </div>
   );
 }

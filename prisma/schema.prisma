@@ -336,10 +336,16 @@ model RatingTask {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
+  pendingActionType      String?         // "APPROVE" or "OVERRIDE"
+  pendingActionValue     Float?          // Overridden score value
+  pendingActionExpiresAt DateTime?       // When the action will be committed
+  pendingActionActorId   String?         // The ID of the admin who initiated it
+
   ratedUser User          @relation("RatedUser", fields: [ratedUserId], references: [id])
   scores    RatingScore[]
 
   @@index([status])
+  @@index([pendingActionExpiresAt])
   @@map("rating_tasks")
 }
 

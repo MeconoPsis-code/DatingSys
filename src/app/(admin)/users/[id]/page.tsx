@@ -49,7 +49,6 @@ interface UserDetail {
     status: string;
     qqNumber: string;
     verifiedAt: string | null;
-    expiresAt: string | null;
     revokedAt: string | null;
     remark: string | null;
   } | null;
@@ -337,7 +336,7 @@ export default function AdminUserDetailPage({
               <InfoRow label="状态" value={user.membership.status} />
               <InfoRow label="QQ号" value={user.membership.qqNumber} />
               <InfoRow label="认证时间" value={formatDateTime(user.membership.verifiedAt)} />
-              <InfoRow label="到期时间" value={formatDateTime(user.membership.expiresAt)} />
+
               {user.membership.revokedAt && (
                 <InfoRow label="撤销时间" value={formatDateTime(user.membership.revokedAt)} />
               )}

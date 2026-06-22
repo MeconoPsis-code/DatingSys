@@ -50,7 +50,6 @@ export async function GET() {
       nickname: session.nickname,
       avatarUrl: session.avatarUrl,
       membershipStatus: session.membershipStatus,
-      membershipExpiresAt: session.membershipExpiresAt,
       activePenalties,
       profile: user?.profile ? {
         birthDate: user.profile.birthDate,

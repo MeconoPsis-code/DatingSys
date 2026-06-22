@@ -33,50 +33,23 @@ export async function POST(
       return error('NOT_FOUND', '评分任务不存在', 404);
     }
 
-    // Move task to COMPLETED
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Save pending override action
     await db.ratingTask.update({
       where: { id: taskId },
       data: {
-        status: 'COMPLETED',
-        completedAt: task.completedAt ?? new Date(),
-      },
-    });
-
-    // Publish the overridden score
-    await db.ratingProfile.upsert({
-      where: { userId: task.ratedUserId },
-      create: {
-        userId: task.ratedUserId,
-        ratingStatus: 'COMPLETED',
-        finalScore: score,
-        scoreCompletedAt: new Date(),
-      },
-      update: {
-        ratingStatus: 'COMPLETED',
-        finalScore: score,
-        scoreCompletedAt: new Date(),
-      },
-    });
-
-    await notify.scoringComplete(task.ratedUserId, score);
-
-    // Audit log
-    await db.auditLog.create({
-      data: {
-        actorUserId: session.id,
-        action: 'ADMIN_OVERRIDE_SCORE',
-        targetType: 'RatingTask',
-        targetId: taskId,
-        metadata: {
-          ratedUserId: task.ratedUserId,
-          overriddenScore: score,
-        },
+        pendingActionType: 'OVERRIDE',
+        pendingActionValue: score,
+        pendingActionExpiresAt: expiresAt,
+        pendingActionActorId: session.id,
       },
     });
 
     return success({
-      message: '已直接设定最终评分',
+      message: '直接设定评分已提交，将在 10 分钟后生效',
       finalScore: score,
+      pendingActionExpiresAt: expiresAt.toISOString(),
     });
   } catch (err) {
     console.error('[admin/scoring/override] POST error:', err);

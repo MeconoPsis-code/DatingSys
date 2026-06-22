@@ -20,11 +20,6 @@ export const ErrorCodes = {
     message: "请先完成群成员认证",
     status: 403,
   },
-  MEMBERSHIP_EXPIRED: {
-    code: "MEMBERSHIP_EXPIRED",
-    message: "群成员认证已过期，请重新认证",
-    status: 403,
-  },
   RATING_INCOMPLETE: {
     code: "RATING_INCOMPLETE",
     message: "评分中，请耐心等待",

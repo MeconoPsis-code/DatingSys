@@ -193,6 +193,32 @@ class NapCatClient implements QQBotClient {
     });
   }
 
+  /** @inheritdoc */
+  async getGroupMemberList(groupId: string): Promise<GroupMemberInfo[]> {
+    const resp = await this.callApi<Array<{
+      group_id: number;
+      user_id: number;
+      nickname: string;
+      card: string;
+      role: 'owner' | 'admin' | 'member';
+      join_time: number;
+      last_sent_time: number;
+    }>>('get_group_member_list', {
+      group_id: Number(groupId),
+    });
+
+    return resp.data.map((m) => ({
+      groupId: String(m.group_id),
+      qqNumber: String(m.user_id),
+      nickname: m.nickname,
+      card: m.card || '',
+      avatarUrl: avatarUrl(String(m.user_id)),
+      role: m.role,
+      joinTime: m.join_time,
+      lastSentTime: m.last_sent_time,
+    }));
+  }
+
   // -----------------------------------------------------------------------
   // Internal: HTTP call with retry
   // -----------------------------------------------------------------------

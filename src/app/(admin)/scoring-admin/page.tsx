@@ -124,6 +124,10 @@ interface ScoringTask {
   createdAt: string;
   finalScore: number | null;
   photoReports: PhotoReport[];
+  pendingActionType: string | null;
+  pendingActionValue: number | null;
+  pendingActionExpiresAt: string | null;
+  pendingActionActorId: string | null;
 }
 
 /* ─── Constants ──────────────────────────────────────── */
@@ -201,14 +205,12 @@ function OverrideScoreInput({ onSubmit }: { onSubmit: (score: number) => void })
         type="button"
         onClick={() => {
           const n = parseFloat(value);
-          if (isNaN(n) || n < 0 || n > 10 || n * 2 !== Math.round(n * 2)) {
-            alert("评分必须在 0-10 之间，步长 0.5");
+          if (isNaN(n) || n < 0 || n > 10 || n * 10 !== Math.round(n * 10)) {
+            alert("评分必须在 0-10 之间，步长 0.1");
             return;
           }
-          if (confirm(`确定将最终评分设为 ${n.toFixed(1)} 分？`)) {
-            onSubmit(n);
-            setOpen(false);
-          }
+          onSubmit(n);
+          setOpen(false);
         }}
         className="rounded-md bg-brand-blue/15 px-2 py-1 text-xs font-medium text-brand-blue transition-all hover:bg-brand-blue/30"
       >
@@ -234,6 +236,7 @@ function TaskCard({
   onApprove,
   onOverride,
   onRevokePhotos,
+  onRevoke,
 }: {
   task: ScoringTask;
   isSuperAdmin: boolean;
@@ -241,8 +244,40 @@ function TaskCard({
   onApprove: (taskId: string) => void;
   onOverride: (taskId: string, score: number) => void;
   onRevokePhotos: (taskId: string) => void;
+  onRevoke: (taskId: string) => void;
 }) {
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState<string>("");
+
+  useEffect(() => {
+    if (!task.pendingActionExpiresAt) {
+      setTimeLeft("");
+      return;
+    }
+
+    const targetTime = new Date(task.pendingActionExpiresAt).getTime();
+
+    function updateTimer() {
+      const now = new Date().getTime();
+      const diff = targetTime - now;
+
+      if (diff <= 0) {
+        setTimeLeft("00:00");
+        return;
+      }
+
+      const totalSec = Math.floor(diff / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      const mm = String(m).padStart(2, "0");
+      const ss = String(s).padStart(2, "0");
+      setTimeLeft(`${mm}:${ss}`);
+    }
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [task.pendingActionExpiresAt]);
   const badge = STATUS_BADGE[task.status] || { label: task.status, cls: "" };
   const progress = task.totalScorers > 0 ? task.scoredCount / task.totalScorers : 0;
   const progressPct = Math.round(progress * 100);
@@ -377,47 +412,75 @@ function TaskCard({
         </div>
       </div>
 
-      {/* Review alert */}
+      {/* Review alert & Pending decision countdown */}
       {task.status === "REVIEW" && isSuperAdmin && (
-        <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-500/10 px-4 py-3">
-          <p className="mb-2 text-xs font-medium text-orange-400">
-            ⚠️ 该用户的评分已完成，需要超级管理员审核后才会发布给用户
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm("确认通过此评分？评分将发布给用户。")) {
-                  onApprove(task.id);
-                }
-              }}
-              className="flex items-center rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/25"
-            >
-              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              通过并发布
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm("确定要重置评分吗？所有已提交的评分将被清除。")) {
-                  onRescore(task.id);
-                }
-              }}
-              className="flex items-center rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20"
-            >
-              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                <path d="M16 16h5v5" />
-              </svg>
-              重新评分
-            </button>
-            <OverrideScoreInput onSubmit={(score) => onOverride(task.id, score)} />
-          </div>
-        </div>
+        <>
+          {task.pendingActionType ? (
+            <div className="mb-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-xs font-medium text-blue-400 flex items-center gap-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                  </span>
+                  <span>
+                    {task.pendingActionType === "APPROVE"
+                      ? "已提交「通过并发布」，将在倒计时结束后生效"
+                      : `已提交「直接设定评分 ${task.pendingActionValue?.toFixed(1)} 分」，将在倒计时结束后生效`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-sm font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                    {timeLeft || "10:00"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onRevoke && onRevoke(task.id)}
+                    className="rounded-lg bg-red-500/15 border border-red-500/30 px-3 py-1 text-xs font-medium text-red-400 transition-all hover:bg-red-500/25"
+                  >
+                    撤销决定
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-500/10 px-4 py-3">
+              <p className="mb-2 text-xs font-medium text-orange-400">
+                ⚠️ 该用户的评分已完成，需要超级管理员审核后才会发布给用户
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => onApprove(task.id)}
+                  className="flex items-center rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/25"
+                >
+                  <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  通过并发布
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm("确定要重置评分吗？所有已提交的评分将被清除。")) {
+                      onRescore(task.id);
+                    }
+                  }}
+                  className="flex items-center rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20"
+                >
+                  <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                    <path d="M16 16h5v5" />
+                  </svg>
+                  重新评分
+                </button>
+                <OverrideScoreInput onSubmit={(score) => onOverride(task.id, score)} />
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Photo reports alert */}
@@ -588,6 +651,17 @@ export default function ScoringAdminPage() {
     }
   }
 
+  async function handleRevoke(taskId: string) {
+    try {
+      const res = await fetch(`/api/admin/scoring/${taskId}/revoke`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "操作失败");
+      fetchTasks();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "操作失败");
+    }
+  }
+
   const [fixing, setFixing] = useState(false);
 
   async function handleFixStuck() {
@@ -682,6 +756,7 @@ export default function ScoringAdminPage() {
               onApprove={handleApprove}
               onOverride={handleOverride}
               onRevokePhotos={handleRevokePhotos}
+              onRevoke={handleRevoke}
             />
           ))}
         </div>

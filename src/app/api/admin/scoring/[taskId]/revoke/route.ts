@@ -1,11 +1,10 @@
 import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
-import { notify } from '@/lib/notifications';
 
 /**
- * POST /api/admin/scoring/[taskId]/approve
- * Super admin approves a REVIEW score — publishes it to the user's RatingProfile.
+ * POST /api/admin/scoring/[taskId]/revoke
+ * Super admin revokes a pending score approval or override decision.
  */
 export async function POST(
   _req: Request,
@@ -17,7 +16,6 @@ export async function POST(
 
     const task = await db.ratingTask.findUnique({
       where: { id: taskId },
-      include: { scores: { select: { score: true } } },
     });
 
     if (!task) {
@@ -25,34 +23,45 @@ export async function POST(
     }
 
     if (task.status !== 'REVIEW') {
-      return error('INVALID_STATUS', '该任务不在待审核状态', 400);
+      return error('INVALID_STATUS', '任务状态不正确', 400);
     }
 
-    // Compute final average
-    const avg =
-      task.scores.reduce((sum, s) => sum + s.score, 0) / task.scores.length;
-    const finalScore = Math.round(avg * 10) / 10;
+    if (!task.pendingActionType) {
+      return error('NO_PENDING_ACTION', '该任务没有待处理的审核决定', 400);
+    }
 
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const previousActionType = task.pendingActionType;
 
-    // Save pending approve action
+    // Reset pending action fields
     await db.ratingTask.update({
       where: { id: taskId },
       data: {
-        pendingActionType: 'APPROVE',
+        pendingActionType: null,
         pendingActionValue: null,
-        pendingActionExpiresAt: expiresAt,
-        pendingActionActorId: session.id,
+        pendingActionExpiresAt: null,
+        pendingActionActorId: null,
+      },
+    });
+
+    // Optional audit log for revocation
+    await db.auditLog.create({
+      data: {
+        actorUserId: session.id,
+        action: 'ADMIN_REVOKE_DECISION',
+        targetType: 'RatingTask',
+        targetId: taskId,
+        metadata: {
+          ratedUserId: task.ratedUserId,
+          revokedActionType: previousActionType,
+        },
       },
     });
 
     return success({
-      message: '评分审核通过已提交，将在 10 分钟后生效',
-      finalScore,
-      pendingActionExpiresAt: expiresAt.toISOString(),
+      message: '已成功撤销决定',
     });
   } catch (err) {
-    console.error('[admin/scoring/approve] POST error:', err);
+    console.error('[admin/scoring/revoke] POST error:', err);
     if (err && typeof err === 'object' && 'status' in err) {
       const appErr = err as { code: string; message: string; status: number };
       return error(appErr.code, appErr.message, appErr.status);

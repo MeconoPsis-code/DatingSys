@@ -58,7 +58,6 @@ const MEMBERSHIP_INFO: Record<string, { label: string; cls: string }> = {
   PENDING: { label: "待审核", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
   VERIFIED: { label: "已认证", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
   REJECTED: { label: "已拒绝", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
-  EXPIRED: { label: "已过期", cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
   REVOKED: { label: "已撤销", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
 };
 

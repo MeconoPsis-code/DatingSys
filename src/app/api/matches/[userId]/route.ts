@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { getSignedUrl } from '@/lib/storage';
+import { commitExpiredActions } from '@/lib/scoring-revocation';
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -20,6 +21,7 @@ export async function GET(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    await commitExpiredActions();
     const session = await requireAuth();
     const { userId } = await params;
 

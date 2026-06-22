@@ -32,6 +32,54 @@ interface ReviewTask {
   createdAt: string;
   completedAt: string | null;
   finalScore: number | null;
+  pendingActionType: string | null;
+  pendingActionValue: number | null;
+  pendingActionExpiresAt: string | null;
+  pendingActionActorId: string | null;
+}
+
+/* ─── Countdown Component ────────────────────────────────── */
+
+function PendingActionCountdown({
+  expiresAt,
+  onExpired,
+}: {
+  expiresAt: string;
+  onExpired?: () => void;
+}) {
+  const [timeLeft, setTimeLeft] = useState("10:00");
+
+  useEffect(() => {
+    const targetTime = new Date(expiresAt).getTime();
+
+    function updateTimer() {
+      const now = new Date().getTime();
+      const diff = targetTime - now;
+
+      if (diff <= 0) {
+        setTimeLeft("00:00");
+        if (onExpired) onExpired();
+        return;
+      }
+
+      const totalSec = Math.floor(diff / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      const mm = String(m).padStart(2, "0");
+      const ss = String(s).padStart(2, "0");
+      setTimeLeft(`${mm}:${ss}`);
+    }
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt, onExpired]);
+
+  return (
+    <span className="font-mono text-sm font-semibold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded border border-blue-500/20 shrink-0 animate-pulse">
+      {timeLeft}
+    </span>
+  );
 }
 
 /* ─── Component ──────────────────────────────────────── */
@@ -91,9 +139,19 @@ export default function ScoringReviewPage() {
       if (!res.ok) {
         throw new Error(data.error?.message || "审核失败");
       }
-      // Remove from list
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
-      setActiveTaskId(null);
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                pendingActionType: "APPROVE",
+                pendingActionValue: null,
+                pendingActionExpiresAt: data.pendingActionExpiresAt || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+              }
+            : t
+        )
+      );
+      setOverrideMode(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : "审核失败");
     } finally {
@@ -113,12 +171,50 @@ export default function ScoringReviewPage() {
       if (!res.ok) {
         throw new Error(data.error?.message || "修改失败");
       }
-      // Remove from list
-      setTasks((prev) => prev.filter((t) => t.id !== taskId));
-      setActiveTaskId(null);
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                pendingActionType: "OVERRIDE",
+                pendingActionValue: overrideScore,
+                pendingActionExpiresAt: data.pendingActionExpiresAt || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+              }
+            : t
+        )
+      );
       setOverrideMode(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : "修改失败");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRevoke(taskId: string) {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/scoring/${taskId}/revoke`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "撤销失败");
+      }
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                pendingActionType: null,
+                pendingActionValue: null,
+                pendingActionExpiresAt: null,
+              }
+            : t
+        )
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "撤销失败");
     } finally {
       setSubmitting(false);
     }
@@ -261,6 +357,12 @@ export default function ScoringReviewPage() {
                           QQ: {task.ratedUserQQ}
                         </span>
                       )}
+                      {task.pendingActionType && (
+                        <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                          {task.pendingActionType === "APPROVE" ? "待审核通过" : `待设定 ${task.pendingActionValue} 分`}
+                        </span>
+                      )}
                     </div>
                     <div className="mt-0.5 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
                       <span>{task.scoredCount} 人评分</span>
@@ -364,10 +466,39 @@ export default function ScoringReviewPage() {
                       </div>
                     </div>
 
-                    {/* Actions (review tab only) */}
+                    {/* Actions (review tab only) & Pending countdown */}
                     {tab === "review" && (
                       <div className="space-y-3">
-                        {!overrideMode ? (
+                        {activeTask.pendingActionType ? (
+                          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                              <h4 className="text-sm font-medium text-blue-400">
+                                {activeTask.pendingActionType === "APPROVE"
+                                  ? "已提交通过，将在倒计时结束后生效"
+                                  : `已提交直接设定最终评分为 ${activeTask.pendingActionValue} 分`}
+                              </h4>
+                              <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                                在此期间您可以撤销该决定。
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {activeTask.pendingActionExpiresAt && (
+                                <PendingActionCountdown
+                                  expiresAt={activeTask.pendingActionExpiresAt}
+                                  onExpired={fetchTasks}
+                                />
+                              )}
+                              <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => handleRevoke(activeTask.id)}
+                                className="rounded-lg bg-red-500/15 border border-red-500/30 px-3.5 py-1.5 text-xs font-medium text-red-400 transition-all hover:bg-red-500/25 disabled:opacity-50 shrink-0"
+                              >
+                                撤销决定
+                              </button>
+                            </div>
+                          </div>
+                        ) : !overrideMode ? (
                           <div className="flex gap-3">
                             <button
                               type="button"

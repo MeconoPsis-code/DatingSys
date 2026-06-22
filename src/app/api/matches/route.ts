@@ -7,6 +7,7 @@ import {
   computeRelevanceScore,
   type MatchCandidate,
 } from '@/lib/matching';
+import { commitExpiredActions } from '@/lib/scoring-revocation';
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ function getHeightRange(cm: number): string {
 
 export async function GET(req: Request) {
   try {
+    await commitExpiredActions();
     const session = await requireAuth();
 
     // 1. Load current user's profile + preference

@@ -15,7 +15,6 @@ export interface SessionUser {
   nickname: string | null;
   avatarUrl: string | null;
   membershipStatus: MembershipStatus | null;
-  membershipExpiresAt: Date | null;
 }
 
 /**
@@ -31,7 +30,7 @@ export async function getSession(): Promise<SessionUser | null> {
     include: {
       authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
       groupMembership: {
-        select: { qqNumber: true, status: true, expiresAt: true },
+        select: { qqNumber: true, status: true },
       },
     },
   });
@@ -46,7 +45,6 @@ export async function getSession(): Promise<SessionUser | null> {
     nickname: user.authIdentities[0]?.nickname ?? null,
     avatarUrl: user.authIdentities[0]?.avatarUrl ?? null,
     membershipStatus: user.groupMembership?.status ?? null,
-    membershipExpiresAt: user.groupMembership?.expiresAt ?? null,
   };
 }
 
@@ -79,14 +77,6 @@ export async function requireVerified(): Promise<SessionUser> {
 
   if (session.membershipStatus !== "VERIFIED") {
     throw new AppError("PROFILE_NOT_VERIFIED");
-  }
-
-  // Check expiry
-  if (
-    session.membershipExpiresAt &&
-    session.membershipExpiresAt < new Date()
-  ) {
-    throw new AppError("MEMBERSHIP_EXPIRED");
   }
 
   return session;

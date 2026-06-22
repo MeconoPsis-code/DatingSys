@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export function ScorerNav() {
   return (
-    <header className="flex h-14 items-center justify-between border-b border-blue-600/10 bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-5 text-white shadow-sm">
+    <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-blue-600/10 bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-5 text-white shadow-sm">
       <span className="flex items-center gap-2 text-lg font-bold text-white">
         <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-white stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
           <circle cx="12" cy="12" r="10" />

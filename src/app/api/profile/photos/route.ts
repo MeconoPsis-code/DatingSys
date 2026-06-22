@@ -5,6 +5,7 @@ import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
+import sharp from "sharp";
 
 const MAX_PHOTOS = 6;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -101,17 +102,36 @@ export async function POST(req: Request) {
     return error("VALIDATION_ERROR", "照片大小不能超过 5MB", 422);
   }
 
-  // 5. Read file buffer
-  const arrayBuf = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuf);
+  // 5. Read file buffer and convert/compress to WebP
+  let webpBuffer: Buffer;
+  let webpName = file.name;
+  if (webpName) {
+    const lastDotIdx = webpName.lastIndexOf(".");
+    if (lastDotIdx !== -1) {
+      webpName = webpName.substring(0, lastDotIdx) + ".webp";
+    } else {
+      webpName = webpName + ".webp";
+    }
+  }
 
-  // 6. Generate storage key
-  const ext = file.type.split("/")[1] === "jpeg" ? "jpg" : file.type.split("/")[1];
-  const key = `photos/${session.id}/${randomUUID()}.${ext}`;
+  try {
+    const arrayBuf = await file.arrayBuffer();
+    const rawBuffer = Buffer.from(arrayBuf);
+    webpBuffer = await sharp(rawBuffer)
+      .webp({ quality: 80 })
+      .toBuffer();
+  } catch (err) {
+    console.error("[Photo Upload] Image processing error:", err);
+    return error("VALIDATION_ERROR", "照片处理失败，请确保上传有效的图片文件", 422);
+  }
+
+  // 6. Generate storage key for webp
+  const key = `photos/${session.id}/${randomUUID()}.webp`;
+  const mimeType = "image/webp";
 
   // 7. Upload to MinIO
   try {
-    await uploadFile(key, buffer, file.type);
+    await uploadFile(key, webpBuffer, mimeType);
   } catch (err) {
     console.error("[Photo Upload] MinIO error:", err);
     return error("INTERNAL_ERROR", "照片上传失败，请稍后重试", 500);
@@ -124,9 +144,9 @@ export async function POST(req: Request) {
       profileId: profile.id,
       storageKey: key,
       order: nextOrder,
-      originalName: file.name || null,
-      mimeType: file.type,
-      sizeBytes: file.size,
+      originalName: webpName || null,
+      mimeType: mimeType,
+      sizeBytes: webpBuffer.length,
     },
   });
 

@@ -14,6 +14,7 @@ import { getProvinceName } from "@/data/regions";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("api:profile-me");
+import { commitExpiredActions } from "@/lib/scoring-revocation";
 
 /* ── Helpers ─────────────────────────────────────────── */
 
@@ -28,6 +29,9 @@ function daysSince(date: Date | null | undefined): number | null {
  * Fetch the current user's profile + preferences + cooldown info + rating info.
  */
 export async function GET() {
+  // Process any expired revocation windows first
+  await commitExpiredActions();
+
   const session = await requireAuth();
 
   const user = await db.user.findUnique({
