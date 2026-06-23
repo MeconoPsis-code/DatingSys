@@ -17,8 +17,6 @@ interface PhotoItem {
   url: string;
 }
 
-type Step = "verify" | "passcode" | "profile";
-
 /* ─── Profile Types ─────────────────────────────────── */
 
 type Attribute = "ONE" | "ZERO" | "HALF" | "LEAN_ONE" | "LEAN_ZERO" | "SIDE" | "OTHER";
@@ -101,7 +99,7 @@ const DAYS = range(1, 31);
 function isUnder18(birthYear: number, birthMonth: number, birthDay: number): boolean {
   const today = new Date();
   const year = today.getFullYear();
-  const month = today.getMonth() + 1; // 1-indexed
+  const month = today.getMonth() + 1;
   const day = today.getDate();
 
   const age = year - birthYear;
@@ -113,29 +111,15 @@ function isUnder18(birthYear: number, birthMonth: number, birthDay: number): boo
   return day < birthDay;
 }
 
-
-
 /**
- * Sign-up page — multi-step flow:
- *  Step 1: Enter 验证码 (received via email after bot /signup command)
- *  Step 2: Set passcode
- *  Step 3: Complete profile (mandatory)
+ * Complete Profile page — shown when a logged-in user
+ * has not yet created their profile (signup Step 3 was skipped).
+ * The user CANNOT navigate away until the profile is created.
  */
-export default function SignupPage() {
+export default function CompleteProfilePage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("verify");
 
-  // Step 1 state
-  const [code, setCode] = useState("");
-
-  // Resolved from verify-code API response
-  const [qqNumber, setQqNumber] = useState("");
-
-  // Step 2 state
-  const [passcode, setPasscode] = useState("");
-  const [confirmPasscode, setConfirmPasscode] = useState("");
-
-  // Step 3 state — profile form
+  // Profile form state
   const [profile, setProfile] = useState<ProfileFormState>(INITIAL_PROFILE);
 
   // Photo state
@@ -174,72 +158,7 @@ export default function SignupPage() {
     setProfile((prev) => ({ ...prev, provinceCode: code, cityCode: "" }));
   }
 
-  /* ── Step 1: Verify code ── */
-  async function handleVerify(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch("/api/auth/verify-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error?.message || "验证失败");
-        return;
-      }
-
-      setQqNumber(data.data.qqNumber);
-      setStep("passcode");
-    } catch {
-      setError("网络错误，请稍后重试");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /* ── Step 2: Set passcode ── */
-  async function handleSetPasscode(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    if (passcode !== confirmPasscode) {
-      setError("两次输入的密码不一致");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/set-passcode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ qqNumber, passcode }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error?.message || "设置密码失败");
-        return;
-      }
-
-      // Move to profile step instead of redirecting
-      setStep("profile");
-      setError(null);
-    } catch {
-      setError("网络错误，请稍后重试");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /* ── Step 3: Validate & submit profile ── */
+  /* ── Validate profile ── */
   function validateProfile(): string | null {
     if (!profile.birthYear || !profile.birthMonth || !profile.birthDay) return "请选择出生日期";
     if (!profile.heightCm) return "请输入身高";
@@ -280,7 +199,6 @@ export default function SignupPage() {
     if (wMin > wMax) return "期望体重范围无效（最小值不能大于最大值）";
 
     if (profile.expectedAttributes.length === 0) return "请至少选择一个期望属性";
-
 
     if (!profile.consent) return "请勾选同意条款后再提交";
 
@@ -339,6 +257,9 @@ export default function SignupPage() {
         throw new Error(data.error?.message || "保存资料失败");
       }
 
+      // Refresh the session JWT so middleware knows we have a profile now
+      await fetch("/api/auth/refresh", { method: "POST" });
+
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1500);
     } catch (err) {
@@ -371,191 +292,45 @@ export default function SignupPage() {
     await doSubmitProfile("ACTIVE");
   }
 
-  /* ── Step indicator ── */
-  function getStepState(s: Step): "done" | "current" | "pending" {
-    const order: Step[] = ["verify", "passcode", "profile"];
-    const ci = order.indexOf(step);
-    const si = order.indexOf(s);
-    if (si < ci) return "done";
-    if (si === ci) return "current";
-    return "pending";
-  }
-
-  const stepLabels: { key: Step; label: string }[] = [
-    { key: "verify", label: "验证" },
-    { key: "passcode", label: "密码" },
-    { key: "profile", label: "资料" },
-  ];
-
   return (
     <div className="flex flex-col gap-6">
+      {/* Header card */}
       <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-8">
-        {/* Header */}
-        <div className="mb-6 text-center">
+        <div className="mb-4 text-center">
           <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">
-            新用户注册
+            完善个人资料
           </h1>
           <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-            {step === "verify"
-              ? "输入邮箱收到的验证码"
-              : step === "passcode"
-              ? "设置你的登录密码"
-              : "完善你的个人资料"}
+            你需要完成资料创建才能继续使用 TenMatch
           </p>
         </div>
 
-        {/* Step indicator */}
-        <div className="mb-6 flex items-center justify-center gap-2">
-          {stepLabels.map((s, i) => {
-            const state = getStepState(s.key);
-            return (
-              <div key={s.key} className="flex items-center gap-2">
-                {i > 0 && (
-                  <div className={`h-px w-6 ${state === "pending" ? "bg-[hsl(var(--border))]" : "bg-[hsl(var(--primary))]"}`} />
-                )}
-                <div className="flex flex-col items-center gap-1">
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
-                      state === "done"
-                        ? "bg-[hsl(var(--primary))] text-white"
-                        : state === "current"
-                        ? "bg-[hsl(var(--primary))] text-white"
-                        : "bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]"
-                    }`}
-                  >
-                    {state === "done" ? "✓" : i + 1}
-                  </div>
-                  <span className={`text-[10px] ${state === "pending" ? "text-[hsl(var(--muted-foreground))]" : "text-[hsl(var(--primary))]"}`}>
-                    {s.label}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+        {/* Notice banner */}
+        <div className="flex items-start gap-3 rounded-lg border border-brand-blue/30 bg-brand-blue/5 px-4 py-3">
+          <svg viewBox="0 0 24 24" className="mt-0.5 h-5 w-5 shrink-0 fill-none stroke-brand-blue stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          <p className="text-sm text-brand-blue">
+            你的注册尚未完成。请填写以下信息以完成资料创建。
+          </p>
         </div>
-
-        {/* Error */}
-        {error && (
-          <div className="mb-4 rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.1)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
-            {error}
-          </div>
-        )}
-
-        {/* Success */}
-        {success ? (
-          <div className="rounded-lg border border-[hsl(150,60%,40%/0.3)] bg-[hsl(150,60%,40%/0.1)] px-4 py-3 text-center text-sm text-[hsl(150,60%,60%)]">
-            ✅ 注册成功！正在跳转...
-          </div>
-        ) : step === "verify" ? (
-          /* Step 1: Verify email code */
-          <form onSubmit={handleVerify} className="space-y-4">
-            <div>
-              <label
-                htmlFor="code"
-                className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]"
-              >
-                验证码
-              </label>
-              <input
-                id="code"
-                type="text"
-                inputMode="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="请输入 6 位验证码"
-                maxLength={6}
-                required
-                autoFocus
-                className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-center font-mono text-lg tracking-[0.5em] text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] placeholder:tracking-normal placeholder:text-sm focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || code.length < 6}
-              className="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
-            >
-              {loading ? "验证中..." : "验证"}
-            </button>
-          </form>
-        ) : step === "passcode" ? (
-          /* Step 2: Set passcode */
-          <form onSubmit={handleSetPasscode} className="space-y-4">
-            <div className="rounded-lg bg-[hsl(var(--secondary))] px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
-              QQ 号: <span className="font-mono text-[hsl(var(--foreground))]">{qqNumber}</span>
-            </div>
-
-            <div>
-              <label
-                htmlFor="passcode"
-                className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]"
-              >
-                设置密码
-              </label>
-              <input
-                id="passcode"
-                type="password"
-                value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                placeholder="至少 8 位，包含字母和数字"
-                required
-                minLength={8}
-                autoFocus
-                className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="confirmPasscode"
-                className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]"
-              >
-                确认密码
-              </label>
-              <input
-                id="confirmPasscode"
-                type="password"
-                value={confirmPasscode}
-                onChange={(e) => setConfirmPasscode(e.target.value)}
-                placeholder="请再次输入密码"
-                required
-                minLength={8}
-                className="w-full rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-              />
-            </div>
-
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">
-              密码至少 8 位，需包含字母和数字
-            </p>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
-            >
-              {loading ? "设置中..." : "下一步"}
-            </button>
-          </form>
-        ) : (
-          /* Step 3: Profile creation — rendered outside this card for full width */
-          null
-        )}
-
-        {/* Footer — only for steps 1 & 2 */}
-        {step !== "profile" && !success && (
-          <div className="mt-6 text-center">
-            <a
-              href="/login"
-              className="text-xs text-[hsl(var(--primary))] underline-offset-4 hover:underline"
-            >
-              ← 已有账号？登录
-            </a>
-          </div>
-        )}
       </div>
 
-      {/* Step 3: Profile form (full width, outside the card) */}
-      {step === "profile" && !success && (
+      {/* Error */}
+      {error && (
+        <div className="rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.1)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
+          {error}
+        </div>
+      )}
+
+      {/* Success */}
+      {success ? (
+        <div className="rounded-lg border border-[hsl(150,60%,40%/0.3)] bg-[hsl(150,60%,40%/0.1)] px-4 py-3 text-center text-sm text-[hsl(150,60%,60%)]">
+          ✅ 资料创建成功！正在跳转...
+        </div>
+      ) : (
         <>
           <ProfileFormSection
             profile={profile}
@@ -582,38 +357,11 @@ export default function SignupPage() {
           />
         </>
       )}
-
-      {/* Help card — only for steps 1 & 2 */}
-      {step !== "profile" && !success && (
-        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
-          <h3 className="mb-2 text-sm font-semibold text-[hsl(var(--foreground))]">
-            📱 注册步骤
-          </h3>
-          <ol className="space-y-1.5 text-xs text-[hsl(var(--muted-foreground))]">
-            <li className="flex gap-2">
-              <span className="font-mono text-[hsl(var(--primary))]">1.</span>
-              在 QQ 群中发送 <code className="rounded bg-[hsl(var(--secondary))] px-1 font-mono">/signup</code> 指令
-            </li>
-            <li className="flex gap-2">
-              <span className="font-mono text-[hsl(var(--primary))]">2.</span>
-              机器人将验证码发送至你的 QQ 邮箱
-            </li>
-            <li className="flex gap-2">
-              <span className="font-mono text-[hsl(var(--primary))]">3.</span>
-              在此页面输入验证码并设置密码
-            </li>
-            <li className="flex gap-2">
-              <span className="font-mono text-[hsl(var(--primary))]">4.</span>
-              完善个人资料，完成注册
-            </li>
-          </ol>
-        </div>
-      )}
     </div>
   );
 }
 
-/* ─── Profile Form Section (Step 3) ─────────────────── */
+/* ─── Profile Form Section ─────────────────────────── */
 
 function ProfileFormSection({
   profile,
@@ -936,8 +684,6 @@ function ProfileFormSection({
               onPhotosChange={onPhotosChange}
               maxPhotos={6}
             />
-
-
           </>
         )}
 
@@ -1044,8 +790,6 @@ function ProfileFormSection({
           />
         </div>
 
-
-
         {/* Expected attributes */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
@@ -1071,12 +815,10 @@ function ProfileFormSection({
               );
             })}
           </div>
-
-
         </div>
       </section>
 
-      {/* Section 7: Consent */}
+      {/* Section 8: Consent */}
       <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
         <label className="flex items-start gap-3 cursor-pointer">
           <input
@@ -1098,7 +840,7 @@ function ProfileFormSection({
         disabled={loading}
         className="w-full rounded-lg bg-brand-blue px-4 py-3 text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
       >
-        {loading ? "保存中..." : "完成注册"}
+        {loading ? "保存中..." : "完成资料创建"}
       </button>
     </div>
   );

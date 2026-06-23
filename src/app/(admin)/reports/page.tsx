@@ -14,12 +14,18 @@ interface AdminReport {
   targetQQ: string | null;
   type: string;
   description: string;
+  evidence: EvidenceItem[];
   status: string;
   resolution: string | null;
   handledBy: string | null;
   handlerNickname: string | null;
   handledAt: string | null;
   createdAt: string;
+}
+
+interface EvidenceItem {
+  key: string;
+  url: string;
 }
 
 /* ─── Constants ──────────────────────────────────────── */
@@ -125,6 +131,32 @@ function ResolveModal({
           <p className="mt-1 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
             {report.description}
           </p>
+          {report.evidence.length > 0 && (
+            <div className="mt-3">
+              <p className="mb-2 text-[11px] font-medium text-[hsl(var(--foreground))]">
+                证据图片 ({report.evidence.length})
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {report.evidence.map((item, index) => (
+                  <a
+                    key={item.key}
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block h-16 w-20 overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))]"
+                    aria-label={`查看证据图片 ${index + 1}`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.url}
+                      alt={`证据图片 ${index + 1}`}
+                      className="h-full w-full object-cover transition-transform hover:scale-105"
+                    />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Verdict */}
@@ -332,6 +364,33 @@ export default function AdminReportsPage() {
                 <p className="mb-3 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
                   {r.description}
                 </p>
+
+                {r.evidence.length > 0 && (
+                  <div className="mb-3">
+                    <p className="mb-2 text-[11px] font-medium text-[hsl(var(--foreground))]">
+                      证据图片 ({r.evidence.length})
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {r.evidence.map((item, index) => (
+                        <a
+                          key={item.key}
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block h-16 w-20 overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))]"
+                          aria-label={`查看证据图片 ${index + 1}`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={item.url}
+                            alt={`证据图片 ${index + 1}`}
+                            className="h-full w-full object-cover transition-transform hover:scale-105"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Resolution */}
                 {r.resolution && (

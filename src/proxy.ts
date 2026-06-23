@@ -10,6 +10,7 @@ const PUBLIC_PATHS = [
   "/",
   "/login",
   "/signup",
+  "/complete-profile",
   "/forgot-passcode",
   "/api/auth",
   "/api/health",
@@ -103,7 +104,22 @@ export async function proxy(req: NextRequest) {
 
   const userRole = payload.role as UserRole;
 
-  // 4. Admin routes — require ADMIN+ role
+  // 4a. Profile completeness check — redirect profile-less users to /complete-profile
+  //     Skip for API routes (they need access to submit profiles), and for /complete-profile itself
+  if (
+    !payload.hasProfile &&
+    !pathname.startsWith("/complete-profile") &&
+    !pathname.startsWith("/api/")
+  ) {
+    return NextResponse.redirect(new URL("/complete-profile", req.url));
+  }
+
+  // 4b. User WITH profile trying to access /complete-profile → redirect to profile
+  if (payload.hasProfile && pathname.startsWith("/complete-profile")) {
+    return NextResponse.redirect(new URL("/profile", req.url));
+  }
+
+  // 5. Admin routes — require ADMIN+ role
   if (isAdminPath(pathname)) {
     if (!hasRole(userRole, "ADMIN")) {
       if (pathname.startsWith("/api/")) {

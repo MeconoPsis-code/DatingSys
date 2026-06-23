@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { error, paginated } from '@/lib/api-response';
+import { getReportEvidenceUrls } from '@/lib/report-evidence';
 
 // ── GET /api/admin/reports — admin report queue ────────
 
@@ -45,23 +46,26 @@ export async function GET(req: Request) {
       }),
     ]);
 
-    const data = reports.map((r) => ({
-      id: r.id,
-      reporterId: r.reporterId,
-      reporterNickname: r.reporter.authIdentities[0]?.nickname ?? null,
-      reporterQQ: r.reporter.qqNumber,
-      targetUserId: r.targetUserId,
-      targetNickname: r.target.authIdentities[0]?.nickname ?? null,
-      targetQQ: r.target.qqNumber,
-      type: r.type,
-      description: r.description,
-      status: r.status,
-      resolution: r.resolution,
-      handledBy: r.handledBy,
-      handlerNickname: r.handler?.authIdentities[0]?.nickname ?? null,
-      handledAt: r.handledAt,
-      createdAt: r.createdAt,
-    }));
+    const data = await Promise.all(
+      reports.map(async (r) => ({
+        id: r.id,
+        reporterId: r.reporterId,
+        reporterNickname: r.reporter.authIdentities[0]?.nickname ?? null,
+        reporterQQ: r.reporter.qqNumber,
+        targetUserId: r.targetUserId,
+        targetNickname: r.target.authIdentities[0]?.nickname ?? null,
+        targetQQ: r.target.qqNumber,
+        type: r.type,
+        description: r.description,
+        status: r.status,
+        resolution: r.resolution,
+        evidence: await getReportEvidenceUrls(r.evidenceObjectKeys),
+        handledBy: r.handledBy,
+        handlerNickname: r.handler?.authIdentities[0]?.nickname ?? null,
+        handledAt: r.handledAt,
+        createdAt: r.createdAt,
+      })),
+    );
 
     return paginated(data, total, page, pageSize);
   } catch (err) {

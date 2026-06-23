@@ -10,6 +10,7 @@ import { redis } from '@/lib/redis';
 import { generateAndStoreCode, isRateLimited } from '@/lib/verification';
 import { sendVerificationCode } from '@/lib/email';
 import { createLogger } from '@/lib/logger';
+import { normalizeNicknameInput } from '@/lib/group-card';
 
 const log = createLogger('bot:register');
 
@@ -61,7 +62,7 @@ export async function handleRegisterCommand(
     let groupCard: string | null = null;
     try {
       const memberInfo = await botClient.getGroupMemberInfo(groupId, qqNumber);
-      nickname = memberInfo.card || memberInfo.nickname || null;
+      nickname = normalizeNicknameInput(memberInfo.card || memberInfo.nickname || '') || null;
       groupCard = memberInfo.card || null;
       avatarUrl = memberInfo.avatarUrl || null;
       log.info({ qqNumber, nickname, groupCard }, 'Fetched group member info');

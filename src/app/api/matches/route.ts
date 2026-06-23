@@ -129,7 +129,7 @@ export async function GET(req: Request) {
         weightMaxKg: preference.weightMaxKg,
         expectedAttributes: preference.expectedAttributes as string[],
       },
-      hasPhotos: profile.photos.length > 0,
+      hasPhotos: profile.photos.length > 0 && ratingProfile !== null,
       finalScore: ratingProfile?.finalScore ?? null,
       lastActiveAt: profile.updatedAt,
     };
@@ -188,7 +188,7 @@ export async function GET(req: Request) {
           weightMaxKg: c.preference.weightMaxKg,
           expectedAttributes: c.preference.expectedAttributes as string[],
         },
-        hasPhotos: c.profile.photos.length > 0,
+        hasPhotos: c.profile.photos.length > 0 && c.ratingProfile !== null,
         finalScore: c.ratingProfile?.finalScore ?? null,
         lastActiveAt: c.profile.updatedAt,
       };
@@ -288,7 +288,7 @@ export async function GET(req: Request) {
           heightMatch,
           weightMatch,
           attributeMatch,
-          hasPhotos: p.photos.length > 0,
+          hasPhotos: p.photos.length > 0 && m.candidate.ratingProfile !== null,
           provinceCode: p.provinceCode,
           direction,
           relevanceScore: m.relevanceScore,
@@ -298,7 +298,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         data,
         currentUserProvinceCode: profile.provinceCode,
-        currentUserHasPhotos: profile.photos.length > 0,
+        currentUserHasPhotos: profile.photos.length > 0 && ratingProfile !== null,
         pagination: {
           total,
           page,
@@ -309,7 +309,7 @@ export async function GET(req: Request) {
     }
 
     // Mutual match — full profile except qqNumber and photos
-    const currentUserHasPhotos = profile.photos.length > 0;
+    const currentUserHasPhotos = profile.photos.length > 0 && ratingProfile !== null;
     const data = pageItems.map((m) => {
       const c = m.candidate;
       const p = c.profile!;
@@ -329,7 +329,7 @@ export async function GET(req: Request) {
         customAttribute: p.customAttribute,
         mbti: p.mbti,
         selfIntro: p.selfIntro,
-        hasPhotos: p.photos.length > 0,
+        hasPhotos: p.photos.length > 0 && c.ratingProfile !== null,
         // No-photo users cannot see appearance scores
         finalScore: currentUserHasPhotos ? (c.ratingProfile?.finalScore ?? null) : null,
         relevanceScore: m.relevanceScore,

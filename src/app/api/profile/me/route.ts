@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import { createSession } from "@/lib/session";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import {
   profileFormSchema,
@@ -10,7 +11,10 @@ import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
 import { notify } from "@/lib/notifications";
 import { napcatClient } from "@/server/bot/clients/napcat.client";
-import { getProvinceName } from "@/data/regions";
+import {
+  buildGroupCardForProfile,
+  normalizeNicknameInput,
+} from "@/lib/group-card";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("api:profile-me");
@@ -337,22 +341,17 @@ export async function PUT(req: Request) {
         select: { nickname: true },
       });
 
-      const nickname = identity?.nickname || "";
+      const nickname = normalizeNicknameInput(identity?.nickname || "");
 
       if (nickname) {
-        // Compute age from profile birthDate
-        const bd = new Date(profileData.birthDate);
-        const today = new Date();
-        let age = today.getFullYear() - bd.getFullYear();
-        const monthDiff = today.getMonth() - bd.getMonth();
-        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bd.getDate())) {
-          age--;
+        const groupCard = buildGroupCardForProfile(nickname, profileData);
+
+        if (identity?.nickname && identity.nickname !== nickname) {
+          await db.authIdentity.updateMany({
+            where: { userId: session.id },
+            data: { nickname },
+          });
         }
-
-        // Resolve province name
-        const provinceName = getProvinceName(profileData.provinceCode).replace(/省$|市$|自治区$|特别行政区$|壮族自治区$|回族自治区$|维吾尔自治区$/, "");
-
-        const groupCard = `${age}-${provinceName}-${nickname}`;
 
         // Find group membership
         const membership = await db.groupMembership.findUnique({
@@ -398,6 +397,9 @@ export async function PUT(req: Request) {
     ip: getClientIp(req),
     userAgent: req.headers.get("user-agent"),
   });
+
+  // 9. Refresh session JWT with hasProfile=true so middleware stops redirecting
+  await createSession(session.id, session.role, true);
 
   return success({ profile, preference });
 }

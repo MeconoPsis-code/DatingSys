@@ -3,7 +3,10 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getProvinceName } from "@/data/regions";
+import {
+  buildGroupCardForProfile,
+  normalizeNicknameInput,
+} from "@/lib/group-card";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -200,22 +203,8 @@ function ChangePasscodeModal({ onClose }: { onClose: () => void }) {
 
 /* ─── Change Nickname Modal ──────────────────────────── */
 
-function computeAge(birthDate: string): number {
-  const bd = new Date(birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - bd.getFullYear();
-  const monthDiff = today.getMonth() - bd.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bd.getDate())) {
-    age--;
-  }
-  return age;
-}
-
 function buildGroupCard(nickname: string, profile: MeData["profile"]): string {
-  if (!profile || !nickname) return nickname || "";
-  const age = computeAge(profile.birthDate);
-  const provinceName = getProvinceName(profile.provinceCode).replace(/省$|市$|自治区$|特别行政区$|壮族自治区$|回族自治区$|维吾尔自治区$/, "");
-  return `${age}-${provinceName}-${nickname}`;
+  return buildGroupCardForProfile(nickname, profile);
 }
 
 function ChangeNicknameModal({
@@ -229,7 +218,8 @@ function ChangeNicknameModal({
   onClose: () => void;
   onSuccess: (newNickname: string) => void;
 }) {
-  const [nickname, setNickname] = useState(currentNickname);
+  const currentNicknameOnly = normalizeNicknameInput(currentNickname);
+  const [nickname, setNickname] = useState(currentNicknameOnly);
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -241,10 +231,10 @@ function ChangeNicknameModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const trimmed = nickname.trim();
+    const trimmed = normalizeNicknameInput(nickname);
     if (!trimmed) return setMsg({ text: "请输入昵称", ok: false });
     if (trimmed.length > 30) return setMsg({ text: "昵称不能超过30个字符", ok: false });
-    if (trimmed === currentNickname) return setMsg({ text: "昵称未变更", ok: false });
+    if (trimmed === currentNicknameOnly) return setMsg({ text: "昵称未变更", ok: false });
 
     setSubmitting(true);
     setMsg(null);

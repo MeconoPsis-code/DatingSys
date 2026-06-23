@@ -67,10 +67,10 @@ export async function GET(
     }
 
     // 3. Check if current user has photos
-    const currentUserPhotoCount = await db.profilePhoto.count({
-      where: { profile: { userId: session.id } },
+    const currentUserRatingProfile = await db.ratingProfile.findUnique({
+      where: { userId: session.id },
     });
-    const currentUserHasPhotos = currentUserPhotoCount > 0;
+    const currentUserHasPhotos = currentUserRatingProfile !== null;
 
     // 4. Photos require an approved ViewRequest AND the requesting user must also have photos
     const photoApproved = !!approvedRequest;
@@ -103,7 +103,7 @@ export async function GET(
       customAttribute: p.customAttribute,
       mbti: p.mbti,
       selfIntro: p.selfIntro,
-      hasPhotos: (targetUser.profile.photos ?? []).length > 0,
+      hasPhotos: (targetUser.profile.photos ?? []).length > 0 && targetUser.ratingProfile !== null,
       photoApproved: photoApproved && currentUserHasPhotos,
       finalScore: currentUserHasPhotos ? (targetUser.ratingProfile?.finalScore ?? null) : null,
       photos,

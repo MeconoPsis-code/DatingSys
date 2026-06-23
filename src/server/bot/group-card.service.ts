@@ -18,6 +18,11 @@ import type { GroupCardCheckResult, ParsedGroupCard } from './bot.types';
 import { BOT_CONFIG } from './bot.config';
 import { PROVINCES } from '@/data/regions';
 import { createLogger } from '@/lib/logger';
+import {
+  formatGroupCard,
+  normalizeGroupCardProvince,
+  parseGroupCard as parseFlexibleGroupCard,
+} from '@/lib/group-card';
 
 const log = createLogger('bot:group-card');
 
@@ -34,15 +39,7 @@ const log = createLogger('bot:group-card');
  *   '🌏 海外'      → '海外'
  */
 export const VALID_PROVINCES: string[] = PROVINCES.map((p) => {
-  return p.name
-    .replace(/省$/, '')
-    .replace(/市$/, '')
-    .replace(/自治区$/, '')
-    .replace(/特别行政区$/, '')
-    .replace(/壮族/, '')
-    .replace(/回族/, '')
-    .replace(/维吾尔/, '')
-    .replace(/🌏 /, '');
+  return normalizeGroupCardProvince(p.name);
 }).filter((n) => n.length > 0);
 
 // ── Sensitive Pattern Detection ─────────────────────────
@@ -87,25 +84,7 @@ function containsSensitivePattern(text: string): boolean {
  * ```
  */
 export function parseGroupCard(card: string): ParsedGroupCard | null {
-  if (!card || typeof card !== 'string') {
-    return null;
-  }
-
-  const { separator } = BOT_CONFIG.groupCard;
-  const parts = card.split(separator);
-
-  if (parts.length !== 3) {
-    return null;
-  }
-
-  const [ageStr, province, nickname] = parts.map((s) => s.trim());
-
-  const age = Number(ageStr);
-  if (!Number.isInteger(age) || ageStr === '') {
-    return null;
-  }
-
-  return { age, province, nickname };
+  return parseFlexibleGroupCard(card);
 }
 
 /**
@@ -181,5 +160,5 @@ export function generateGroupCard(
   nickname: string,
 ): string {
   const { separator } = BOT_CONFIG.groupCard;
-  return `${age}${separator}${province}${separator}${nickname}`;
+  return formatGroupCard(age, province, nickname, separator);
 }

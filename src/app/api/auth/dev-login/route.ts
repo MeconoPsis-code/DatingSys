@@ -38,8 +38,14 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Check if user has a profile
+  const existingProfile = await db.profile.findUnique({
+    where: { userId: user.id },
+    select: { id: true },
+  });
+
   // Create session
-  await createSession(user.id, user.role);
+  await createSession(user.id, user.role, !!existingProfile);
 
   // Update last login
   await db.user.update({

@@ -13,7 +13,11 @@
  */
 
 import { db } from "@/lib/db";
-import { getProvinceName } from "@/data/regions";
+import {
+  buildGroupCardForProfile,
+  normalizeNicknameInput,
+  parseGroupCard,
+} from "@/lib/group-card";
 import { createLogger } from "@/lib/logger";
 import type { QQBotClient } from "./clients/qqbot-client.interface";
 
@@ -25,49 +29,6 @@ export interface GroupCardChangedEvent {
   qqNumber: string;
   cardNew: string;
   cardOld: string;
-}
-
-/**
- * Compute age from a Date.
- */
-function computeAge(birthDate: Date): number {
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-}
-
-/**
- * Try to parse "age-city-nickname" from a card string.
- * Returns { age, city, nickname } or null if format doesn't match.
- *
- * Rules:
- * - Must have at least 2 dashes → 3 parts
- * - First part must be a valid integer (age)
- * - Second part is city (non-empty)
- * - Third+ parts (joined) is nickname (non-empty)
- */
-function parseGroupCard(card: string): { age: number; city: string; nickname: string } | null {
-  if (!card) return null;
-
-  const parts = card.split("-");
-  if (parts.length < 3) return null;
-
-  const ageStr = parts[0].trim();
-  const age = Number(ageStr);
-  if (!Number.isInteger(age) || age < 1 || age > 120) return null;
-
-  const city = parts[1].trim();
-  if (!city) return null;
-
-  // nickname = everything after the second dash (allows dashes in nicknames)
-  const nickname = parts.slice(2).join("-").trim();
-  if (!nickname) return null;
-
-  return { age, city, nickname };
 }
 
 /**
@@ -116,12 +77,12 @@ export async function handleGroupCardChanged(
   let correctCard: string;
 
   if (parsed) {
-    // Card follows "age-city-nickname" format → extract nickname
-    newNickname = parsed.nickname;
+    // Card follows "age-city-nickname" format → extract nickname.
+    newNickname = normalizeNicknameInput(parsed.nickname);
     log.info({ qqNumber, nickname: newNickname }, "Card follows format, extracting nickname");
   } else {
     // Card doesn't follow format → treat entire card as the new nickname
-    newNickname = cardNew.trim();
+    newNickname = normalizeNicknameInput(cardNew);
     log.info({ qqNumber, nickname: newNickname }, "Card doesn't follow format, treating as nickname");
   }
 
@@ -136,11 +97,7 @@ export async function handleGroupCardChanged(
 
   // Build the correct card from the user's profile
   if (user.profile) {
-    const age = computeAge(user.profile.birthDate);
-    const provinceName = getProvinceName(
-      user.profile.provinceCode,
-    ).replace(/省$|市$|自治区$|特别行政区$|壮族自治区$|回族自治区$|维吾尔自治区$/, "");
-    correctCard = `${age}-${provinceName}-${newNickname}`;
+    correctCard = buildGroupCardForProfile(newNickname, user.profile);
   } else {
     // No profile → just use the nickname as-is
     correctCard = newNickname;

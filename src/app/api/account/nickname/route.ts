@@ -3,35 +3,12 @@ import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { napcatClient } from "@/server/bot/clients/napcat.client";
 import { createLogger } from "@/lib/logger";
-import { getProvinceName } from "@/data/regions";
+import {
+  buildGroupCardForProfile,
+  normalizeNicknameInput,
+} from "@/lib/group-card";
 
 const log = createLogger("api:nickname");
-
-/**
- * Compute age from birthDate.
- */
-function computeAge(birthDate: Date): number {
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-}
-
-/**
- * Build a group card string in the format: age-city-nickname
- * If profile data is unavailable, just use the nickname alone.
- */
-function buildGroupCard(nickname: string, profile: { birthDate: Date; provinceCode: string; cityCode: string } | null): string {
-  if (!profile) return nickname;
-
-  const age = computeAge(profile.birthDate);
-  const provinceName = getProvinceName(profile.provinceCode).replace(/省$|市$|自治区$|特别行政区$|壮族自治区$|回族自治区$|维吾尔自治区$/, "");
-
-  return `${age}-${provinceName}-${nickname}`;
-}
 
 /**
  * POST /api/account/nickname
@@ -55,7 +32,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const trimmed = nickname.trim();
+  const trimmed = normalizeNicknameInput(nickname);
 
   if (trimmed.length === 0 || trimmed.length > 30) {
     return NextResponse.json(
@@ -71,7 +48,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Build the full group card: age-city-nickname
-  const groupCard = buildGroupCard(trimmed, profile);
+  const groupCard = buildGroupCardForProfile(trimmed, profile);
 
   // 1. Update AuthIdentity nickname (store just the nickname part)
   await db.authIdentity.updateMany({

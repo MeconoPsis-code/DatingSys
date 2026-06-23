@@ -4,6 +4,7 @@ import type { UserRole } from "@prisma/client";
 export interface JWTPayload {
   sub: string; // user ID
   role: UserRole; // cached role for middleware fast-path
+  hasProfile: boolean; // true if user has created a profile
   iat: number;
   exp: number;
 }
@@ -20,10 +21,10 @@ const DEFAULT_EXPIRY = "7d";
  * Sign a JWT with user ID and role.
  * Uses HS256 — Edge-runtime compatible via jose.
  */
-export async function signToken(userId: string, role: UserRole): Promise<string> {
+export async function signToken(userId: string, role: UserRole, hasProfile: boolean): Promise<string> {
   const secret = getSecret();
 
-  return new SignJWT({ role })
+  return new SignJWT({ role, hp: hasProfile ? 1 : 0 })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
     .setIssuedAt()
@@ -42,6 +43,7 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
     return {
       sub: payload.sub as string,
       role: payload.role as UserRole,
+      hasProfile: payload.hp === 1,
       iat: payload.iat as number,
       exp: payload.exp as number,
     };

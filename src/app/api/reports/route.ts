@@ -1,18 +1,44 @@
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error, paginated } from '@/lib/api-response';
+import {
+  deleteReportEvidence,
+  getReportEvidenceUrls,
+  ReportEvidenceError,
+  uploadReportEvidenceFiles,
+} from '@/lib/report-evidence';
+import { Prisma } from '@prisma/client';
 
 // ── POST /api/reports — user submits a report ──────────
 
 export async function POST(req: Request) {
   try {
     const session = await requireAuth();
-    const body = await req.json();
-    const { targetUserId: targetQQ, type, description } = body as {
-      targetUserId: string;
-      type: string;
-      description: string;
-    };
+    const contentType = req.headers.get('content-type') || '';
+    let targetQQ = '';
+    let type = '';
+    let description = '';
+    let evidenceFiles: File[] = [];
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      targetQQ = String(formData.get('targetUserId') || '');
+      type = String(formData.get('type') || '');
+      description = String(formData.get('description') || '');
+      evidenceFiles = formData
+        .getAll('evidence')
+        .filter((file): file is File => file instanceof File && file.size > 0);
+    } else {
+      const body = await req.json();
+      const parsed = body as {
+        targetUserId: string;
+        type: string;
+        description: string;
+      };
+      targetQQ = parsed.targetUserId;
+      type = parsed.type;
+      description = parsed.description;
+    }
 
     // Validate
     const validTypes = [
@@ -62,14 +88,24 @@ export async function POST(req: Request) {
     }
 
     // Create report
-    const report = await db.report.create({
-      data: {
-        reporterId: session.id,
-        targetUserId,
-        type: type as 'FAKE_INFO' | 'STOLEN_PHOTO' | 'IMPERSONATION' | 'HARASSMENT' | 'SCAM' | 'MALICIOUS' | 'OTHER',
-        description: description.trim(),
-      },
-    });
+    const evidenceKeys = await uploadReportEvidenceFiles(evidenceFiles, session.id);
+    let report;
+    try {
+      report = await db.report.create({
+        data: {
+          reporterId: session.id,
+          targetUserId,
+          type: type as 'FAKE_INFO' | 'STOLEN_PHOTO' | 'IMPERSONATION' | 'HARASSMENT' | 'SCAM' | 'MALICIOUS' | 'OTHER',
+          description: description.trim(),
+          evidenceObjectKeys: evidenceKeys.length > 0
+            ? (evidenceKeys as Prisma.InputJsonValue)
+            : undefined,
+        },
+      });
+    } catch (err) {
+      await deleteReportEvidence(evidenceKeys);
+      throw err;
+    }
 
     // Audit log
     await db.auditLog.create({
@@ -78,13 +114,16 @@ export async function POST(req: Request) {
         action: 'REPORT_CREATE',
         targetType: 'Report',
         targetId: report.id,
-        metadata: { targetUserId, type },
+        metadata: { targetUserId, type, evidenceCount: evidenceKeys.length },
       },
     });
 
     return success({ id: report.id, message: '举报已提交' }, 201);
   } catch (err) {
     console.error('[reports] POST error:', err);
+    if (err instanceof ReportEvidenceError) {
+      return error(err.code, err.message, err.status);
+    }
     if (err && typeof err === 'object' && 'status' in err) {
       const appErr = err as { code: string; message: string; status: number };
       return error(appErr.code, appErr.message, appErr.status);
@@ -122,18 +161,21 @@ export async function GET(req: Request) {
       }),
     ]);
 
-    const data = reports.map((r) => ({
-      id: r.id,
-      targetUserId: r.targetUserId,
-      targetNickname: r.target.authIdentities[0]?.nickname ?? null,
-      targetQQ: r.target.qqNumber,
-      type: r.type,
-      description: r.description,
-      status: r.status,
-      resolution: r.resolution,
-      createdAt: r.createdAt,
-      handledAt: r.handledAt,
-    }));
+    const data = await Promise.all(
+      reports.map(async (r) => ({
+        id: r.id,
+        targetUserId: r.targetUserId,
+        targetNickname: r.target.authIdentities[0]?.nickname ?? null,
+        targetQQ: r.target.qqNumber,
+        type: r.type,
+        description: r.description,
+        status: r.status,
+        resolution: r.resolution,
+        evidence: await getReportEvidenceUrls(r.evidenceObjectKeys),
+        createdAt: r.createdAt,
+        handledAt: r.handledAt,
+      })),
+    );
 
     return paginated(data, total, page, pageSize);
   } catch (err) {

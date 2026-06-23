@@ -4,6 +4,7 @@ import { redis } from "@/lib/redis";
 import { sendVerificationCode } from "@/lib/email";
 import { generateAndStoreCode, isRateLimited } from "@/lib/verification";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
+import { normalizeNicknameInput } from "@/lib/group-card";
 
 /**
  * POST /api/auth/bot-signup
@@ -58,7 +59,10 @@ export async function POST(req: NextRequest) {
   await redis.setex(
     contextKey,
     900, // 15 min
-    JSON.stringify({ groupId, nickname: nickname || null })
+    JSON.stringify({
+      groupId,
+      nickname: normalizeNicknameInput(nickname || "") || null,
+    })
   );
 
   // 6. Generate verification code and send email

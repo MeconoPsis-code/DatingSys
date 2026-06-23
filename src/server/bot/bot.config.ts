@@ -62,7 +62,7 @@ export const BOT_CONFIG = {
   /** 群名片格式规则 */
   groupCard: {
     /** 群名片字段分隔符（全角竖线） */
-    separator: process.env.GROUP_CARD_SEPARATOR || '｜',
+    separator: process.env.GROUP_CARD_SEPARATOR || '-',
     /** 是否自动修复不合规群名片 */
     autoFix: process.env.GROUP_CARD_AUTO_FIX !== 'false',
     /** 允许的最小年龄 */

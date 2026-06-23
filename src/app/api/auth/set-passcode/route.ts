@@ -5,6 +5,7 @@ import { consumeVerifiedFlag } from "@/lib/verification";
 import { validatePasscode, hashPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
+import { normalizeNicknameInput } from "@/lib/group-card";
 
 /**
  * POST /api/auth/set-passcode
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   // Avatar URL: use context or generate from QQ number
   const avatarUrl = context.avatarUrl || `https://q1.qlogo.cn/g?b=qq&nk=${qqStr}&s=640`;
-  const nickname = context.nickname || null;
+  const nickname = normalizeNicknameInput(context.nickname || context.groupCard || "") || null;
 
   // 5. Create or update user with credentials
   let user = await db.user.findFirst({ where: { qqNumber: qqStr } });
@@ -134,8 +135,14 @@ export async function POST(req: NextRequest) {
     // BotIdentity may not exist if avatar sync was skipped — non-critical
   }
 
-  // 6. Create session
-  await createSession(user.id, user.role);
+  // 6. Check if user already has a profile (e.g. seeded users)
+  const existingProfile = await db.profile.findUnique({
+    where: { userId: user.id },
+    select: { id: true },
+  });
+
+  // 7. Create session
+  await createSession(user.id, user.role, !!existingProfile);
 
   // 7. Audit log
   await logAudit({

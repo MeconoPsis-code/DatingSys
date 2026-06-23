@@ -9,9 +9,10 @@ const COOKIE_NAME = "date-session";
  */
 export async function createSession(
   userId: string,
-  role: UserRole
+  role: UserRole,
+  hasProfile: boolean = false
 ): Promise<void> {
-  const token = await signToken(userId, role);
+  const token = await signToken(userId, role, hasProfile);
   const cookieStore = await cookies();
 
   cookieStore.set(COOKIE_NAME, token, {

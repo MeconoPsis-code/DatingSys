@@ -154,6 +154,7 @@ export default function ProfileEditPage() {
   const [wantPhotos, setWantPhotos] = useState(false);
   const [showClearPhotosConfirm, setShowClearPhotosConfirm] = useState(false);
   const [deleteAllPhotos, setDeleteAllPhotos] = useState(false);
+  const [hasPublishedPhotos, setHasPublishedPhotos] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
 
   // Cities based on selected province
@@ -273,7 +274,10 @@ export default function ProfileEditPage() {
               const photoData = await photoRes.json();
               const loadedPhotos = photoData.data?.photos || [];
               setPhotos(loadedPhotos);
-              if (loadedPhotos.length > 0 && !deleteAllPhotos) setWantPhotos(true);
+              if (loadedPhotos.length > 0) {
+                setHasPublishedPhotos(true);
+                if (!deleteAllPhotos) setWantPhotos(true);
+              }
             }
           } catch {
             // Photos are optional, don't block on error
@@ -822,7 +826,7 @@ export default function ProfileEditPage() {
               photos={photos}
               onPhotosChange={setPhotos}
               maxPhotos={6}
-              readOnly={originalProfileStatus === "ACTIVE"}
+              readOnly={originalProfileStatus === "ACTIVE" && hasPublishedPhotos}
             />
 
 
@@ -898,8 +902,8 @@ export default function ProfileEditPage() {
             期望身高 (cm)
           </label>
           <DualRangeSlider
-            min={140}
-            max={210}
+            min={100}
+            max={250}
             valueMin={Number(form.heightMinCm) || 155}
             valueMax={Number(form.heightMaxCm) || 185}
             onChangeMin={(v) => updateField("heightMinCm", String(v))}
@@ -914,8 +918,8 @@ export default function ProfileEditPage() {
             期望体重 (kg)
           </label>
           <DualRangeSlider
-            min={35}
-            max={150}
+            min={30}
+            max={200}
             valueMin={Number(form.weightMinKg) || 45}
             valueMax={Number(form.weightMaxKg) || 80}
             onChangeMin={(v) => updateField("weightMinKg", String(v))}

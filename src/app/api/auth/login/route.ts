@@ -51,8 +51,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 4. Create session
-  await createSession(user.id, user.role);
+  // 4. Check if user has a profile
+  const existingProfile = await db.profile.findUnique({
+    where: { userId: user.id },
+    select: { id: true },
+  });
+
+  // 5. Create session
+  await createSession(user.id, user.role, !!existingProfile);
 
   // 5. Update last login
   await db.user.update({
