@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 
 /* ─── Types ──────────────────────────────────────────── */
@@ -76,12 +76,32 @@ function RoleSelector({
 }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const options = [
     { value: "USER", label: "用户" },
     { value: "SCORER", label: "评分员" },
     { value: "ADMIN", label: "管理员" },
   ];
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      const target = event.target;
+      if (target instanceof Node && !menuRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [open]);
 
   async function handleSelect(role: string) {
     if (role === user.role) {
@@ -135,7 +155,7 @@ function RoleSelector({
   }
 
   return (
-    <div className="relative">
+    <div ref={menuRef} className="relative">
       <div className="absolute left-0 top-0 z-20 min-w-[120px] rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-1 shadow-lg">
         {options.map((opt) => (
           <button

@@ -16,9 +16,10 @@ import {
   normalizeNicknameInput,
 } from "@/lib/group-card";
 import { createLogger } from "@/lib/logger";
+import { commitExpiredActions } from "@/lib/scoring-revocation";
+import { getOnDutyScorers } from "@/lib/scorer-duty";
 
 const log = createLogger("api:profile-me");
-import { commitExpiredActions } from "@/lib/scoring-revocation";
 
 /* ── Helpers ─────────────────────────────────────────── */
 
@@ -268,25 +269,19 @@ export async function PUT(req: Request) {
       });
 
       if (!existingTask) {
-        // Get all eligible scorers
-        const scorers = await db.user.findMany({
-          where: {
-            role: { in: ["SCORER", "ADMIN"] },
-            id: { not: session.id }, // can't score yourself
-          },
-          select: { id: true },
+        // Assign only scorers/admins scheduled for today's duty roster.
+        const scorers = await getOnDutyScorers({ excludeUserId: session.id });
+
+        const firstPhoto = await db.profilePhoto.findFirst({
+          where: { profileId: profile.id },
+          orderBy: { order: "asc" },
         });
 
-        if (scorers.length > 0) {
-          const firstPhoto = await db.profilePhoto.findFirst({
-            where: { profileId: profile.id },
-            orderBy: { order: "asc" },
-          });
-
+        if (firstPhoto) {
           await db.ratingTask.create({
             data: {
               ratedUserId: session.id,
-              photoObjectKey: firstPhoto!.storageKey,
+              photoObjectKey: firstPhoto.storageKey,
               status: "PENDING",
               scorerSnapshot: scorers.map((s) => s.id),
             },

@@ -156,6 +156,7 @@ model User {
   // Rating
   ratingTasks        RatingTask[]  @relation("RatedUser")
   ratingScores       RatingScore[] @relation("Scorer")
+  dutySchedules      ScorerDutySchedule[] @relation("ScorerDuty")
 
   // Matching & Requests
   matchesAsUser      MatchSnapshot[] @relation("MatchUser")
@@ -364,13 +365,28 @@ model RatingScore {
   @@map("rating_scores")
 }
 
+/// Weekly scorer duty roster. weekday uses ISO day numbers: 1=Monday ... 7=Sunday.
+model ScorerDutySchedule {
+  id           String   @id @default(cuid())
+  scorerUserId String
+  weekday      Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  scorer User @relation("ScorerDuty", fields: [scorerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([scorerUserId, weekday])
+  @@index([weekday])
+  @@map("scorer_duty_schedules")
+}
+
 /// Cached match result (optional for MVP — can compute in real-time)
 model MatchSnapshot {
   id           String   @id @default(cuid())
   userId       String
   targetUserId String
   matchType    String   // "mutual" | "one_way"
-  direction    String   // "i_like_target" | "target_likes_me" | "mutual"
+  direction    String   // "me_fits_them" | "they_fit_me" | "mutual"
   score        Float?   // relevance score for sorting
   computedAt   DateTime @default(now())
 

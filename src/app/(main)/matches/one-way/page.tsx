@@ -6,16 +6,27 @@ import { usePathname } from "next/navigation";
 
 /* ─── Types ──────────────────────────────────────────── */
 
+type MatchDirection = "me_fits_them" | "they_fit_me";
+
+interface ExpectationCheck {
+  key: "age" | "height" | "weight" | "attribute";
+  label: string;
+  matched: boolean;
+  expected: string;
+}
+
 interface OneWayMatch {
   userId: string;
   ageMatch: boolean;
   heightMatch: boolean;
   weightMatch: boolean;
-
   attributeMatch: boolean;
   hasPhotos: boolean;
   provinceCode: string;
-  direction: "i_like" | "likes_me";
+  direction: MatchDirection;
+  directionLabel: string;
+  targetAgainstMyExpectations: ExpectationCheck[];
+  meAgainstTargetExpectations: ExpectationCheck[];
   relevanceScore: number;
 }
 
@@ -81,6 +92,105 @@ function MatchBadge({ icon, label, match }: { icon: React.ReactNode; label: stri
   );
 }
 
+function getCheckIcon(key: ExpectationCheck["key"]) {
+  switch (key) {
+    case "age":
+      return (
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+          <path d="M8 14h.01" />
+          <path d="M12 14h.01" />
+          <path d="M16 14h.01" />
+        </svg>
+      );
+    case "height":
+      return (
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <path d="M21.3 15.3a2.82 2.82 0 0 1 0 4c-1 1-2.5 1-3.5 0L2.8 4.3a2.82 2.82 0 0 1 0-4c1-1 2.5-1 3.5 0Z" />
+          <path d="m5.6 7.2 1.4-1.4" />
+          <path d="m8.4 10 1.4-1.4" />
+          <path d="m11.2 12.8 1.4-1.4" />
+          <path d="m14 15.6 1.4-1.4" />
+        </svg>
+      );
+    case "weight":
+      return (
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <path d="m16 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+          <path d="m2 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+          <path d="M7 21h10" />
+          <path d="M12 3v18" />
+          <path d="M3 7h18" />
+        </svg>
+      );
+    case "attribute":
+      return (
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+        </svg>
+      );
+  }
+}
+
+function ExpectationCheckRow({ check }: { check: ExpectationCheck }) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs ${
+        check.matched
+          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+          : "border-[hsl(0,60%,50%/0.28)] bg-[hsl(0,60%,50%/0.08)] text-[hsl(0,60%,65%)]"
+      }`}
+    >
+      <span className="flex min-w-0 items-center gap-2 font-medium">
+        {getCheckIcon(check.key)}
+        <span>{check.label}</span>
+      </span>
+      <span className="min-w-0 text-right">
+        <span className="block font-semibold">{check.matched ? "符合" : "不符合"}</span>
+        <span className="block truncate text-[10px] opacity-80">
+          期望 {check.expected}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function ExpectationSection({
+  title,
+  description,
+  checks,
+}: {
+  title: string;
+  description: string;
+  checks: ExpectationCheck[];
+}) {
+  const matchedCount = checks.filter((check) => check.matched).length;
+
+  return (
+    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.45)] p-3">
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">
+          {title}
+        </h3>
+        <span className="shrink-0 text-[10px] font-medium text-[hsl(var(--muted-foreground))]">
+          {matchedCount}/{checks.length} 项符合
+        </span>
+      </div>
+      <p className="mb-3 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
+        {description}
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {checks.map((check) => (
+          <ExpectationCheckRow key={check.key} check={check} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── One-Way Match Card ─────────────────────────────── */
 
 function OneWayMatchCard({
@@ -94,8 +204,13 @@ function OneWayMatchCard({
   viewRequestStatus: string | null;
   currentUserHasPhotos: boolean;
 }) {
-  const isILike = match.direction === "i_like";
-  const matchCount = [match.ageMatch, match.heightMatch, match.weightMatch, match.attributeMatch].filter(Boolean).length;
+  const isMeFitsThem = match.direction === "me_fits_them";
+  const directionLabel = isMeFitsThem ? "我符合他" : "他符合我";
+  const oneWayReasonChecks = (
+    isMeFitsThem
+      ? match.targetAgainstMyExpectations
+      : match.meAgainstTargetExpectations
+  ).filter((check) => !check.matched);
   const [showReport, setShowReport] = useState(false);
 
   return (
@@ -104,15 +219,17 @@ function OneWayMatchCard({
       <div className="mb-3 flex items-center gap-2">
         <span
           className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
-            isILike
+            isMeFitsThem
               ? "border border-blue-500/30 bg-blue-500/15 text-blue-400"
               : "border border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
           }`}
         >
-          {isILike ? "→ 我符合对方条件" : "← 对方符合我的条件"}
+          {directionLabel}
         </span>
         <span className="text-[10px] text-[hsl(var(--muted-foreground))]">
-          {matchCount}/4 项符合我的偏好
+          {oneWayReasonChecks.length > 0
+            ? `单向原因：${oneWayReasonChecks.map((check) => check.label).join("、")}`
+            : "单向条件已展示"}
         </span>
       </div>
 
@@ -182,6 +299,27 @@ function OneWayMatchCard({
             有照片
           </span>
         )}
+      </div>
+
+      <div className="mb-4 space-y-3">
+        <ExpectationSection
+          title="他是否符合我"
+          description={
+            isMeFitsThem
+              ? "对方没有完全符合我的期待，红色项目就是造成单向匹配的原因。"
+              : "对方符合我的全部期待，因此这边是完整通过。"
+          }
+          checks={match.targetAgainstMyExpectations}
+        />
+        <ExpectationSection
+          title="我是否符合他"
+          description={
+            isMeFitsThem
+              ? "我符合对方的全部期待，因此对方能看到我符合他。"
+              : "我没有完全符合对方的期待，所以这次不是双向匹配。"
+          }
+          checks={match.meAgainstTargetExpectations}
+        />
       </div>
 
       {/* Action */}
@@ -275,7 +413,7 @@ export default function OneWayMatchesPage() {
   const [viewRequestMap, setViewRequestMap] = useState<Record<string, string>>({});
   const [requesting, setRequesting] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "i_like" | "likes_me">("all");
+  const [filter, setFilter] = useState<"all" | MatchDirection>("all");
   const [provinceOnly, setProvinceOnly] = useState(false);
   const [currentUserProvinceCode, setCurrentUserProvinceCode] = useState<string | null>(null);
   const [currentUserHasPhotos, setCurrentUserHasPhotos] = useState(false);
@@ -396,8 +534,8 @@ export default function OneWayMatchesPage() {
     ? dirFiltered.filter((m) => m.provinceCode === currentUserProvinceCode)
     : dirFiltered;
 
-  const iLikeCount = matches.filter((m) => m.direction === "i_like").length;
-  const likesMeCount = matches.filter((m) => m.direction === "likes_me").length;
+  const meFitsThemCount = matches.filter((m) => m.direction === "me_fits_them").length;
+  const theyFitMeCount = matches.filter((m) => m.direction === "they_fit_me").length;
 
   return (
     <div ref={scrollRef} className="flex flex-col gap-5">
@@ -488,25 +626,25 @@ export default function OneWayMatchesPage() {
           </button>
           <button
             type="button"
-            onClick={() => setFilter("i_like")}
+            onClick={() => setFilter("me_fits_them")}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              filter === "i_like"
+              filter === "me_fits_them"
                 ? "bg-blue-500/15 text-blue-400"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
-            → 我符合 ({iLikeCount})
+            我符合他 ({meFitsThemCount})
           </button>
           <button
             type="button"
-            onClick={() => setFilter("likes_me")}
+            onClick={() => setFilter("they_fit_me")}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              filter === "likes_me"
+              filter === "they_fit_me"
                 ? "bg-emerald-500/15 text-emerald-400"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
             }`}
           >
-            ← 符合我 ({likesMeCount})
+            他符合我 ({theyFitMeCount})
           </button>
         </div>
       )}

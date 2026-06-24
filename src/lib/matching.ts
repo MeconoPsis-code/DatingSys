@@ -167,8 +167,8 @@ export function getMatchType(a: MatchCandidate, b: MatchCandidate): MatchType {
   const bAcceptsA = accepts(b, a);
 
   if (aAcceptsB && bAcceptsA) return "mutual";
-  if (aAcceptsB && !bAcceptsA) return "one_way_ab"; // A likes B, B doesn't match A's criteria
-  if (!aAcceptsB && bAcceptsA) return "one_way_ba"; // B likes A, A doesn't match B's criteria
+  if (aAcceptsB && !bAcceptsA) return "one_way_ab"; // B fits A's preferences; A does not fit B's
+  if (!aAcceptsB && bAcceptsA) return "one_way_ba"; // A fits B's preferences; B does not fit A's
   return "none";
 }
 

@@ -57,9 +57,17 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "asc" },
     });
 
+    const assignedTasks = tasks.filter((task) => {
+      const scorerSnapshot = task.scorerSnapshot as unknown;
+      return (
+        Array.isArray(scorerSnapshot) &&
+        scorerSnapshot.map(String).includes(session.id)
+      );
+    });
+
     // Enrich with photos + signed URLs
     const enriched = await Promise.all(
-      tasks.map(async (task) => {
+      assignedTasks.map(async (task) => {
         const photos = await db.profilePhoto.findMany({
           where: {
             profile: { userId: task.ratedUserId },

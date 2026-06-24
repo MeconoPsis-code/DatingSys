@@ -1,6 +1,6 @@
 import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { success, error, paginated } from '@/lib/api-response';
+import { success, error } from '@/lib/api-response';
 import { NextResponse } from 'next/server';
 import {
   getMatchType,
@@ -8,6 +8,7 @@ import {
   type MatchCandidate,
 } from '@/lib/matching';
 import { commitExpiredActions } from '@/lib/scoring-revocation';
+import { ATTRIBUTE_LABELS } from '@/data/attributes';
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -19,22 +20,65 @@ function ageFromDate(bd: Date): number {
   return age;
 }
 
-function getAgeRange(age: number): string {
-  if (age <= 22) return '18-22';
-  if (age <= 27) return '23-27';
-  if (age <= 32) return '28-32';
-  if (age <= 37) return '33-37';
-  return '38+';
+type ExpectationCheckKey = 'age' | 'height' | 'weight' | 'attribute';
+
+interface ExpectationCheck {
+  key: ExpectationCheckKey;
+  label: string;
+  matched: boolean;
+  expected: string;
 }
 
-function getHeightRange(cm: number): string {
-  if (cm < 160) return '<160';
-  if (cm <= 165) return '160-165';
-  if (cm <= 170) return '165-170';
-  if (cm <= 175) return '170-175';
-  if (cm <= 180) return '175-180';
-  if (cm <= 185) return '180-185';
-  return '185+';
+function formatAttribute(attribute: string): string {
+  return (
+    ATTRIBUTE_LABELS[attribute as keyof typeof ATTRIBUTE_LABELS] ?? attribute
+  );
+}
+
+function formatAttributeList(attributes: string[]): string {
+  if (attributes.length === 0) return '未设置';
+  return attributes.map(formatAttribute).join(' / ');
+}
+
+function buildExpectationChecks(
+  preferenceOwner: MatchCandidate,
+  subject: MatchCandidate
+): ExpectationCheck[] {
+  const subjectAge = ageFromDate(subject.profile.birthDate);
+  const expectedAttributes = preferenceOwner.preference.expectedAttributes;
+
+  return [
+    {
+      key: 'age',
+      label: '年龄',
+      matched:
+        subjectAge >= preferenceOwner.preference.ageMin &&
+        subjectAge <= preferenceOwner.preference.ageMax,
+      expected: `${preferenceOwner.preference.ageMin}-${preferenceOwner.preference.ageMax} 岁`,
+    },
+    {
+      key: 'height',
+      label: '身高',
+      matched:
+        subject.profile.heightCm >= preferenceOwner.preference.heightMinCm &&
+        subject.profile.heightCm <= preferenceOwner.preference.heightMaxCm,
+      expected: `${preferenceOwner.preference.heightMinCm}-${preferenceOwner.preference.heightMaxCm} cm`,
+    },
+    {
+      key: 'weight',
+      label: '体重',
+      matched:
+        subject.profile.weightKg >= preferenceOwner.preference.weightMinKg &&
+        subject.profile.weightKg <= preferenceOwner.preference.weightMaxKg,
+      expected: `${preferenceOwner.preference.weightMinKg}-${preferenceOwner.preference.weightMaxKg} kg`,
+    },
+    {
+      key: 'attribute',
+      label: '属性',
+      matched: expectedAttributes.includes(subject.profile.attribute),
+      expected: formatAttributeList(expectedAttributes),
+    },
+  ];
 }
 
 // ── GET /api/matches ────────────────────────────────────
@@ -140,6 +184,7 @@ export async function GET(req: Request) {
       matchType: ReturnType<typeof getMatchType>;
       relevanceScore: number;
       candidate: (typeof candidates)[number];
+      candidateUser: MatchCandidate;
     }> = [];
 
     for (const c of candidates) {
@@ -203,6 +248,7 @@ export async function GET(req: Request) {
         matchType,
         relevanceScore,
         candidate: c,
+        candidateUser,
       });
     }
 
@@ -220,9 +266,9 @@ export async function GET(req: Request) {
             direction:
               match.matchType === 'mutual'
                 ? 'mutual'
-                : match.matchType === 'one_way_ab'
-                  ? 'i_like_target'
-                  : 'target_likes_me',
+                : match.matchType === 'one_way_ba'
+                  ? 'me_fits_them'
+                  : 'they_fit_me',
             score: match.relevanceScore,
           },
         });
@@ -261,36 +307,40 @@ export async function GET(req: Request) {
 
     // 13. Format response based on match type
     if (type === 'one_way') {
-      // Desensitized one-way response — show match indicators, not actual values
+      // Desensitized one-way response: show rule outcomes and expected ranges,
+      // but do not expose the other user's exact profile values.
       const data = pageItems.map((m) => {
         const p = m.candidate.profile!;
-        const cAge = ageFromDate(p.birthDate);
-        const direction =
-          m.matchType === 'one_way_ab' ? 'i_like' : 'likes_me';
-
-        // Check if candidate meets the CURRENT USER's preferences
-        const ageMatch =
-          cAge >= preference.ageMin && cAge <= preference.ageMax;
-        const heightMatch =
-          p.heightCm >= preference.heightMinCm &&
-          p.heightCm <= preference.heightMaxCm;
-        const weightMatch =
-          p.weightKg >= preference.weightMinKg &&
-          p.weightKg <= preference.weightMaxKg;
-        const attributeMatch = (preference.expectedAttributes as string[]).includes(
-          p.attribute
+        const targetAgainstMyExpectations = buildExpectationChecks(
+          currentUser,
+          m.candidateUser
         );
-
+        const meAgainstTargetExpectations = buildExpectationChecks(
+          m.candidateUser,
+          currentUser
+        );
+        const targetMatchByKey = Object.fromEntries(
+          targetAgainstMyExpectations.map((check) => [
+            check.key,
+            check.matched,
+          ])
+        ) as Record<ExpectationCheckKey, boolean>;
+        const direction =
+          m.matchType === 'one_way_ba' ? 'me_fits_them' : 'they_fit_me';
 
         return {
           userId: m.userId,
-          ageMatch,
-          heightMatch,
-          weightMatch,
-          attributeMatch,
+          ageMatch: targetMatchByKey.age,
+          heightMatch: targetMatchByKey.height,
+          weightMatch: targetMatchByKey.weight,
+          attributeMatch: targetMatchByKey.attribute,
           hasPhotos: p.photos.length > 0 && m.candidate.ratingProfile !== null,
           provinceCode: p.provinceCode,
           direction,
+          directionLabel:
+            direction === 'me_fits_them' ? '我符合他' : '他符合我',
+          targetAgainstMyExpectations,
+          meAgainstTargetExpectations,
           relevanceScore: m.relevanceScore,
         };
       });

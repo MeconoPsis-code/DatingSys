@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionPayload } from "@/lib/session";
+import { PublicTopNav } from "@/components/public-top-nav";
 
 export default async function LandingPage() {
   // Auth-aware redirect
@@ -10,6 +11,7 @@ export default async function LandingPage() {
 
   return (
     <div className="relative flex min-h-screen lg:h-screen w-full items-center justify-center bg-[#fafbfe] p-0 font-sans lg:overflow-hidden">
+      <PublicTopNav active="home" />
       {/* ─── DESKTOP PC VIEWPORT (lg:flex) ─────────────────────────────────── */}
       <div className="app-window relative z-10 hidden h-screen w-screen flex-col overflow-hidden bg-[#fafbfe] lg:flex">
         {/* Ambient background circles */}

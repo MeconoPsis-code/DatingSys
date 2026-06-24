@@ -54,31 +54,42 @@ export async function GET(req: Request) {
       }),
     ]);
 
-    // Fetch ALL current eligible scorers so the admin sees the complete list
-    const allEligibleScorers = await db.user.findMany({
-      where: {
-        role: { in: ['SCORER', 'ADMIN'] },
-        status: 'ACTIVE',
-      },
+    const snapshotScorerIds = Array.from(
+      new Set(
+        tasks.flatMap((task) => {
+          const snapshot = task.scorerSnapshot as unknown;
+          return Array.isArray(snapshot) ? snapshot.map(String) : [];
+        })
+      )
+    );
+
+    const snapshotScorers = await db.user.findMany({
+      where: { id: { in: snapshotScorerIds } },
       include: { authIdentities: { select: { nickname: true }, take: 1 } },
     });
 
     const scorerNameMap: Record<string, { nickname: string | null; qq: string | null }> = {};
-    for (const u of allEligibleScorers) {
+    const eligibleSnapshotScorerIds = new Set<string>();
+    for (const u of snapshotScorers) {
       scorerNameMap[u.id] = {
         nickname: u.authIdentities[0]?.nickname ?? null,
         qq: u.qqNumber,
       };
+      if (u.role === 'SCORER' || u.role === 'ADMIN') {
+        eligibleSnapshotScorerIds.add(u.id);
+      }
     }
 
     const data = await Promise.all(
       tasks.map(async (t) => {
         const photos = t.ratedUser.profile?.photos ?? [];
 
-        // Use all eligible scorers minus the rated user as the full scorer list
-        const fullScorerList = allEligibleScorers
-          .filter((s) => s.id !== t.ratedUserId)
-          .map((s) => s.id);
+        const scorerSnapshot = Array.isArray(t.scorerSnapshot)
+          ? t.scorerSnapshot.map(String)
+          : [];
+        const assignedScorerList = scorerSnapshot.filter(
+          (id) => id !== t.ratedUserId && eligibleSnapshotScorerIds.has(id)
+        );
 
         const photosWithUrls = await Promise.all(
           photos.map(async (p) => ({
@@ -95,7 +106,7 @@ export async function GET(req: Request) {
           ratedUserQQ: t.ratedUser.qqNumber,
           photoObjectKey: t.photoObjectKey,
           status: t.status,
-          scorerSnapshot: fullScorerList,
+          scorerSnapshot: assignedScorerList,
           scorerNames: scorerNameMap,
           scores: t.scores.map((s) => ({
             id: s.id,
@@ -106,7 +117,7 @@ export async function GET(req: Request) {
             createdAt: s.createdAt,
           })),
           scoredCount: t.scores.length,
-          totalScorers: fullScorerList.length,
+          totalScorers: assignedScorerList.length,
           photos: photosWithUrls,
           completedAt: t.completedAt,
           createdAt: t.createdAt,

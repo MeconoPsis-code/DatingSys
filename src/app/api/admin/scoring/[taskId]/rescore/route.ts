@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
+import { getOnDutyScorers } from '@/lib/scorer-duty';
 
 // ── POST /api/admin/scoring/[taskId]/rescore — super admin rescore ──
 
@@ -18,15 +19,8 @@ export async function POST(
       return error('NOT_FOUND', '评分任务不存在', 404);
     }
 
-    // Get current eligible scorers (exclude SUPER_ADMIN and the rated user)
-    const scorers = await db.user.findMany({
-      where: {
-        role: { in: ['SCORER', 'ADMIN'] },
-        status: 'ACTIVE',
-        id: { not: task.ratedUserId }, // can't score yourself
-      },
-      select: { id: true },
-    });
+    // Rebuild from today's on-duty roster, excluding the rated user.
+    const scorers = await getOnDutyScorers({ excludeUserId: task.ratedUserId });
     const newScorerSnapshot = scorers.map((s) => s.id);
 
     // Transaction: delete scores, reset task, reset rating profile

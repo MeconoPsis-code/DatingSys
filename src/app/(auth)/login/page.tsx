@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { PublicTopNav } from "@/components/public-top-nav";
 
 const SEED_USERS = [
   { id: "seed-super-admin", label: "超级管理员", role: "SUPER_ADMIN" },
@@ -74,7 +75,7 @@ function LoginContent() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pt-12 sm:pt-14">
       {/* Error alert */}
       {(error || formError) && (
         <div className="rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.1)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
@@ -202,14 +203,17 @@ function LoginContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center py-20">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent" />
-        </div>
-      }
-    >
-      <LoginContent />
-    </Suspense>
+    <>
+      <PublicTopNav active="login" />
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-20">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent" />
+          </div>
+        }
+      >
+        <LoginContent />
+      </Suspense>
+    </>
   );
 }

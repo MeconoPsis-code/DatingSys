@@ -20,6 +20,7 @@ async function main() {
       rating_scores,
       rating_tasks,
       rating_profiles,
+      scorer_duty_schedules,
       profile_photos,
       match_snapshots,
       view_requests,
@@ -97,6 +98,16 @@ async function main() {
     });
     console.log(`  ✅ Scorer: ${scorer.id}`);
   }
+
+  await prisma.scorerDutySchedule.createMany({
+    data: ["seed-admin", ...scorerIds].flatMap((scorerUserId) =>
+      Array.from({ length: 7 }, (_, index) => ({
+        scorerUserId,
+        weekday: index + 1,
+      }))
+    ),
+  });
+  console.log("  ✅ Scorer duty schedules created");
 
   // ── 4. Regular Users (blank state — no profile, no preference) ──
   const users = [

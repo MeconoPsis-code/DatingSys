@@ -536,7 +536,7 @@ export default function MePage() {
   const memberInfo = me.membershipStatus ? MEMBERSHIP_INFO[me.membershipStatus] : null;
 
   const isAdmin = me.role === "ADMIN" || me.role === "SUPER_ADMIN";
-  const isScorer = me.role === "SCORER" || isAdmin;
+  const isScorer = me.role === "SCORER" || me.role === "ADMIN";
 
   return (
     <div className="mx-auto max-w-lg space-y-5">

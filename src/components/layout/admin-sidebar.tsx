@@ -60,6 +60,19 @@ const links = [
     ),
   },
   {
+    label: "评分排班",
+    href: "/scorer-schedule",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5">
+        <rect x="3" y="4" width="18" height="17" rx="2" />
+        <path d="M8 2v4" />
+        <path d="M16 2v4" />
+        <path d="M3 10h18" />
+        <path d="m8 15 2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
     label: "审计日志",
     href: "/audit",
     icon: (
