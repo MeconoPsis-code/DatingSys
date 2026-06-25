@@ -13,8 +13,8 @@ const NAV_ITEMS: Array<{
 }> = [
   { key: "home", label: "主页", href: "/" },
   { key: "login", label: "登录", href: "/login" },
-  { key: "announcements", label: "公告" },
-  { key: "ranking", label: "排行" },
+  { key: "announcements", label: "公告", href: "/announcements" },
+  { key: "ranking", label: "排行", href: "/ranking" },
 ];
 
 export function PublicTopNav({ active }: PublicTopNavProps) {

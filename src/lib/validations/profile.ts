@@ -164,6 +164,11 @@ export const profileFormSchema = z
   .object({
     profile: profileSchema,
     preference: preferenceSchema,
+    nickname: z
+      .string()
+      .max(30, "昵称不能超过 30 个字符")
+      .optional()
+      .nullable(),
   })
   .refine(
     (d) => {

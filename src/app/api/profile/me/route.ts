@@ -18,6 +18,12 @@ import {
 import { createLogger } from "@/lib/logger";
 import { commitExpiredActions } from "@/lib/scoring-revocation";
 import { getOnDutyScorers } from "@/lib/scorer-duty";
+import {
+  orderDraftPhotos,
+  publishedPhotosToDraftPhotos,
+  readProfileDraftData,
+  toDraftJson,
+} from "@/lib/profile-draft";
 
 const log = createLogger("api:profile-me");
 
@@ -86,6 +92,8 @@ export async function GET() {
           ratingStatus: user.ratingProfile.ratingStatus,
           finalScore: user.ratingProfile.finalScore,
           scoreCompletedAt: user.ratingProfile.scoreCompletedAt,
+          rankingOptIn: user.ratingProfile.rankingOptIn,
+          rankingOptInUpdatedAt: user.ratingProfile.rankingOptInUpdatedAt,
         }
       : null,
   });
@@ -119,27 +127,44 @@ export async function PUT(req: Request) {
     );
   }
 
-  const { profile: profileData, preference: prefData } = result.data;
+  const { profile: profileData, preference: prefData, nickname: nicknameInput } = result.data;
   const profileStatus = profileData.status || "DRAFT";
+  const requestedNickname =
+    typeof nicknameInput === "string" ? normalizeNicknameInput(nicknameInput) : null;
+
+  if (typeof nicknameInput === "string" && (!requestedNickname || requestedNickname.length > 30)) {
+    return error("VALIDATION_ERROR", "昵称长度需在 1-30 个字符之间", 422);
+  }
 
   // 3. Fetch user for cooldown checks
   const user = await db.user.findUnique({
     where: { id: session.id },
-    include: { profile: true },
+    include: {
+      profile: {
+        include: {
+          photos: { orderBy: { order: "asc" } },
+        },
+      },
+    },
   });
 
   // ─── DRAFT SAVE FOR ACTIVE PROFILES → store in draftData, don't touch published ───
   if (profileStatus === "DRAFT" && user?.profile?.status === "ACTIVE") {
-    // Store the entire form body as draft data without modifying published profile
+    const existingDraft = readProfileDraftData(user.profile.draftData);
+    const deleteAllPhotos = body.deleteAllPhotos ?? existingDraft.deleteAllPhotos ?? false;
+
+    // Store draft data without modifying published profile fields or photos.
     const draftPayload = {
-      profile: body.profile,
-      preference: body.preference,
-      deleteAllPhotos: body.deleteAllPhotos ?? false,
+      ...existingDraft,
+      profile: body.profile as Prisma.InputJsonValue,
+      preference: body.preference as Prisma.InputJsonValue,
+      deleteAllPhotos,
+      photos: deleteAllPhotos ? [] : existingDraft.photos,
     };
 
     await db.profile.update({
       where: { userId: session.id },
-      data: { draftData: draftPayload as Prisma.InputJsonValue },
+      data: { draftData: toDraftJson(draftPayload) },
     });
 
     await logAudit({
@@ -236,21 +261,66 @@ export async function PUT(req: Request) {
     }),
   ]);
 
-  // 6. Handle photo deletion if requested (only allowed through publish flow)
-  if (body.deleteAllPhotos && profileStatus === "ACTIVE") {
-    const photosToDelete = await db.profilePhoto.findMany({
-      where: { profileId: profile.id },
-      select: { id: true, storageKey: true },
-    });
+  // 6. Apply draft photo changes only when publishing.
+  if (profileStatus === "ACTIVE") {
+    const existingDraft = readProfileDraftData(user?.profile?.draftData);
+    const shouldApplyDraftPhotos =
+      user?.profile?.status === "ACTIVE" &&
+      (existingDraft.photos !== undefined || existingDraft.deleteAllPhotos || body.deleteAllPhotos);
 
-    // Delete from storage
-    const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
-    await Promise.all(
-      photosToDelete.map((p) => deleteStorageFile(p.storageKey).catch(() => {}))
-    );
+    if (shouldApplyDraftPhotos) {
+      const currentPhotos = await db.profilePhoto.findMany({
+        where: { profileId: profile.id },
+        orderBy: { order: "asc" },
+      });
+      const desiredPhotos = orderDraftPhotos(
+        body.deleteAllPhotos
+          ? []
+          : existingDraft.photos ?? publishedPhotosToDraftPhotos(user?.profile?.photos ?? []),
+      );
+      const desiredStorageKeys = new Set(desiredPhotos.map((p) => p.storageKey));
+      const candidateDeleteKeys = new Set([
+        ...currentPhotos.map((p) => p.storageKey),
+        ...(existingDraft.photos ?? [])
+          .filter((p) => p.source === "draft")
+          .map((p) => p.storageKey),
+      ]);
 
-    // Delete from DB
-    await db.profilePhoto.deleteMany({ where: { profileId: profile.id } });
+      const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
+      await Promise.all(
+        [...candidateDeleteKeys]
+          .filter((key) => !desiredStorageKeys.has(key))
+          .map((key) => deleteStorageFile(key).catch(() => {})),
+      );
+
+      await db.$transaction([
+        db.profilePhoto.deleteMany({ where: { profileId: profile.id } }),
+        ...desiredPhotos.map((photo, index) =>
+          db.profilePhoto.create({
+            data: {
+              profileId: profile.id,
+              storageKey: photo.storageKey,
+              order: index,
+              originalName: photo.originalName,
+              mimeType: photo.mimeType,
+              sizeBytes: photo.sizeBytes,
+            },
+          }),
+        ),
+      ]);
+    } else if (body.deleteAllPhotos) {
+      const photosToDelete = await db.profilePhoto.findMany({
+        where: { profileId: profile.id },
+        select: { storageKey: true },
+      });
+
+      const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
+      await Promise.all(
+        photosToDelete.map((p) => deleteStorageFile(p.storageKey).catch(() => {})),
+      );
+
+      await db.profilePhoto.deleteMany({ where: { profileId: profile.id } });
+    }
   }
 
   // 7. Auto-create rating task for photo users publishing as ACTIVE
@@ -336,17 +406,15 @@ export async function PUT(req: Request) {
         select: { nickname: true },
       });
 
-      const nickname = normalizeNicknameInput(identity?.nickname || "");
+      const nickname = requestedNickname ?? normalizeNicknameInput(identity?.nickname || "");
 
       if (nickname) {
         const groupCard = buildGroupCardForProfile(nickname, profileData);
 
-        if (identity?.nickname && identity.nickname !== nickname) {
-          await db.authIdentity.updateMany({
-            where: { userId: session.id },
-            data: { nickname },
-          });
-        }
+        await db.authIdentity.updateMany({
+          where: { userId: session.id },
+          data: { nickname },
+        });
 
         // Find group membership
         const membership = await db.groupMembership.findUnique({
@@ -370,7 +438,7 @@ export async function PUT(req: Request) {
         try {
           await db.botIdentity.update({
             where: { qqNumber: session.qqNumber },
-            data: { groupCard },
+            data: { qqNickname: nickname, groupCard },
           });
         } catch {
           // BotIdentity may not exist — non-critical

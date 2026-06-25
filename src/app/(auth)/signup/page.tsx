@@ -9,6 +9,10 @@ import { MBTI_OPTIONS } from "@/data/mbti";
 import { DualRangeSlider } from "@/components/DualRangeSlider";
 import { PhotoUploader } from "@/components/profile/photo-uploader";
 import { AlertModal } from "@/components/ui/alert-modal";
+import {
+  buildGroupCardForProfile,
+  normalizeNicknameInput,
+} from "@/lib/group-card";
 
 interface PhotoItem {
   id: string;
@@ -31,6 +35,7 @@ const SELECT_CLS_EMPTY =
   `${SELECT_CLS} text-[hsl(var(--muted-foreground))]`;
 
 interface ProfileFormState {
+  nickname: string;
   birthYear: string;
   birthMonth: string;
   birthDay: string;
@@ -60,6 +65,7 @@ interface ProfileFormState {
 }
 
 const INITIAL_PROFILE: ProfileFormState = {
+  nickname: "",
   birthYear: "",
   birthMonth: "",
   birthDay: "",
@@ -229,6 +235,11 @@ export default function SignupPage() {
         return;
       }
 
+      const nickname = normalizeNicknameInput(data.data?.nickname || "");
+      if (nickname) {
+        setProfile((prev) => ({ ...prev, nickname }));
+      }
+
       // Move to profile step instead of redirecting
       setStep("profile");
       setError(null);
@@ -241,6 +252,9 @@ export default function SignupPage() {
 
   /* ── Step 3: Validate & submit profile ── */
   function validateProfile(): string | null {
+    const nickname = normalizeNicknameInput(profile.nickname);
+    if (!nickname) return "请输入昵称";
+    if (nickname.length > 30) return "昵称不能超过30个字符";
     if (!profile.birthYear || !profile.birthMonth || !profile.birthDay) return "请选择出生日期";
     if (!profile.heightCm) return "请输入身高";
     const hVal = Number(profile.heightCm);
@@ -294,6 +308,7 @@ export default function SignupPage() {
     const birthDate = `${profile.birthYear}-${String(profile.birthMonth).padStart(2, "0")}-${String(profile.birthDay).padStart(2, "0")}`;
 
     const body = {
+      nickname: normalizeNicknameInput(profile.nickname),
       profile: {
         birthDate,
         heightCm: Number(profile.heightCm),
@@ -338,6 +353,12 @@ export default function SignupPage() {
         const data = await res.json();
         throw new Error(data.error?.message || "保存资料失败");
       }
+
+      const refreshRes = await fetch("/api/auth/refresh", { method: "POST", cache: "no-store" });
+      if (!refreshRes.ok) {
+        throw new Error("登录状态刷新失败，请刷新页面后重试");
+      }
+      router.refresh();
 
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1500);
@@ -641,11 +662,50 @@ function ProfileFormSection({
   onSubmit: () => void;
 }) {
   const [showClearPhotosConfirm, setShowClearPhotosConfirm] = useState(false);
+  const nicknamePreview = normalizeNicknameInput(profile.nickname);
+  const groupCardPreview = useMemo(() => {
+    if (!nicknamePreview) return "";
+    if (!profile.birthYear || !profile.birthMonth || !profile.birthDay || !profile.provinceCode) {
+      return nicknamePreview;
+    }
+
+    return buildGroupCardForProfile(nicknamePreview, {
+      birthDate: `${profile.birthYear}-${String(profile.birthMonth).padStart(2, "0")}-${String(profile.birthDay).padStart(2, "0")}`,
+      provinceCode: profile.provinceCode,
+    });
+  }, [
+    nicknamePreview,
+    profile.birthYear,
+    profile.birthMonth,
+    profile.birthDay,
+    profile.provinceCode,
+  ]);
   return (
     <div className="flex flex-col gap-5">
       {/* Section 1: Basic Info */}
       <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
         <h2 className="mb-5 text-base font-semibold text-[hsl(var(--foreground))]">基本信息</h2>
+
+        {/* Nickname */}
+        <div className="mb-4">
+          <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
+            昵称 <span className="text-[hsl(var(--destructive))]">*</span>
+          </label>
+          <input
+            type="text"
+            value={profile.nickname}
+            onChange={(e) => updateProfile("nickname", e.target.value)}
+            maxLength={30}
+            placeholder="请输入群名片中的昵称部分"
+            className={SELECT_CLS}
+          />
+          <p className="mt-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+            群名片预览：
+            <span className="font-semibold text-[hsl(var(--primary))]">
+              {groupCardPreview || "填写昵称、生日和地区后生成"}
+            </span>
+          </p>
+        </div>
 
         {/* Birth date */}
         <div className="mb-4">

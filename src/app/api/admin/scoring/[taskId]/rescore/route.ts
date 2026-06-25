@@ -43,6 +43,8 @@ export async function POST(
           ratingStatus: 'PENDING',
           finalScore: null,
           scoreCompletedAt: null,
+          rankingOptIn: false,
+          rankingOptInUpdatedAt: null,
         },
       }),
     ]);

@@ -23,6 +23,15 @@ export async function GET() {
       profile: {
         select: { birthDate: true, provinceCode: true, cityCode: true },
       },
+      ratingProfile: {
+        select: {
+          ratingStatus: true,
+          finalScore: true,
+          scoreCompletedAt: true,
+          rankingOptIn: true,
+          rankingOptInUpdatedAt: true,
+        },
+      },
     },
   });
 
@@ -56,6 +65,15 @@ export async function GET() {
         provinceCode: user.profile.provinceCode,
         cityCode: user.profile.cityCode,
       } : null,
+      ratingProfile: user?.ratingProfile
+        ? {
+            ratingStatus: user.ratingProfile.ratingStatus,
+            finalScore: user.ratingProfile.finalScore,
+            scoreCompletedAt: user.ratingProfile.scoreCompletedAt,
+            rankingOptIn: user.ratingProfile.rankingOptIn,
+            rankingOptInUpdatedAt: user.ratingProfile.rankingOptInUpdatedAt,
+          }
+        : null,
     },
   });
 }

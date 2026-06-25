@@ -6,10 +6,13 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('bot:member-joined');
 
 /** Welcome message sent to new group members */
-const WELCOME_MESSAGE = `欢迎加入本群！
+const WELCOME_MESSAGE = `如需使用 TenMatch 匹配系统，
 
-如需使用 TenMatch 匹配系统，请在群内发送 /signup。
-系统会向你的 QQ 邮箱发送验证码，用于完成 Web 端注册。
+请查看群公告中的注意事项及TenMatch匹配系统入口。
+
+根据系统指引完成用户注册
+
+注册过程中，请务必保证您当前帐户的QQ邮箱收件功能正常
 
 本系统为自愿使用，不强制注册。`;
 

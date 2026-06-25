@@ -10,9 +10,12 @@ const PUBLIC_PATHS = [
   "/",
   "/login",
   "/signup",
-  "/complete-profile",
   "/forgot-passcode",
+  "/announcements",
+  "/ranking",
   "/api/auth",
+  "/api/announcements",
+  "/api/ranking",
   "/api/health",
   "/api/bot",           // Bot webhook — uses X-Bot-Token auth
   "/api/internal/bot",  // Internal bot APIs — uses X-Internal-Secret auth
@@ -23,6 +26,7 @@ const ADMIN_PATHS = [
   "/dashboard",
   "/users",
   "/reports",
+  "/announcements-admin",
   "/audit",
   "/api/admin",
 ];

@@ -6,6 +6,13 @@ import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
+import {
+  orderDraftPhotos,
+  publishedPhotosToDraftPhotos,
+  readProfileDraftData,
+  toDraftJson,
+  type DraftPhotoRecord,
+} from "@/lib/profile-draft";
 
 const MAX_PHOTOS = 6;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -16,8 +23,9 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
  *
  * Returns the current user's photos with signed URLs.
  */
-export async function GET() {
+export async function GET(req: Request) {
   const session = await requireAuth();
+  const mode = new URL(req.url).searchParams.get("mode");
 
   const profile = await db.profile.findUnique({
     where: { userId: session.id },
@@ -28,13 +36,20 @@ export async function GET() {
     return success({ photos: [] });
   }
 
+  const draftData = readProfileDraftData(profile.draftData);
+  const sourcePhotos =
+    mode === "draft" && profile.status === "ACTIVE"
+      ? draftData.photos ?? (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos))
+      : publishedPhotosToDraftPhotos(profile.photos);
+
   // Generate signed URLs for each photo
   const photosWithUrls = await Promise.all(
-    profile.photos.map(async (p) => ({
+    sourcePhotos.map(async (p) => ({
       id: p.id,
       order: p.order,
       originalName: p.originalName,
       url: await getSignedUrl(p.storageKey, 3600),
+      source: p.source,
     }))
   );
 
@@ -49,6 +64,7 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   const session = await requireAuth();
+  const mode = new URL(req.url).searchParams.get("mode");
 
   // 1. Find or auto-create a DRAFT profile so photos can be uploaded
   //    during the profile creation flow (before the form is saved).
@@ -75,8 +91,15 @@ export async function POST(req: Request) {
     });
   }
 
+  const draftData = readProfileDraftData(profile.draftData);
+  const isActiveDraftMode = mode === "draft" && profile.status === "ACTIVE";
+  const currentDraftPhotos = isActiveDraftMode
+    ? draftData.photos ?? (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos))
+    : [];
+  const currentPhotoCount = isActiveDraftMode ? currentDraftPhotos.length : profile.photos.length;
+
   // 2. Check photo limit
-  if (profile.photos.length >= MAX_PHOTOS) {
+  if (currentPhotoCount >= MAX_PHOTOS) {
     return error("LIMIT_EXCEEDED", `最多上传 ${MAX_PHOTOS} 张照片`, 400);
   }
 
@@ -137,18 +160,43 @@ export async function POST(req: Request) {
     return error("INTERNAL_ERROR", "照片上传失败，请稍后重试", 500);
   }
 
-  // 8. Create DB record
-  const nextOrder = profile.photos.length;
-  const photo = await db.profilePhoto.create({
-    data: {
-      profileId: profile.id,
-      storageKey: key,
-      order: nextOrder,
-      originalName: webpName || null,
-      mimeType: mimeType,
-      sizeBytes: webpBuffer.length,
-    },
-  });
+  // 8. Create photo record. Active-profile drafts keep photos in draftData until publish.
+  const nextOrder = currentPhotoCount;
+  const draftPhoto: DraftPhotoRecord = {
+    id: `draft_${randomUUID()}`,
+    storageKey: key,
+    order: nextOrder,
+    originalName: webpName || null,
+    mimeType,
+    sizeBytes: webpBuffer.length,
+    source: "draft",
+  };
+
+  const photo = isActiveDraftMode
+    ? draftPhoto
+    : await db.profilePhoto.create({
+        data: {
+          profileId: profile.id,
+          storageKey: key,
+          order: nextOrder,
+          originalName: webpName || null,
+          mimeType: mimeType,
+          sizeBytes: webpBuffer.length,
+        },
+      });
+
+  if (isActiveDraftMode) {
+    await db.profile.update({
+      where: { id: profile.id },
+      data: {
+        draftData: toDraftJson({
+          ...draftData,
+          photos: orderDraftPhotos([...currentDraftPhotos, draftPhoto]),
+          deleteAllPhotos: false,
+        }),
+      },
+    });
+  }
 
   // 9. Audit log
   await logAudit({
@@ -156,7 +204,7 @@ export async function POST(req: Request) {
     action: AUDIT_ACTIONS.PROFILE_UPDATE,
     targetType: "ProfilePhoto",
     targetId: photo.id,
-    metadata: { action: "upload", key } as Prisma.InputJsonValue,
+    metadata: { action: isActiveDraftMode ? "draft_upload" : "upload", key } as Prisma.InputJsonValue,
     ip: getClientIp(req),
     userAgent: req.headers.get("user-agent"),
   });
@@ -170,6 +218,7 @@ export async function POST(req: Request) {
       order: photo.order,
       originalName: photo.originalName,
       url,
+      source: isActiveDraftMode ? "draft" : "published",
     },
   });
 }
@@ -181,6 +230,7 @@ export async function POST(req: Request) {
  */
 export async function DELETE(req: Request) {
   const session = await requireAuth();
+  const mode = new URL(req.url).searchParams.get("mode");
 
   let body;
   try {
@@ -192,6 +242,56 @@ export async function DELETE(req: Request) {
   const { photoId } = body as { photoId?: string };
   if (!photoId) {
     return error("VALIDATION_ERROR", "缺少 photoId", 422);
+  }
+
+  if (mode === "draft") {
+    const profile = await db.profile.findUnique({
+      where: { userId: session.id },
+      include: { photos: { orderBy: { order: "asc" } } },
+    });
+
+    if (profile?.status === "ACTIVE") {
+      const draftData = readProfileDraftData(profile.draftData);
+      const currentDraftPhotos =
+        draftData.photos ?? (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos));
+      const photo = currentDraftPhotos.find((p) => p.id === photoId);
+
+      if (!photo) {
+        return error("NOT_FOUND", "ç…§ç‰‡ä¸å­˜åœ¨", 404);
+      }
+
+      if (photo.source === "draft") {
+        try {
+          await deleteFile(photo.storageKey);
+        } catch (err) {
+          console.error("[Photo Delete] Draft MinIO error:", err);
+        }
+      }
+
+      const remaining = orderDraftPhotos(currentDraftPhotos.filter((p) => p.id !== photoId));
+      await db.profile.update({
+        where: { id: profile.id },
+        data: {
+          draftData: toDraftJson({
+            ...draftData,
+            photos: remaining,
+            deleteAllPhotos: remaining.length === 0,
+          }),
+        },
+      });
+
+      await logAudit({
+        actorId: session.id,
+        action: AUDIT_ACTIONS.PROFILE_UPDATE,
+        targetType: "ProfilePhoto",
+        targetId: photoId,
+        metadata: { action: "draft_delete", key: photo.storageKey } as Prisma.InputJsonValue,
+        ip: getClientIp(req),
+        userAgent: req.headers.get("user-agent"),
+      });
+
+      return success({ message: "ç…§ç‰‡å·²åˆ é™¤" });
+    }
   }
 
   // 1. Find photo and verify ownership

@@ -4,7 +4,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 
-const userTabs = [
+type NavAccent = "blue" | "gold";
+
+interface NavTab {
+  label: string;
+  href: string;
+  icon: React.ReactNode;
+}
+
+const userTabs: NavTab[] = [
   {
     label: "资料",
     href: "/profile",
@@ -58,7 +66,20 @@ const userTabs = [
   },
 ];
 
-const scorerTab = {
+const announcementTab: NavTab = {
+  label: "公告",
+  href: "/announcements",
+  icon: (
+    <svg viewBox="0 0 24 24">
+      <path d="M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5" />
+      <path d="M8 7h8" />
+      <path d="M8 11h6" />
+      <path d="M8 15h4" />
+    </svg>
+  ),
+};
+
+const scorerTab: NavTab = {
   label: "评分",
   href: "/scoring",
   icon: (
@@ -70,7 +91,7 @@ const scorerTab = {
   ),
 };
 
-const reviewTab = {
+const reviewTab: NavTab = {
   label: "审核",
   href: "/scoring-review",
   icon: (
@@ -81,7 +102,7 @@ const reviewTab = {
   ),
 };
 
-const adminTab = {
+const adminTab: NavTab = {
   label: "管理",
   href: "/dashboard",
   icon: (
@@ -100,6 +121,32 @@ const ROLE_WEIGHT: Record<UserRole, number> = {
   SCORER: 1,
   ADMIN: 2,
   SUPER_ADMIN: 3,
+};
+
+const ACCENT_STYLES: Record<
+  NavAccent,
+  {
+    header: string;
+    active: string;
+    inactive: string;
+    mobileActive: string;
+  }
+> = {
+  blue: {
+    header: "text-brand-blue",
+    active: "bg-brand-blue text-white shadow-[0_10px_22px_rgba(22,119,255,0.18)]",
+    inactive:
+      "text-brand-muted hover:bg-brand-blue/10 hover:text-brand-blue [&_svg]:stroke-brand-muted hover:[&_svg]:stroke-brand-blue",
+    mobileActive: "text-brand-blue",
+  },
+  gold: {
+    header: "text-[#d48806]",
+    active:
+      "border border-[#ffe58f] bg-gold-1 text-[#d48806] shadow-[0_10px_22px_rgba(250,173,20,0.16)]",
+    inactive:
+      "text-brand-muted hover:bg-gold-1 hover:text-[#d48806] [&_svg]:stroke-brand-muted hover:[&_svg]:stroke-[#d48806]",
+    mobileActive: "text-[#d48806]",
+  },
 };
 
 export function MainNav() {
@@ -149,18 +196,25 @@ export function MainNav() {
   }, [pathname, fetchBadges]);
 
   // Build tabs based on role
-  const tabs = [...userTabs];
+  const userSection = userTabs;
+  const managementSection: NavTab[] = [announcementTab];
+
   // SCORER and ADMIN get the scoring tab; SUPER_ADMIN does NOT score
   if (role === "SCORER" || role === "ADMIN") {
-    tabs.push(scorerTab);
+    managementSection.push(scorerTab);
   }
   // SUPER_ADMIN gets the review tab
   if (role === "SUPER_ADMIN") {
-    tabs.push(reviewTab);
+    managementSection.push(reviewTab);
   }
   if (ROLE_WEIGHT[role] >= ROLE_WEIGHT.ADMIN) {
-    tabs.push(adminTab);
+    managementSection.push(adminTab);
   }
+
+  const mobileTabs: Array<{ tab: NavTab; accent: NavAccent }> = [
+    ...userSection.map((tab) => ({ tab, accent: "blue" as const })),
+    ...managementSection.map((tab) => ({ tab, accent: "gold" as const })),
+  ];
 
   const isActive = (href: string) => {
     if (href === "/matches/mutual") {
@@ -177,6 +231,46 @@ export function MainNav() {
     return 0;
   };
 
+  const renderDesktopSection = (
+    title: string,
+    accent: NavAccent,
+    sectionTabs: NavTab[]
+  ) => {
+    const styles = ACCENT_STYLES[accent];
+
+    return (
+      <section className="flex flex-col gap-2">
+        <div className={`px-2.5 text-sm font-extrabold ${styles.header}`}>
+          {title}
+        </div>
+
+        {sectionTabs.map((tab) => {
+          const active = isActive(tab.href);
+          const badge = getBadge(tab.href);
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={`menu-item relative flex h-11 items-center gap-3 rounded-[13px] px-3.5 text-sm font-semibold transition-all duration-200 ${
+                active ? styles.active : styles.inactive
+              }`}
+            >
+              <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+                {tab.icon}
+              </span>
+              {tab.label}
+              {badge > 0 && (
+                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(0,72%,51%)] px-1 text-[10px] font-bold text-white">
+                  {badge > 99 ? "99+" : badge}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </section>
+    );
+  };
+
   return (
     <>
       {/* Desktop sidebar */}
@@ -190,47 +284,25 @@ export function MainNav() {
             TenMatch
           </span>
         </div>
-        <nav className="menu flex flex-col gap-2 px-[18px]">
-          {tabs.map((tab) => {
-            const active = isActive(tab.href);
-            const badge = getBadge(tab.href);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={`menu-item relative flex h-11 items-center gap-3 rounded-[13px] px-3.5 text-sm font-semibold transition-all duration-200 ${
-                  active
-                    ? "bg-brand-blue text-white shadow-[0_10px_22px_rgba(22,119,255,0.18)]"
-                    : "text-brand-muted hover:bg-slate-100 hover:text-brand-text [&_svg]:stroke-brand-muted hover:[&_svg]:stroke-brand-text"
-                }`}
-              >
-                <span className={`shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round`}>
-                  {tab.icon}
-                </span>
-                {tab.label}
-                {badge > 0 && (
-                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(0,72%,51%)] px-1 text-[10px] font-bold text-white">
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+        <nav className="menu flex flex-col gap-6 px-[18px]">
+          {renderDesktopSection("个人", "blue", userSection)}
+          {renderDesktopSection("系统", "gold", managementSection)}
         </nav>
       </aside>
 
       {/* Mobile bottom tab bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-[#e9edf5] bg-white safe-bottom md:hidden">
-        {tabs.map((tab) => {
+        {mobileTabs.map(({ tab, accent }) => {
           const active = isActive(tab.href);
           const badge = getBadge(tab.href);
+          const styles = ACCENT_STYLES[accent];
           return (
             <Link
               key={tab.href}
               href={tab.href}
               className={`relative flex flex-1 flex-col items-center gap-1 py-2 text-xs font-semibold transition-colors ${
                 active
-                  ? "text-brand-blue"
+                  ? styles.mobileActive
                   : "text-brand-muted hover:text-brand-text"
               }`}
             >

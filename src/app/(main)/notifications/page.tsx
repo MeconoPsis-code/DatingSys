@@ -24,6 +24,17 @@ const TYPE_ICONS: Record<string, { icon: React.ReactNode; color: string }> = {
     ),
     color: "bg-amber-500/15 text-amber-500",
   },
+  RANKING_INVITE: {
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <path d="M3 17h18" />
+        <path d="M7 17V9" />
+        <path d="M12 17V5" />
+        <path d="M17 17v-4" />
+      </svg>
+    ),
+    color: "bg-brand-blue/15 text-brand-blue",
+  },
   VIEW_REQUEST_RECEIVED: {
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
@@ -93,6 +104,7 @@ function formatTime(dateStr: string): string {
 
 const NOTIF_LINK_MAP: Record<string, string> = {
   SCORING_COMPLETE: "/match-preferences",
+  RANKING_INVITE: "/me#ranking-setting",
   VIEW_REQUEST_RECEIVED: "/requests",
 };
 

@@ -154,7 +154,6 @@ export default function ProfileEditPage() {
   const [wantPhotos, setWantPhotos] = useState(false);
   const [showClearPhotosConfirm, setShowClearPhotosConfirm] = useState(false);
   const [deleteAllPhotos, setDeleteAllPhotos] = useState(false);
-  const [hasPublishedPhotos, setHasPublishedPhotos] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
 
   // Cities based on selected province
@@ -269,14 +268,15 @@ export default function ProfileEditPage() {
         // Load photos — always from server (published photos, not draft)
         if (profile) {
           try {
-            const photoRes = await fetch("/api/profile/photos");
+            const photoRes = await fetch(
+              profile.status === "ACTIVE" ? "/api/profile/photos?mode=draft" : "/api/profile/photos"
+            );
             if (photoRes.ok) {
               const photoData = await photoRes.json();
               const loadedPhotos = photoData.data?.photos || [];
               setPhotos(loadedPhotos);
               if (loadedPhotos.length > 0) {
-                setHasPublishedPhotos(true);
-                if (!deleteAllPhotos) setWantPhotos(true);
+                setWantPhotos(true);
               }
             }
           } catch {
@@ -417,6 +417,12 @@ export default function ProfileEditPage() {
         throw new Error(data.error?.message || "保存失败");
       }
 
+      const refreshRes = await fetch("/api/auth/refresh", { method: "POST", cache: "no-store" });
+      if (!refreshRes.ok) {
+        throw new Error("登录状态刷新失败，请刷新页面后重试");
+      }
+      router.refresh();
+
       router.push("/profile");
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");
@@ -451,6 +457,45 @@ export default function ProfileEditPage() {
     } else {
       setPendingStatus(status);
       setConfirmOpen(true);
+    }
+  }
+
+  const photoApiUrl = originalProfileStatus === "ACTIVE"
+    ? "/api/profile/photos?mode=draft"
+    : "/api/profile/photos";
+
+  function handlePhotosChange(nextPhotos: PhotoItem[]) {
+    setPhotos(nextPhotos);
+    setDeleteAllPhotos(originalProfileStatus === "ACTIVE" && nextPhotos.length === 0);
+    if (nextPhotos.length > 0) {
+      setWantPhotos(true);
+    }
+  }
+
+  async function handleClearPhotos() {
+    const photosToClear = photos;
+    setShowClearPhotosConfirm(false);
+    setDeleteAllPhotos(true);
+    setPhotos([]);
+    setWantPhotos(false);
+
+    try {
+      for (const photo of photosToClear) {
+        const res = await fetch(photoApiUrl, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ photoId: photo.id }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error?.message || "删除照片失败");
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "删除照片失败");
+      setPhotos(photosToClear);
+      setWantPhotos(photosToClear.length > 0);
     }
   }
 
@@ -824,9 +869,9 @@ export default function ProfileEditPage() {
           <>
             <PhotoUploader
               photos={photos}
-              onPhotosChange={setPhotos}
+              onPhotosChange={handlePhotosChange}
               maxPhotos={6}
-              readOnly={originalProfileStatus === "ACTIVE" && hasPublishedPhotos}
+              mode={originalProfileStatus === "ACTIVE" ? "draft" : "published"}
             />
 
 
@@ -860,12 +905,7 @@ export default function ProfileEditPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowClearPhotosConfirm(false);
-                    setDeleteAllPhotos(true);
-                    setPhotos([]);
-                    setWantPhotos(false);
-                  }}
+                  onClick={handleClearPhotos}
                   className="flex-1 rounded-lg bg-[hsl(0,72%,51%)] py-2 text-sm font-semibold text-white transition-all hover:bg-[hsl(0,72%,45%)]"
                 >
                   确认删除

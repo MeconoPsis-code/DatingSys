@@ -37,7 +37,6 @@ enum MembershipStatus {
   REMOVED
 }
 
-
 enum ProfileStatus {
   DRAFT
   ACTIVE
@@ -47,8 +46,8 @@ enum ProfileStatus {
 }
 
 enum PhotoMatchPref {
-  PHOTO_ONLY   // only match with other photo users
-  ALL          // match with all users
+  PHOTO_ONLY // only match with other photo users
+  ALL // match with all users
 }
 
 enum Attribute {
@@ -62,12 +61,12 @@ enum Attribute {
 }
 
 enum LocationType {
-  RESIDENCE   // 常住地
-  HOMETOWN    // 家乡
-  SCHOOL      // 就读地
-  WORK        // 工作地
-  TRAVEL      // 旅居地
-  OTHER       // 其他
+  RESIDENCE // 常住地
+  HOMETOWN // 家乡
+  SCHOOL // 就读地
+  WORK // 工作地
+  TRAVEL // 旅居地
+  OTHER // 其他
 }
 
 enum LocationScope {
@@ -85,8 +84,6 @@ enum RatingStatus {
   NEEDS_RESCORE
   WITHDRAWN
 }
-
-
 
 enum RatingTaskStatus {
   PENDING
@@ -127,55 +124,63 @@ enum PenaltyType {
   ACCOUNT_BANNED
 }
 
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 // ─── Models ───────────────────────────────────────────
 
 /// Core user account — every person in the system has exactly one User record
 model User {
-  id            String     @id @default(cuid())
-  qqNumber      String?    @unique  // QQ号 — primary login identifier
-  passwordHash  String?              // bcrypt hash of passcode
-  status        UserStatus @default(ACTIVE)
-  role          UserRole   @default(USER)
-  lastLoginAt   DateTime?
-  lastProfileClearedAt DateTime?  // tracks 30-day publish cooldown after clear
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id                   String     @id @default(cuid())
+  qqNumber             String?    @unique // QQ号 — primary login identifier
+  passwordHash         String? // bcrypt hash of passcode
+  status               UserStatus @default(ACTIVE)
+  role                 UserRole   @default(USER)
+  lastLoginAt          DateTime?
+  lastProfileClearedAt DateTime? // tracks 30-day publish cooldown after clear
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
 
   // Relations
-  authIdentities    AuthIdentity[]
-  groupMembership   GroupMembership?
-  profile           Profile?
-  preference        Preference?
-  ratingProfile     RatingProfile?
-
+  authIdentities  AuthIdentity[]
+  groupMembership GroupMembership?
+  profile         Profile?
+  preference      Preference?
+  ratingProfile   RatingProfile?
 
   // Membership verifications performed by this user (admin)
   verifiedMemberships GroupMembership[] @relation("MembershipVerifier")
   revokedMemberships  GroupMembership[] @relation("MembershipRevoker")
 
   // Rating
-  ratingTasks        RatingTask[]  @relation("RatedUser")
-  ratingScores       RatingScore[] @relation("Scorer")
-  dutySchedules      ScorerDutySchedule[] @relation("ScorerDuty")
+  ratingTasks   RatingTask[]         @relation("RatedUser")
+  ratingScores  RatingScore[]        @relation("Scorer")
+  dutySchedules ScorerDutySchedule[] @relation("ScorerDuty")
 
   // Matching & Requests
-  matchesAsUser      MatchSnapshot[] @relation("MatchUser")
-  matchesAsTarget    MatchSnapshot[] @relation("MatchTarget")
-  sentViewRequests   ViewRequest[]   @relation("ViewRequester")
-  receivedViewRequests ViewRequest[] @relation("ViewTarget")
+  matchesAsUser        MatchSnapshot[] @relation("MatchUser")
+  matchesAsTarget      MatchSnapshot[] @relation("MatchTarget")
+  sentViewRequests     ViewRequest[]   @relation("ViewRequester")
+  receivedViewRequests ViewRequest[]   @relation("ViewTarget")
 
   // Reports & Penalties
-  filedReports       Report[]  @relation("Reporter")
-  receivedReports    Report[]  @relation("ReportTarget")
-  handledReports     Report[]  @relation("ReportHandler")
-  penalties          Penalty[] @relation("PenaltyTarget")
-  issuedPenalties    Penalty[] @relation("PenaltyIssuer")
+  filedReports    Report[]  @relation("Reporter")
+  receivedReports Report[]  @relation("ReportTarget")
+  handledReports  Report[]  @relation("ReportHandler")
+  penalties       Penalty[] @relation("PenaltyTarget")
+  issuedPenalties Penalty[] @relation("PenaltyIssuer")
 
   // Audit
-  auditLogs          AuditLog[]
+  auditLogs AuditLog[]
 
   // Notifications
-  notifications      Notification[]
+  notifications Notification[]
+
+  // Announcements
+  announcements Announcement[] @relation("AnnouncementAuthor")
 
   @@map("users")
 }
@@ -184,8 +189,8 @@ model User {
 model AuthIdentity {
   id                    String   @id @default(cuid())
   userId                String
-  provider              String   // e.g. "qq", "qq_connect"
-  providerUserId        String   // raw ID from provider
+  provider              String // e.g. "qq", "qq_connect"
+  providerUserId        String // raw ID from provider
   openid                String
   unionid               String?
   nickname              String?
@@ -215,15 +220,15 @@ model GroupMembership {
   revokedBy       String?
   remark          String?
   // Bot leave-detection fields
-  leftDetectedAt  DateTime?        // When bot detected user left the group
-  leftConfirmedAt DateTime?        // When admin confirmed user left
-  restoredAt      DateTime?        // When admin restored user
-  removedAt       DateTime?        // When admin purged user data
-  leaveType       String?          // 'leave' | 'kick' | 'unknown'
-  reviewReason    String?          // Reason shown in admin review
-  reviewedBy      String?          // Admin who handled the review
-  reviewRemark    String?          // Admin notes
-  rawEvent        Json?            // Raw bot event that triggered status change
+  leftDetectedAt  DateTime? // When bot detected user left the group
+  leftConfirmedAt DateTime? // When admin confirmed user left
+  restoredAt      DateTime? // When admin restored user
+  removedAt       DateTime? // When admin purged user data
+  leaveType       String? // 'leave' | 'kick' | 'unknown'
+  reviewReason    String? // Reason shown in admin review
+  reviewedBy      String? // Admin who handled the review
+  reviewRemark    String? // Admin notes
+  rawEvent        Json? // Raw bot event that triggered status change
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -238,48 +243,48 @@ model GroupMembership {
 
 /// User profile with personal information
 model Profile {
-  id                       String         @id @default(cuid())
-  userId                   String         @unique
+  id                       String          @id @default(cuid())
+  userId                   String          @unique
   birthDate                DateTime
   heightCm                 Int
   weightKg                 Int
   provinceCode             String
   cityCode                 String
-  locationType             LocationType   @default(RESIDENCE)
+  locationType             LocationType    @default(RESIDENCE)
   attribute                Attribute
-  isSide                   Boolean        @default(false)
-  isOther                  Boolean        @default(false)
-  customAttribute          String?        @db.VarChar(20)
-  mbti                     String?        @db.VarChar(4)
+  isSide                   Boolean         @default(false)
+  isOther                  Boolean         @default(false)
+  customAttribute          String?         @db.VarChar(20)
+  mbti                     String?         @db.VarChar(4)
   selfIntro                String?
-  consentProfileVisibility Boolean        @default(false)
-  status                   ProfileStatus  @default(DRAFT)
+  consentProfileVisibility Boolean         @default(false)
+  status                   ProfileStatus   @default(DRAFT)
   lastSubmittedAt          DateTime?
   // Photo matching preferences (only relevant when user has photos)
-  photoMatchPref           PhotoMatchPref?  // null = no photos
-  highScoreOnly            Boolean        @default(false) // only match ≥7.0
-  draftData                Json?          // Unpublished draft edits for ACTIVE profiles
-  createdAt                DateTime       @default(now())
-  updatedAt                DateTime       @updatedAt
+  photoMatchPref           PhotoMatchPref? // null = no photos
+  highScoreOnly            Boolean         @default(false) // only match ≥7.0
+  draftData                Json? // Unpublished draft edits for ACTIVE profiles
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  photos ProfilePhoto[]
+
   @@index([status])
   @@map("profiles")
-
-  photos ProfilePhoto[]
 }
 
 /// User's profile photos, stored in MinIO (S3-compatible)
 model ProfilePhoto {
-  id          String   @id @default(cuid())
-  profileId   String
-  storageKey  String   // MinIO object key, e.g. "photos/userId/uuid.webp"
-  order       Int      @default(0)   // display order (0-based)
+  id           String   @id @default(cuid())
+  profileId    String
+  storageKey   String // MinIO object key, e.g. "photos/userId/uuid.webp"
+  order        Int      @default(0) // display order (0-based)
   originalName String?
-  mimeType    String?  @db.VarChar(100)
-  sizeBytes   Int?
-  createdAt   DateTime @default(now())
+  mimeType     String?  @db.VarChar(100)
+  sizeBytes    Int?
+  createdAt    DateTime @default(now())
 
   profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
@@ -289,21 +294,21 @@ model ProfilePhoto {
 
 /// User preference / expected conditions for matching
 model Preference {
-  id                   String       @id @default(cuid())
-  userId               String       @unique
-  ageMin               Int
-  ageMax               Int
-  heightMinCm          Int
-  heightMaxCm          Int
-  weightMinKg          Int
-  weightMaxKg          Int
-  locationScope        LocationScope @default(ANY)
-  expectedProvinceCode String?
-  expectedCityCode     String?
-  expectedAttributes   Json         // Array of Attribute enum values
-  expectedCustomAttribute String? @db.VarChar(20)  // custom text when OTHER in expectedAttributes
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  id                      String        @id @default(cuid())
+  userId                  String        @unique
+  ageMin                  Int
+  ageMax                  Int
+  heightMinCm             Int
+  heightMaxCm             Int
+  weightMinKg             Int
+  weightMaxKg             Int
+  locationScope           LocationScope @default(ANY)
+  expectedProvinceCode    String?
+  expectedCityCode        String?
+  expectedAttributes      Json // Array of Attribute enum values
+  expectedCustomAttribute String?       @db.VarChar(20) // custom text when OTHER in expectedAttributes
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -312,35 +317,38 @@ model Preference {
 
 /// Rating profile — tracks scoring status for users with photos
 model RatingProfile {
-  id                       String             @id @default(cuid())
-  userId                   String             @unique
-  ratingStatus             RatingStatus       @default(NOT_SUBMITTED)
-  finalScore               Float?
-  scoreCompletedAt         DateTime?
-  createdAt                DateTime           @default(now())
-  updatedAt                DateTime           @updatedAt
+  id                    String       @id @default(cuid())
+  userId                String       @unique
+  ratingStatus          RatingStatus @default(NOT_SUBMITTED)
+  finalScore            Float?
+  scoreCompletedAt      DateTime?
+  rankingOptIn          Boolean      @default(false)
+  rankingOptInUpdatedAt DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([rankingOptIn, finalScore])
   @@map("rating_profiles")
 }
 
 /// A rating task assigned to all scorers for one user's photo
 model RatingTask {
-  id              String          @id @default(cuid())
-  ratedUserId     String
-  photoObjectKey  String
-  status          RatingTaskStatus @default(PENDING)
-  scorerSnapshot  Json            // Array of scorer user IDs at task creation
-  photoReports    Json?           // Array of { reporterId, reason, createdAt }
-  completedAt     DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id             String           @id @default(cuid())
+  ratedUserId    String
+  photoObjectKey String
+  status         RatingTaskStatus @default(PENDING)
+  scorerSnapshot Json // Array of scorer user IDs at task creation
+  photoReports   Json? // Array of { reporterId, reason, createdAt }
+  completedAt    DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
-  pendingActionType      String?         // "APPROVE" or "OVERRIDE"
-  pendingActionValue     Float?          // Overridden score value
-  pendingActionExpiresAt DateTime?       // When the action will be committed
-  pendingActionActorId   String?         // The ID of the admin who initiated it
+  pendingActionType      String? // "APPROVE" or "OVERRIDE"
+  pendingActionValue     Float? // Overridden score value
+  pendingActionExpiresAt DateTime? // When the action will be committed
+  pendingActionActorId   String? // The ID of the admin who initiated it
 
   ratedUser User          @relation("RatedUser", fields: [ratedUserId], references: [id])
   scores    RatingScore[]
@@ -352,11 +360,11 @@ model RatingTask {
 
 /// Individual score from one scorer for one rating task
 model RatingScore {
-  id            String   @id @default(cuid())
-  ratingTaskId  String
-  scorerUserId  String
-  score         Float    // 0-10 with 0.5 steps
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  ratingTaskId String
+  scorerUserId String
+  score        Float // 0-10 with 0.5 steps
+  createdAt    DateTime @default(now())
 
   ratingTask RatingTask @relation(fields: [ratingTaskId], references: [id], onDelete: Cascade)
   scorer     User       @relation("Scorer", fields: [scorerUserId], references: [id])
@@ -385,9 +393,9 @@ model MatchSnapshot {
   id           String   @id @default(cuid())
   userId       String
   targetUserId String
-  matchType    String   // "mutual" | "one_way"
-  direction    String   // "me_fits_them" | "they_fit_me" | "mutual"
-  score        Float?   // relevance score for sorting
+  matchType    String // "mutual" | "one_way"
+  direction    String // "me_fits_them" | "they_fit_me" | "mutual"
+  score        Float? // relevance score for sorting
   computedAt   DateTime @default(now())
 
   user   User @relation("MatchUser", fields: [userId], references: [id])
@@ -425,7 +433,7 @@ model Report {
   targetUserId       String
   type               ReportType
   description        String
-  evidenceObjectKeys Json?        // Array of S3 keys for evidence screenshots
+  evidenceObjectKeys Json? // Array of S3 keys for evidence screenshots
   status             ReportStatus @default(PENDING)
   resolution         String?
   handledBy          String?
@@ -464,10 +472,10 @@ model Penalty {
 model AuditLog {
   id          String   @id @default(cuid())
   actorUserId String?
-  action      String   // e.g. "LOGIN", "PROFILE_UPDATE", "PENALTY_CREATE"
-  targetType  String?  // e.g. "User", "Profile", "InviteCode"
+  action      String // e.g. "LOGIN", "PROFILE_UPDATE", "PENALTY_CREATE"
+  targetType  String? // e.g. "User", "Profile", "InviteCode"
   targetId    String?
-  metadata    Json?    // Additional context
+  metadata    Json? // Additional context
   ip          String?
   userAgent   String?
   createdAt   DateTime @default(now())
@@ -493,8 +501,8 @@ model BotIdentity {
   qqAvatarSyncedAt      DateTime?
   groupId               String
   groupCard             String?
-  groupCardStatus       String?   // 'valid' | 'invalid_format' | etc.
-  groupCardSyncStatus   String?   // 'synced' | 'pending_sync' | 'sync_failed' | etc.
+  groupCardStatus       String? // 'valid' | 'invalid_format' | etc.
+  groupCardSyncStatus   String? // 'synced' | 'pending_sync' | 'sync_failed' | etc.
   groupCardSyncedAt     DateTime?
   registeredFromGroupId String
   lastCommandAt         DateTime?
@@ -508,9 +516,9 @@ model BotIdentity {
 /// Raw event log — every inbound NapCat/OneBot event
 model BotEventLog {
   id           String   @id @default(cuid())
-  eventId      String?  // Deduplication key
-  platform     String   // 'napcat' | 'onebot' | 'other'
-  eventType    String   // 'group_message' | 'group_member_joined' | etc.
+  eventId      String? // Deduplication key
+  platform     String // 'napcat' | 'onebot' | 'other'
+  eventType    String // 'group_message' | 'group_member_joined' | etc.
   groupId      String?
   qqNumber     String?
   messageText  String?
@@ -528,10 +536,10 @@ model BotEventLog {
 /// Outbound bot action log — messages sent, cards set, API calls
 model BotActionLog {
   id           String   @id @default(cuid())
-  action       String   // 'send_group_msg' | 'set_group_card' | etc.
+  action       String // 'send_group_msg' | 'set_group_card' | etc.
   groupId      String?
   qqNumber     String?
-  status       String   // 'success' | 'failed' | 'error'
+  status       String // 'success' | 'failed' | 'error'
   request      Json?
   response     Json?
   errorMessage String?
@@ -545,17 +553,17 @@ model BotActionLog {
 
 /// Admin review for group membership anomalies
 model AdminReview {
-  id          String    @id @default(cuid())
-  type        String    // 'group_membership_left' | 'group_card_violation' | etc.
-  userId      String?
-  status      String    @default("pending") // 'pending' | 'resolved' | 'dismissed'
-  reason      String
-  metadata    Json?     // Additional context (qqNumber, groupId, leaveType, etc.)
-  handledBy   String?
-  handledAt   DateTime?
-  resolution  String?   // 'restored' | 'confirmed_left' | 'purged' | etc.
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String    @id @default(cuid())
+  type       String // 'group_membership_left' | 'group_card_violation' | etc.
+  userId     String?
+  status     String    @default("pending") // 'pending' | 'resolved' | 'dismissed'
+  reason     String
+  metadata   Json? // Additional context (qqNumber, groupId, leaveType, etc.)
+  handledBy  String?
+  handledAt  DateTime?
+  resolution String? // 'restored' | 'confirmed_left' | 'purged' | etc.
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@index([type])
   @@index([userId])
@@ -568,7 +576,7 @@ model Notification {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String   // SCORING_COMPLETE | VIEW_REQUEST_RECEIVED | VIEW_REQUEST_APPROVED | VIEW_REQUEST_REJECTED | PENALTY_WARNING | SYSTEM
+  type      String // SCORING_COMPLETE | VIEW_REQUEST_RECEIVED | VIEW_REQUEST_APPROVED | VIEW_REQUEST_REJECTED | PENALTY_WARNING | SYSTEM
   title     String
   message   String
   isRead    Boolean  @default(false)
@@ -577,4 +585,24 @@ model Notification {
   @@index([userId, isRead])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+/// System announcement posts shown to users and managed by admins
+model Announcement {
+  id          String             @id @default(cuid())
+  title       String             @db.VarChar(120)
+  summary     String?            @db.VarChar(240)
+  content     String
+  status      AnnouncementStatus @default(DRAFT)
+  pinned      Boolean            @default(false)
+  publishedAt DateTime?
+  authorId    String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  author User? @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([status, pinned, publishedAt])
+  @@index([createdAt])
+  @@map("announcements")
 }

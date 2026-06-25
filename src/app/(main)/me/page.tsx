@@ -32,6 +32,13 @@ interface MeData {
     provinceCode: string;
     cityCode: string;
   } | null;
+  ratingProfile: {
+    ratingStatus: string;
+    finalScore: number | null;
+    scoreCompletedAt: string | null;
+    rankingOptIn: boolean;
+    rankingOptInUpdatedAt: string | null;
+  } | null;
 }
 
 interface NotificationItem {
@@ -426,6 +433,8 @@ export default function MePage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
   const [showAllNotifs, setShowAllNotifs] = useState(false);
+  const [rankingSaving, setRankingSaving] = useState(false);
+  const [rankingMsg, setRankingMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -469,6 +478,7 @@ export default function MePage() {
 
   const NOTIF_LINK_MAP: Record<string, string> = {
     SCORING_COMPLETE: "/match-preferences",
+    RANKING_INVITE: "/me#ranking-setting",
     VIEW_REQUEST_RECEIVED: "/requests",
   };
 
@@ -522,6 +532,48 @@ export default function MePage() {
     }
   }
 
+  async function handleRankingToggle(optIn: boolean) {
+    setRankingSaving(true);
+    setRankingMsg(null);
+    try {
+      const res = await fetch("/api/ranking/me", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ optIn }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "排行设置更新失败");
+      }
+
+      setMe((prev) =>
+        prev
+          ? {
+              ...prev,
+              ratingProfile: {
+                ratingStatus: data.data.ratingStatus,
+                finalScore: data.data.finalScore,
+                scoreCompletedAt: data.data.scoreCompletedAt,
+                rankingOptIn: data.data.rankingOptIn,
+                rankingOptInUpdatedAt: data.data.rankingOptInUpdatedAt,
+              },
+            }
+          : prev
+      );
+      setRankingMsg({
+        text: optIn ? "已开启排行参与" : "已关闭排行参与",
+        ok: true,
+      });
+    } catch (err) {
+      setRankingMsg({
+        text: err instanceof Error ? err.message : "排行设置更新失败",
+        ok: false,
+      });
+    } finally {
+      setRankingSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -534,6 +586,10 @@ export default function MePage() {
 
   const statusInfo = STATUS_INFO[me.status];
   const memberInfo = me.membershipStatus ? MEMBERSHIP_INFO[me.membershipStatus] : null;
+  const canJoinRanking =
+    me.ratingProfile?.ratingStatus === "COMPLETED" &&
+    me.ratingProfile.finalScore !== null;
+  const rankingEnabled = canJoinRanking && Boolean(me.ratingProfile?.rankingOptIn);
 
   const isAdmin = me.role === "ADMIN" || me.role === "SUPER_ADMIN";
   const isScorer = me.role === "SCORER" || me.role === "ADMIN";
@@ -715,6 +771,71 @@ export default function MePage() {
             label="认证到期"
             value={new Date(me.membershipExpiresAt).toLocaleDateString("zh-CN")}
           />
+        )}
+      </div>
+
+      {/* Ranking Settings */}
+      <div
+        id="ranking-setting"
+        className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5"
+      >
+        <div className="mb-3 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-[hsl(var(--foreground))]">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+                <path d="M3 17h18" />
+                <path d="M7 17V9" />
+                <path d="M12 17V5" />
+                <path d="M17 17v-4" />
+              </svg>
+              颜值排行
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">
+              公开娱乐排行只展示昵称和颜值分，可随时开启或关闭。
+            </p>
+          </div>
+          {canJoinRanking && (
+            <span className="shrink-0 rounded-full bg-brand-blue/10 px-3 py-1 text-xs font-bold text-brand-blue">
+              {me.ratingProfile?.finalScore?.toFixed(1)} 分
+            </span>
+          )}
+        </div>
+
+        {canJoinRanking ? (
+          <div className="flex items-center justify-between gap-4 rounded-xl bg-[hsl(var(--secondary))] px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">
+                {rankingEnabled ? "已参与公开排行" : "未参与公开排行"}
+              </p>
+              <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                {rankingEnabled
+                  ? "你的昵称和颜值分会进入前 10 名排行计算。"
+                  : "开启后，若进入前 10 名会显示在公开排行页。"}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={rankingSaving}
+              onClick={() => handleRankingToggle(!rankingEnabled)}
+              className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all disabled:opacity-50 ${
+                rankingEnabled
+                  ? "border border-[hsl(var(--border))] bg-white text-[hsl(var(--muted-foreground))] hover:text-brand-text"
+                  : "bg-brand-blue text-white shadow-[0_10px_22px_rgba(22,119,255,0.18)] hover:bg-[#0958d9]"
+              }`}
+            >
+              {rankingSaving ? "保存中..." : rankingEnabled ? "关闭" : "开启"}
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-xl bg-[hsl(var(--secondary))] px-4 py-3 text-sm text-[hsl(var(--muted-foreground))]">
+            评分完成后可以选择是否参与公开排行。
+          </div>
+        )}
+
+        {rankingMsg && (
+          <p className={`mt-3 text-xs ${rankingMsg.ok ? "text-emerald-500" : "text-red-500"}`}>
+            {rankingMsg.text}
+          </p>
         )}
       </div>
 

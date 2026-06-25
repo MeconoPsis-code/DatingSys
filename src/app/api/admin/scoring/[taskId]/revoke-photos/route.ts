@@ -52,6 +52,8 @@ export async function POST(
           ratingStatus: 'NOT_SUBMITTED',
           finalScore: null,
           scoreCompletedAt: null,
+          rankingOptIn: false,
+          rankingOptInUpdatedAt: null,
         },
       }),
     ]);

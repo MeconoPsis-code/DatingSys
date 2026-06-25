@@ -15,6 +15,7 @@ interface PhotoUploaderProps {
   onPhotosChange: (photos: PhotoItem[]) => void;
   maxPhotos?: number;
   readOnly?: boolean;
+  mode?: "published" | "draft";
 }
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -30,6 +31,7 @@ export function PhotoUploader({
   onPhotosChange,
   maxPhotos = 6,
   readOnly = false,
+  mode = "published",
 }: PhotoUploaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -42,6 +44,7 @@ export function PhotoUploader({
   const [showConsentModal, setShowConsentModal] = useState(false);
 
   const canUpload = photos.length < maxPhotos && !uploading && !readOnly;
+  const endpoint = mode === "draft" ? "/api/profile/photos?mode=draft" : "/api/profile/photos";
 
   function handleUploadClick() {
     if (!hasConsented) {
@@ -83,7 +86,7 @@ export function PhotoUploader({
         const formData = new FormData();
         formData.append("file", file);
 
-        const res = await fetch("/api/profile/photos", {
+        const res = await fetch(endpoint, {
           method: "POST",
           body: formData,
         });
@@ -102,7 +105,7 @@ export function PhotoUploader({
         setUploading(false);
       }
     },
-    [photos, onPhotosChange]
+    [endpoint, photos, onPhotosChange]
   );
 
   const handleDelete = useCallback(
@@ -111,7 +114,7 @@ export function PhotoUploader({
       setError(null);
 
       try {
-        const res = await fetch("/api/profile/photos", {
+        const res = await fetch(endpoint, {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ photoId }),
@@ -129,7 +132,7 @@ export function PhotoUploader({
         setDeletingId(null);
       }
     },
-    [photos, onPhotosChange]
+    [endpoint, photos, onPhotosChange]
   );
 
   return (

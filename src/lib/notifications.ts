@@ -37,6 +37,12 @@ export const notify = {
       "评分完成",
       `你的照片评分已完成，请前往「匹配偏好设置」选择你的匹配方式后进入匹配池。`
     );
+    await create(
+      userId,
+      "RANKING_INVITE",
+      "是否参与颜值排行？",
+      `你的颜值分为 ${score.toFixed(1)}。请前往「我的账号」开启或关闭公开娱乐排行。`
+    );
   },
 
   /** Photo scoring task queued */

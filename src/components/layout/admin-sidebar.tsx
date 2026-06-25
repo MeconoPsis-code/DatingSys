@@ -37,6 +37,18 @@ const links = [
     ),
   },
   {
+    label: "公告管理",
+    href: "/announcements-admin",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5">
+        <path d="M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 1 4 17.5" />
+        <path d="M8 7h8" />
+        <path d="M8 11h6" />
+        <path d="M8 15h4" />
+      </svg>
+    ),
+  },
+  {
     label: "举报处理",
     href: "/reports",
     icon: (

@@ -156,6 +156,6 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({
-    data: { success: true, message: "注册成功" },
+    data: { success: true, message: "注册成功", nickname },
   });
 }
