@@ -13,7 +13,7 @@ export default function ScorerLayout({
         style={{ backgroundImage: "url('/portrait.png')" }}
       />
       <ScorerNav />
-      <main className="mx-auto max-w-2xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-2xl px-3 py-4 sm:px-4 sm:py-6">{children}</main>
     </div>
   );
 }

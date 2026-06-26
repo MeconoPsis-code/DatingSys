@@ -79,6 +79,19 @@ const announcementTab: NavTab = {
   ),
 };
 
+const rankingTab: NavTab = {
+  label: "排行",
+  href: "/ranking",
+  icon: (
+    <svg viewBox="0 0 24 24">
+      <path d="M3 17h18" />
+      <path d="M7 17V9" />
+      <path d="M12 17V5" />
+      <path d="M17 17v-4" />
+    </svg>
+  ),
+};
+
 const scorerTab: NavTab = {
   label: "评分",
   href: "/scoring",
@@ -113,6 +126,13 @@ const adminTab: NavTab = {
   ),
 };
 
+const systemMenuIcon = (
+  <svg viewBox="0 0 24 24">
+    <circle cx="5" cy="12" r="1.5" />
+    <circle cx="12" cy="12" r="1.5" />
+    <circle cx="19" cy="12" r="1.5" />
+  </svg>
+);
 
 type UserRole = "USER" | "SCORER" | "ADMIN" | "SUPER_ADMIN";
 
@@ -154,6 +174,7 @@ export function MainNav() {
   const [role, setRole] = useState<UserRole>("USER");
   const [requestBadge, setRequestBadge] = useState(0);
   const [notificationBadge, setNotificationBadge] = useState(0);
+  const [isSystemMenuOpen, setIsSystemMenuOpen] = useState(false);
 
   const fetchBadges = useCallback(async () => {
     try {
@@ -185,19 +206,34 @@ export function MainNav() {
 
   // Fetch badge counts on mount and poll every 30s
   useEffect(() => {
-    fetchBadges();
-    const interval = setInterval(fetchBadges, 30000);
-    return () => clearInterval(interval);
+    const timer = window.setTimeout(fetchBadges, 0);
+    const interval = window.setInterval(fetchBadges, 30000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+    };
   }, [fetchBadges]);
+
+  useEffect(() => {
+    if (!isSystemMenuOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsSystemMenuOpen(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSystemMenuOpen]);
 
   // Refresh badges on navigation
   useEffect(() => {
-    fetchBadges();
+    const timer = window.setTimeout(fetchBadges, 0);
+    return () => window.clearTimeout(timer);
   }, [pathname, fetchBadges]);
 
   // Build tabs based on role
   const userSection = userTabs;
-  const managementSection: NavTab[] = [announcementTab];
+  const managementSection: NavTab[] = [announcementTab, rankingTab];
 
   // SCORER and ADMIN get the scoring tab; SUPER_ADMIN does NOT score
   if (role === "SCORER" || role === "ADMIN") {
@@ -210,11 +246,6 @@ export function MainNav() {
   if (ROLE_WEIGHT[role] >= ROLE_WEIGHT.ADMIN) {
     managementSection.push(adminTab);
   }
-
-  const mobileTabs: Array<{ tab: NavTab; accent: NavAccent }> = [
-    ...userSection.map((tab) => ({ tab, accent: "blue" as const })),
-    ...managementSection.map((tab) => ({ tab, accent: "gold" as const })),
-  ];
 
   const isActive = (href: string) => {
     if (href === "/matches/mutual") {
@@ -230,6 +261,8 @@ export function MainNav() {
     if (href === "/notifications") return notificationBadge;
     return 0;
   };
+
+  const isSystemActive = managementSection.some((tab) => isActive(tab.href));
 
   const renderDesktopSection = (
     title: string,
@@ -271,8 +304,85 @@ export function MainNav() {
     );
   };
 
+  const renderMobileLink = (tab: NavTab, accent: NavAccent) => {
+    const active = isActive(tab.href);
+    const badge = getBadge(tab.href);
+    const styles = ACCENT_STYLES[accent];
+
+    return (
+      <Link
+        key={tab.href}
+        href={tab.href}
+        onClick={() => setIsSystemMenuOpen(false)}
+        className={`relative flex min-w-0 flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold transition-colors min-[360px]:text-[11px] ${
+          active ? styles.mobileActive : "text-brand-muted hover:text-brand-text"
+        }`}
+      >
+        <span className="relative shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+          {tab.icon}
+          {badge > 0 && (
+            <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[hsl(0,72%,51%)] px-0.5 text-[9px] font-bold text-white">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          )}
+        </span>
+        <span className="truncate">{tab.label}</span>
+      </Link>
+    );
+  };
+
   return (
     <>
+      {isSystemMenuOpen && (
+        <button
+          type="button"
+          aria-label="关闭系统菜单"
+          className="fixed inset-0 z-40 bg-black/20 md:hidden"
+          onClick={() => setIsSystemMenuOpen(false)}
+        />
+      )}
+
+      {isSystemMenuOpen && (
+        <div
+          id="mobile-system-menu"
+          className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[60] overflow-hidden rounded-2xl border border-[#e9edf5] bg-white shadow-[0_18px_46px_rgba(15,23,42,0.16)] md:hidden"
+        >
+          <div className="flex items-center justify-between border-b border-[#eef2f7] px-4 py-3">
+            <span className="text-sm font-extrabold text-[#d48806]">系统</span>
+            <button
+              type="button"
+              aria-label="关闭系统菜单"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-brand-muted hover:bg-slate-100 hover:text-brand-text"
+              onClick={() => setIsSystemMenuOpen(false)}
+            >
+              ×
+            </button>
+          </div>
+          <div className="grid gap-1 p-2">
+            {managementSection.map((tab) => {
+              const active = isActive(tab.href);
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  onClick={() => setIsSystemMenuOpen(false)}
+                  className={`flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors ${
+                    active
+                      ? "border border-[#ffe58f] bg-gold-1 text-[#d48806]"
+                      : "text-brand-muted hover:bg-gold-1 hover:text-[#d48806]"
+                  }`}
+                >
+                  <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+                    {tab.icon}
+                  </span>
+                  {tab.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7 overflow-y-auto">
         <div className="side-brand mb-6 flex h-[92px] items-center gap-3 bg-brand-blue rounded-b-[20px] px-[28px] text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]">
@@ -291,33 +401,24 @@ export function MainNav() {
       </aside>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex border-t border-[#e9edf5] bg-white safe-bottom md:hidden">
-        {mobileTabs.map(({ tab, accent }) => {
-          const active = isActive(tab.href);
-          const badge = getBadge(tab.href);
-          const styles = ACCENT_STYLES[accent];
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className={`relative flex flex-1 flex-col items-center gap-1 py-2 text-xs font-semibold transition-colors ${
-                active
-                  ? styles.mobileActive
-                  : "text-brand-muted hover:text-brand-text"
-              }`}
-            >
-              <span className={`relative shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round`}>
-                {tab.icon}
-                {badge > 0 && (
-                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[hsl(0,72%,51%)] px-0.5 text-[9px] font-bold text-white">
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                )}
-              </span>
-              {tab.label}
-            </Link>
-          );
-        })}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-6 border-t border-[#e9edf5] bg-white px-1 safe-bottom md:hidden">
+        {userSection.map((tab) => renderMobileLink(tab, "blue"))}
+        <button
+          type="button"
+          aria-controls="mobile-system-menu"
+          aria-expanded={isSystemMenuOpen}
+          onClick={() => setIsSystemMenuOpen((open) => !open)}
+          className={`relative flex min-w-0 flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold transition-colors min-[360px]:text-[11px] ${
+            isSystemMenuOpen || isSystemActive
+              ? ACCENT_STYLES.gold.mobileActive
+              : "text-brand-muted hover:text-brand-text"
+          }`}
+        >
+          <span className="relative shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-current [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+            {systemMenuIcon}
+          </span>
+          <span className="truncate">系统</span>
+        </button>
       </nav>
     </>
   );

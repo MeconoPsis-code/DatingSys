@@ -119,7 +119,8 @@ export function AdminSidebar() {
   };
 
   return (
-    <aside className="flex w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7 overflow-y-auto">
+    <>
+    <aside className="hidden w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7 overflow-y-auto md:flex">
       {/* Brand area */}
       <div className="side-brand mb-6 flex h-[92px] items-center gap-3 bg-brand-blue rounded-b-[20px] px-[28px] text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]">
         <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.06)]">
@@ -164,5 +165,26 @@ export function AdminSidebar() {
         </Link>
       </div>
     </aside>
+
+    <nav className="fixed bottom-0 left-0 right-0 z-50 flex overflow-x-auto border-t border-[#e9edf5] bg-white px-1 safe-bottom md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {links.map((link) => {
+        const active = isActive(link.href);
+        return (
+          <Link
+            key={link.label}
+            href={link.href}
+            className={`relative flex min-w-[72px] flex-none flex-col items-center gap-1 py-2.5 text-[11px] font-semibold transition-colors ${
+              active ? "text-brand-blue" : "text-brand-muted hover:text-brand-text"
+            }`}
+          >
+            <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+              {link.icon}
+            </span>
+            <span className="max-w-[68px] truncate">{link.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+    </>
   );
 }

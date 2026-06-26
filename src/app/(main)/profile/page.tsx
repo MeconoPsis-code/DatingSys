@@ -209,7 +209,7 @@ export default function ProfilePage() {
           </svg>
           我的资料
         </h1>
-        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-8 text-center">
+        <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 text-center sm:p-8">
           <div className="mb-4 flex justify-center text-[hsl(var(--muted-foreground))]">
             <svg viewBox="0 0 24 24" className="h-14 w-14 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
               <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
@@ -247,7 +247,7 @@ export default function ProfilePage() {
       </h1>
 
       {/* Profile card */}
-      <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
+      <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:p-6">
         {/* Badges */}
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusInfo.color}`}>
@@ -333,7 +333,7 @@ export default function ProfilePage() {
               </svg>
               照片
             </h3>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {photos.map((photo) => (
                 <div
                   key={photo.id}
@@ -354,7 +354,7 @@ export default function ProfilePage() {
 
         {/* Preference sub-card */}
         {preference && (
-          <div className="mt-6 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] p-5">
+          <div className="mt-6 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] p-4 sm:p-5">
             <h3 className="mb-4 text-sm font-semibold text-[hsl(var(--foreground))]">
               匹配偏好
             </h3>
@@ -424,11 +424,11 @@ export default function ProfilePage() {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="shrink-0 text-xs font-medium text-[hsl(var(--muted-foreground))]">
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <span className="text-xs font-medium text-[hsl(var(--muted-foreground))] sm:shrink-0">
         {label}
       </span>
-      <span className="text-right text-sm text-[hsl(var(--foreground))]">
+      <span className="break-words text-left text-sm text-[hsl(var(--foreground))] sm:text-right">
         {value}
       </span>
     </div>

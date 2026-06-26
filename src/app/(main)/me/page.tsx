@@ -7,6 +7,7 @@ import {
   buildGroupCardForProfile,
   normalizeNicknameInput,
 } from "@/lib/group-card";
+import { getRankingOptInCooldown } from "@/lib/ranking-cooldown";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -38,6 +39,7 @@ interface MeData {
     scoreCompletedAt: string | null;
     rankingOptIn: boolean;
     rankingOptInUpdatedAt: string | null;
+    rankingCooldownEndsAt?: string | null;
   } | null;
 }
 
@@ -71,6 +73,23 @@ const MEMBERSHIP_INFO: Record<string, { label: string; cls: string }> = {
   REVOKED: { label: "已撤销", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
 };
 
+const NOTIFICATION_PREVIEW_LIMIT = 3;
+
+function formatRankingCooldownEnd(date: Date): string {
+  return date.toLocaleString("zh-CN", {
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function buildRankingCooldownMessage(nextChangeAt: Date | null): string {
+  if (!nextChangeAt) return "每天最多修改一次，避免频繁切换造成服务压力。";
+  return `今天已修改过，${formatRankingCooldownEnd(nextChangeAt)} 后可再次调整。`;
+}
+
 /* ─── Info Row ───────────────────────────────────────── */
 
 function InfoRow({ icon, label, value, badge }: {
@@ -80,15 +99,15 @@ function InfoRow({ icon, label, value, badge }: {
   badge?: { label: string; cls: string };
 }) {
   return (
-    <div className="flex items-center gap-3 border-b border-[hsl(var(--border)/0.3)] px-1 py-2.5 last:border-b-0">
+    <div className="flex flex-col gap-2 border-b border-[hsl(var(--border)/0.3)] px-1 py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:gap-3">
       <span className="shrink-0 flex items-center justify-center">{icon}</span>
-      <span className="w-24 shrink-0 text-sm text-[hsl(var(--muted-foreground))]">{label}</span>
+      <span className="text-sm text-[hsl(var(--muted-foreground))] sm:w-24 sm:shrink-0">{label}</span>
       {badge ? (
         <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${badge.cls}`}>
           {badge.label}
         </span>
       ) : (
-        <span className="text-sm font-medium text-[hsl(var(--foreground))]">{value || "—"}</span>
+        <span className="min-w-0 break-words text-sm font-medium text-[hsl(var(--foreground))]">{value || "—"}</span>
       )}
     </div>
   );
@@ -432,14 +451,15 @@ export default function MePage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifLoading, setNotifLoading] = useState(false);
-  const [showAllNotifs, setShowAllNotifs] = useState(false);
   const [rankingSaving, setRankingSaving] = useState(false);
   const [rankingMsg, setRankingMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [rankingCooldownNow, setRankingCooldownNow] = useState(() => new Date());
 
   const fetchNotifications = useCallback(async () => {
     try {
+      await Promise.resolve();
       setNotifLoading(true);
-      const res = await fetch("/api/notifications?pageSize=50");
+      const res = await fetch(`/api/notifications?pageSize=${NOTIFICATION_PREVIEW_LIMIT}`);
       if (res.ok) {
         const data = await res.json();
         setNotifications(data.data?.notifications || []);
@@ -519,8 +539,22 @@ export default function MePage() {
       }
     }
     fetchMe();
-    fetchNotifications();
+    const notificationTimerId = window.setTimeout(() => {
+      fetchNotifications();
+    }, 0);
+
+    return () => window.clearTimeout(notificationTimerId);
   }, [router, fetchNotifications]);
+
+  useEffect(() => {
+    if (!me?.ratingProfile?.rankingOptInUpdatedAt) return;
+
+    const intervalId = window.setInterval(() => {
+      setRankingCooldownNow(new Date());
+    }, 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [me?.ratingProfile?.rankingOptInUpdatedAt]);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -533,6 +567,19 @@ export default function MePage() {
   }
 
   async function handleRankingToggle(optIn: boolean) {
+    const localCooldown = getRankingOptInCooldown(
+      me?.ratingProfile?.rankingOptInUpdatedAt,
+      rankingCooldownNow
+    );
+
+    if (localCooldown.isActive) {
+      setRankingMsg({
+        text: buildRankingCooldownMessage(localCooldown.nextChangeAt),
+        ok: false,
+      });
+      return;
+    }
+
     setRankingSaving(true);
     setRankingMsg(null);
     try {
@@ -556,10 +603,12 @@ export default function MePage() {
                 scoreCompletedAt: data.data.scoreCompletedAt,
                 rankingOptIn: data.data.rankingOptIn,
                 rankingOptInUpdatedAt: data.data.rankingOptInUpdatedAt,
+                rankingCooldownEndsAt: data.data.rankingCooldownEndsAt ?? null,
               },
             }
           : prev
       );
+      setRankingCooldownNow(new Date());
       setRankingMsg({
         text: optIn ? "已开启排行参与" : "已关闭排行参与",
         ok: true,
@@ -590,6 +639,21 @@ export default function MePage() {
     me.ratingProfile?.ratingStatus === "COMPLETED" &&
     me.ratingProfile.finalScore !== null;
   const rankingEnabled = canJoinRanking && Boolean(me.ratingProfile?.rankingOptIn);
+  const rankingCooldown = getRankingOptInCooldown(
+    me.ratingProfile?.rankingOptInUpdatedAt,
+    rankingCooldownNow
+  );
+  const rankingCooldownActive = canJoinRanking && rankingCooldown.isActive;
+  const rankingCooldownHint = rankingCooldownActive
+    ? buildRankingCooldownMessage(rankingCooldown.nextChangeAt)
+    : "每天最多修改一次，避免频繁切换造成服务压力。";
+  const rankingButtonLabel = rankingSaving
+    ? "保存中..."
+    : rankingCooldownActive
+      ? "今日已修改"
+      : rankingEnabled
+        ? "关闭"
+        : "开启";
 
   const isAdmin = me.role === "ADMIN" || me.role === "SUPER_ADMIN";
   const isScorer = me.role === "SCORER" || me.role === "ADMIN";
@@ -791,7 +855,7 @@ export default function MePage() {
               颜值排行
             </h2>
             <p className="mt-1 text-xs leading-5 text-[hsl(var(--muted-foreground))]">
-              公开娱乐排行只展示昵称和颜值分，可随时开启或关闭。
+              公开娱乐排行只展示昵称和颜值分，每天最多修改一次参与状态。
             </p>
           </div>
           {canJoinRanking && (
@@ -812,10 +876,13 @@ export default function MePage() {
                   ? "你的昵称和颜值分会进入前 10 名排行计算。"
                   : "开启后，若进入前 10 名会显示在公开排行页。"}
               </p>
+              <p className={`mt-1 text-xs ${rankingCooldownActive ? "text-amber-500" : "text-[hsl(var(--muted-foreground))]"}`}>
+                {rankingCooldownHint}
+              </p>
             </div>
             <button
               type="button"
-              disabled={rankingSaving}
+              disabled={rankingSaving || rankingCooldownActive}
               onClick={() => handleRankingToggle(!rankingEnabled)}
               className={`shrink-0 rounded-xl px-4 py-2 text-xs font-bold transition-all disabled:opacity-50 ${
                 rankingEnabled
@@ -823,7 +890,7 @@ export default function MePage() {
                   : "bg-brand-blue text-white shadow-[0_10px_22px_rgba(22,119,255,0.18)] hover:bg-[#0958d9]"
               }`}
             >
-              {rankingSaving ? "保存中..." : rankingEnabled ? "关闭" : "开启"}
+              {rankingButtonLabel}
             </button>
           </div>
         ) : (
@@ -873,7 +940,7 @@ export default function MePage() {
           <p className="py-4 text-center text-xs text-[hsl(var(--muted-foreground))]">暂无通知</p>
         ) : (
           <div className="space-y-1">
-            {(showAllNotifs ? notifications : notifications.slice(0, 5)).map((n) => (
+            {notifications.map((n) => (
               <button
                 key={n.id}
                 type="button"
@@ -891,28 +958,28 @@ export default function MePage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-medium ${!n.isRead ? "text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"}`}>
+                    <span className={`truncate text-xs font-medium ${!n.isRead ? "text-[hsl(var(--foreground))]" : "text-[hsl(var(--muted-foreground))]"}`}>
                       {n.title}
                     </span>
                     <span className="ml-auto shrink-0 text-[10px] text-[hsl(var(--muted-foreground))]">
                       {new Date(n.createdAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
+                  <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
                     {renderNotifMessage(n)}
                   </p>
                 </div>
               </button>
             ))}
-            {notifications.length > 5 && (
-              <button
-                type="button"
-                onClick={() => setShowAllNotifs(!showAllNotifs)}
-                className="w-full rounded-lg py-1.5 text-center text-xs text-brand-blue hover:bg-[hsl(var(--secondary))] transition-colors"
+            <div className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-[hsl(var(--muted-foreground))]">
+              <span>仅显示最近 {NOTIFICATION_PREVIEW_LIMIT} 条</span>
+              <Link
+                href="/notifications"
+                className="font-medium text-brand-blue hover:underline"
               >
-                {showAllNotifs ? "收起" : `查看全部 ${notifications.length} 条通知`}
-              </button>
-            )}
+                查看全部
+              </Link>
+            </div>
           </div>
         )}
       </div>

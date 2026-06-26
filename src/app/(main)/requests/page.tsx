@@ -82,9 +82,9 @@ function IncomingRequestCard({
   const statusInfo = STATUS_MAP[request.status] ?? STATUS_MAP.PENDING;
 
   return (
-    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 transition-all">
+    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-all sm:p-5">
       {/* Header */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#1677ff] to-[#0958d9] text-sm font-bold text-white">
             {(request.requesterNickname || "?").charAt(0)}
@@ -169,7 +169,7 @@ function IncomingRequestCard({
 
       {/* Actions for pending */}
       {isPending && (
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
             disabled={responding === request.id}
@@ -234,8 +234,8 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
   const statusInfo = STATUS_MAP[request.status] ?? STATUS_MAP.PENDING;
 
   return (
-    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 transition-all">
-      <div className="flex items-center justify-between">
+    <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-all sm:p-5">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(200,80%,55%)] to-[hsl(220,70%,50%)] text-sm font-bold text-white">
             {(request.targetNickname || "?").charAt(0)}
@@ -349,7 +349,7 @@ export default function RequestsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="flex items-center gap-2 text-2xl font-bold">
+      <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
         <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
           <rect width="20" height="16" x="2" y="4" rx="2" />
           <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
@@ -361,7 +361,7 @@ export default function RequestsPage() {
       <div className="flex gap-1 rounded-xl bg-[hsl(var(--secondary))] p-1">
         <button
           onClick={() => { setTab("incoming"); setPage(1); }}
-          className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+            className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:px-4 sm:text-sm ${
             tab === "incoming"
               ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
               : "text-brand-muted hover:bg-slate-100/50 hover:text-brand-text"
@@ -376,7 +376,7 @@ export default function RequestsPage() {
         </button>
         <button
           onClick={() => { setTab("outgoing"); setPage(1); }}
-          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:px-4 sm:text-sm ${
             tab === "outgoing"
               ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
               : "text-brand-muted hover:bg-slate-100/50 hover:text-brand-text"
@@ -424,7 +424,7 @@ export default function RequestsPage() {
 
       {/* Cards */}
       {!loading && (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {requests.map((req) =>
             tab === "incoming" ? (
               <IncomingRequestCard

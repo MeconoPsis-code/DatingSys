@@ -1,5 +1,6 @@
 import { PublicTopNav } from "@/components/public-top-nav";
 import { db } from "@/lib/db";
+import { getSessionPayload } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -13,33 +14,36 @@ function formatDate(date: Date | null): string {
 }
 
 export default async function AnnouncementsPage() {
-  const announcements = await db.announcement.findMany({
-    where: { status: "PUBLISHED" },
-    orderBy: [
-      { pinned: "desc" },
-      { publishedAt: "desc" },
-      { createdAt: "desc" },
-    ],
-    include: {
-      author: {
-        select: {
-          qqNumber: true,
-          authIdentities: { select: { nickname: true }, take: 1 },
+  const [announcements, session] = await Promise.all([
+    db.announcement.findMany({
+      where: { status: "PUBLISHED" },
+      orderBy: [
+        { pinned: "desc" },
+        { publishedAt: "desc" },
+        { createdAt: "desc" },
+      ],
+      include: {
+        author: {
+          select: {
+            qqNumber: true,
+            authIdentities: { select: { nickname: true }, take: 1 },
+          },
         },
       },
-    },
-  });
+    }),
+    getSessionPayload(),
+  ]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#fafbfe] px-4 py-28 text-brand-text">
-      <PublicTopNav active="announcements" />
+    <div className="relative min-h-screen overflow-hidden bg-[#fafbfe] px-3 py-24 text-brand-text sm:px-4 sm:py-28">
+      <PublicTopNav active="announcements" isLoggedIn={Boolean(session)} />
 
       <div className="pointer-events-none absolute -right-28 top-12 h-80 w-80 rounded-full bg-[#ebf2ff]" />
       <div className="pointer-events-none absolute -left-36 bottom-8 h-96 w-96 rounded-full bg-[#ebf2ff]" />
 
-      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-col gap-8">
+      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-col gap-6 sm:gap-8">
         <header className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-blue/10 text-brand-blue shadow-[0_10px_24px_rgba(22,119,255,0.12)]">
+          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-blue/10 text-brand-blue shadow-[0_10px_24px_rgba(22,119,255,0.12)] sm:h-12 sm:w-12">
             <svg
               viewBox="0 0 24 24"
               className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
@@ -50,10 +54,10 @@ export default async function AnnouncementsPage() {
               <path d="M8 14h5" />
             </svg>
           </div>
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-brand-blue/70">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-blue/70 sm:text-sm sm:tracking-[0.22em]">
             TenMatch Notice
           </p>
-          <h1 className="mt-2 text-4xl font-extrabold tracking-[-0.5px] text-brand-blue">
+          <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.5px] text-brand-blue sm:text-4xl">
             系统公告
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-7 text-brand-muted">
@@ -62,7 +66,7 @@ export default async function AnnouncementsPage() {
         </header>
 
         {announcements.length === 0 ? (
-          <section className="rounded-[24px] border border-brand-line bg-white/90 px-6 py-20 text-center shadow-[0_18px_48px_rgba(22,119,255,0.08)]">
+          <section className="rounded-[20px] border border-brand-line bg-white/90 px-4 py-16 text-center shadow-[0_18px_48px_rgba(22,119,255,0.08)] sm:rounded-[24px] sm:px-6 sm:py-20">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-brand-subtle">
               <svg
                 viewBox="0 0 24 24"
@@ -77,7 +81,7 @@ export default async function AnnouncementsPage() {
             <p className="mt-2 text-sm text-brand-muted">管理员发布后会显示在这里。</p>
           </section>
         ) : (
-          <section className="space-y-5">
+          <section className="flex flex-col gap-4 sm:gap-5">
             {announcements.map((item) => {
               const authorName =
                 item.author?.authIdentities[0]?.nickname ?? item.author?.qqNumber ?? "TenMatch";
@@ -85,7 +89,7 @@ export default async function AnnouncementsPage() {
               return (
                 <article
                   key={item.id}
-                  className={`rounded-[24px] border bg-white/95 p-6 shadow-[0_18px_48px_rgba(22,119,255,0.08)] transition-all hover:-translate-y-0.5 hover:border-brand-blue/25 hover:shadow-[0_22px_56px_rgba(22,119,255,0.12)] ${
+                  className={`rounded-[20px] border bg-white/95 p-4 shadow-[0_18px_48px_rgba(22,119,255,0.08)] transition-all hover:-translate-y-0.5 hover:border-brand-blue/25 hover:shadow-[0_22px_56px_rgba(22,119,255,0.12)] sm:rounded-[24px] sm:p-6 ${
                     item.pinned ? "border-brand-blue/30" : "border-brand-line"
                   }`}
                 >
@@ -100,7 +104,7 @@ export default async function AnnouncementsPage() {
                     <span>{authorName}</span>
                   </div>
 
-                  <h2 className="text-2xl font-extrabold tracking-[-0.3px] text-brand-text">
+                  <h2 className="text-center text-xl font-extrabold tracking-[-0.3px] text-brand-text sm:text-2xl">
                     {item.title}
                   </h2>
                   {item.summary && (
@@ -108,7 +112,7 @@ export default async function AnnouncementsPage() {
                       {item.summary}
                     </p>
                   )}
-                  <div className="mt-5 whitespace-pre-wrap text-[15px] leading-8 text-brand-muted">
+                  <div className="mt-5 whitespace-pre-wrap text-sm leading-7 text-brand-muted sm:text-[15px] sm:leading-8">
                     {item.content}
                   </div>
                 </article>

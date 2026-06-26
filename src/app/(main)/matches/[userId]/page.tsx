@@ -191,7 +191,7 @@ export default function MatchDetailPage({
             <img
               src={sortedPhotos[photoIndex]?.url}
               alt="用户照片"
-              className="mx-auto h-[24rem] w-full object-contain"
+              className="mx-auto h-[18rem] w-full object-contain sm:h-[24rem]"
             />
             {sortedPhotos.length > 1 && (
               <>
@@ -247,9 +247,9 @@ export default function MatchDetailPage({
         )}
 
         {/* Profile info */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Name + badges */}
-          <div className="mb-4 flex items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <h2 className="text-xl font-bold text-[hsl(var(--foreground))]">
               {detail.nickname || "匿名用户"}
             </h2>
@@ -266,7 +266,7 @@ export default function MatchDetailPage({
           </div>
 
           {/* Stats grid */}
-          <div className="mb-4 grid grid-cols-2 gap-3">
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <InfoItem label="年龄" value={`${detail.age} 岁`} />
             <InfoItem label="身高" value={`${detail.heightCm} cm`} />
             <InfoItem label="体重" value={`${detail.weightKg} kg`} />
@@ -310,7 +310,7 @@ function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-[hsl(var(--secondary))] px-3 py-2">
       <div className="text-[10px] text-[hsl(var(--muted-foreground))]">{label}</div>
-      <div className="text-sm font-medium text-[hsl(var(--foreground))]">{value}</div>
+      <div className="break-words text-sm font-medium text-[hsl(var(--foreground))]">{value}</div>
     </div>
   );
 }

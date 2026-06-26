@@ -2,6 +2,11 @@ import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { success, error } from "@/lib/api-response";
+import {
+  RANKING_OPT_IN_COOLDOWN_MS,
+  formatRankingCooldownRemaining,
+  getRankingOptInCooldown,
+} from "@/lib/ranking-cooldown";
 
 const updateSchema = z.object({
   optIn: z.boolean(),
@@ -25,6 +30,9 @@ function toRankingSettings(ratingProfile: {
     scoreCompletedAt: ratingProfile?.scoreCompletedAt ?? null,
     rankingOptIn: canJoin ? Boolean(ratingProfile?.rankingOptIn) : false,
     rankingOptInUpdatedAt: ratingProfile?.rankingOptInUpdatedAt ?? null,
+    rankingCooldownEndsAt: getRankingOptInCooldown(
+      ratingProfile?.rankingOptInUpdatedAt
+    ).nextChangeAt,
   };
 }
 
@@ -74,6 +82,9 @@ export async function PUT(req: Request) {
       select: {
         ratingStatus: true,
         finalScore: true,
+        scoreCompletedAt: true,
+        rankingOptIn: true,
+        rankingOptInUpdatedAt: true,
       },
     });
 
@@ -89,12 +100,38 @@ export async function PUT(req: Request) {
       return error("RATING_PROFILE_NOT_FOUND", "暂无评分资料", 404);
     }
 
-    const updated = await db.ratingProfile.update({
-      where: { userId: session.id },
+    if (ratingProfile.rankingOptIn === parsed.data.optIn) {
+      return success(toRankingSettings(ratingProfile));
+    }
+
+    const cooldown = getRankingOptInCooldown(ratingProfile.rankingOptInUpdatedAt);
+    if (cooldown.isActive) {
+      return error(
+        "COOLDOWN_ACTIVE",
+        `公开排行参与设置每天只能修改一次，还需等待 ${formatRankingCooldownRemaining(cooldown.remainingMs)}。`,
+        429
+      );
+    }
+
+    const now = new Date();
+    const cooldownCutoff = new Date(now.getTime() - RANKING_OPT_IN_COOLDOWN_MS);
+    const updateResult = await db.ratingProfile.updateMany({
+      where: {
+        userId: session.id,
+        rankingOptIn: { not: parsed.data.optIn },
+        OR: [
+          { rankingOptInUpdatedAt: null },
+          { rankingOptInUpdatedAt: { lte: cooldownCutoff } },
+        ],
+      },
       data: {
         rankingOptIn: parsed.data.optIn,
-        rankingOptInUpdatedAt: new Date(),
+        rankingOptInUpdatedAt: now,
       },
+    });
+
+    const updated = await db.ratingProfile.findUnique({
+      where: { userId: session.id },
       select: {
         ratingStatus: true,
         finalScore: true,
@@ -103,6 +140,21 @@ export async function PUT(req: Request) {
         rankingOptInUpdatedAt: true,
       },
     });
+
+    if (updateResult.count === 0) {
+      if (updated?.rankingOptIn === parsed.data.optIn) {
+        return success(toRankingSettings(updated));
+      }
+
+      const latestCooldown = getRankingOptInCooldown(
+        updated?.rankingOptInUpdatedAt
+      );
+      return error(
+        "COOLDOWN_ACTIVE",
+        `公开排行参与设置每天只能修改一次，还需等待 ${formatRankingCooldownRemaining(latestCooldown.remainingMs)}。`,
+        429
+      );
+    }
 
     return success(toRankingSettings(updated));
   } catch (err) {

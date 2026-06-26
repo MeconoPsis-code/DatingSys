@@ -1,17 +1,12 @@
-import { redirect } from "next/navigation";
-import { getSessionPayload } from "@/lib/session";
 import { PublicTopNav } from "@/components/public-top-nav";
+import { getSessionPayload } from "@/lib/session";
 
 export default async function LandingPage() {
-  // Auth-aware redirect
   const session = await getSessionPayload();
-  if (session) {
-    redirect("/profile");
-  }
 
   return (
-    <div className="relative flex min-h-screen lg:h-screen w-full items-center justify-center bg-[#fafbfe] p-0 font-sans lg:overflow-hidden">
-      <PublicTopNav active="home" />
+    <div className="relative flex min-h-screen min-h-dvh w-full items-start justify-center bg-[#fafbfe] px-0 pb-6 pt-20 font-sans sm:pt-24 lg:h-screen lg:items-center lg:overflow-hidden lg:p-0">
+      <PublicTopNav active="home" isLoggedIn={Boolean(session)} />
       {/* ─── DESKTOP PC VIEWPORT (lg:flex) ─────────────────────────────────── */}
       <div className="app-window relative z-10 hidden h-screen w-screen flex-col overflow-hidden bg-[#fafbfe] lg:flex">
         {/* Ambient background circles */}
@@ -130,7 +125,7 @@ export default async function LandingPage() {
       </div>
 
       {/* ─── MOBILE VIEWPORT & TABLET SIMULATOR (lg:hidden) ───────────────── */}
-      <div className="relative z-10 flex h-full w-full max-w-[390px] flex-col overflow-hidden bg-white shadow-none md:h-[844px] md:rounded-[40px] md:border-[12px] md:border-[#1a1a1a] md:shadow-[0_32px_80px_rgba(29,33,41,0.2),0_4px_16px_rgba(29,33,41,0.08)] lg:hidden">
+      <div className="relative z-10 flex min-h-[calc(100dvh-6.5rem)] w-full max-w-[430px] flex-col overflow-hidden bg-white shadow-none md:h-[844px] md:min-h-0 md:max-w-[390px] md:rounded-[40px] md:border-[12px] md:border-[#1a1a1a] md:shadow-[0_32px_80px_rgba(29,33,41,0.2),0_4px_16px_rgba(29,33,41,0.08)] lg:hidden">
         {/* Ambient Background Accents */}
         <div className="pointer-events-none absolute -right-[100px] -top-[100px] z-0 h-[300px] w-[300px] rounded-full bg-[#ebf2ff]" />
         <div className="pointer-events-none absolute -bottom-[80px] -left-[100px] z-0 h-[260px] w-[260px] rounded-full bg-[#ebf2ff]" />
@@ -263,7 +258,7 @@ export default async function LandingPage() {
           </section>
 
           {/* Feature Grid Row */}
-          <section className="landing-animate-fadeInUp animation-delay-300 mt-6 grid w-full grid-cols-3 gap-1 border-t border-brand-blue/5 py-4">
+          <section className="landing-animate-fadeInUp animation-delay-300 mt-6 grid w-full grid-cols-1 gap-2 border-t border-brand-blue/5 py-4 min-[390px]:grid-cols-3">
             <div className="flex flex-col items-center text-center">
               <div className="mb-1.5 flex h-8.5 w-8.5 items-center justify-center rounded-full bg-brand-blue/5 transition-all duration-200 hover:bg-brand-blue/10">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-brand-blue">
@@ -271,8 +266,8 @@ export default async function LandingPage() {
                   <circle cx="9" cy="7" r="4" />
                 </svg>
               </div>
-              <span className="text-[10.5px] font-bold text-brand-text">群认证专属</span>
-              <span className="text-[8.5px] text-brand-muted">仅限认证成员</span>
+              <span className="text-[11px] font-bold leading-tight text-brand-text">群认证专属</span>
+              <span className="text-[10px] leading-tight text-brand-muted">仅限认证成员</span>
             </div>
 
             <div className="flex flex-col items-center text-center">
@@ -283,8 +278,8 @@ export default async function LandingPage() {
                   <line x1="16" y1="13" x2="8" y2="13" />
                 </svg>
               </div>
-              <span className="text-[10.5px] font-bold text-brand-text">资料智能匹配</span>
-              <span className="text-[8.5px] text-brand-muted">快速找到同好</span>
+              <span className="text-[11px] font-bold leading-tight text-brand-text">资料智能匹配</span>
+              <span className="text-[10px] leading-tight text-brand-muted">快速找到同好</span>
             </div>
 
             <div className="flex flex-col items-center text-center">
@@ -294,8 +289,8 @@ export default async function LandingPage() {
                   <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
               </div>
-              <span className="text-[10.5px] font-bold text-brand-text">隐私双向保护</span>
-              <span className="text-[8.5px] text-brand-muted">解锁可见敏感资料</span>
+              <span className="text-[11px] font-bold leading-tight text-brand-text">隐私双向保护</span>
+              <span className="text-[10px] leading-tight text-brand-muted">解锁可见敏感资料</span>
             </div>
           </section>
 
