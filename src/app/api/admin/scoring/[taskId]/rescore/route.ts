@@ -34,6 +34,11 @@ export async function POST(
           status: 'PENDING',
           completedAt: null,
           scorerSnapshot: newScorerSnapshot,
+          photoReports: [],
+          pendingActionType: null,
+          pendingActionValue: null,
+          pendingActionExpiresAt: null,
+          pendingActionActorId: null,
         },
       }),
       // 3. Reset user's rating profile
@@ -59,6 +64,7 @@ export async function POST(
         metadata: {
           ratedUserId: task.ratedUserId,
           newScorerCount: newScorerSnapshot.length,
+          clearedPhotoReports: Array.isArray(task.photoReports) ? task.photoReports.length : 0,
         },
       },
     });

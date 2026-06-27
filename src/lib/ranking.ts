@@ -10,7 +10,10 @@ export interface RankingEntry {
   scoreCompletedAt: Date | null;
 }
 
-export type RankingProfileRequestStatus = ViewRequestStatus | "SELF";
+export type RankingProfileRequestStatus =
+  | ViewRequestStatus
+  | "PENDING_INCOMING"
+  | "SELF";
 
 function displayNickname(rawNickname: string | null | undefined): string {
   const normalized = normalizeNicknameInput(rawNickname || "");
@@ -63,6 +66,7 @@ function requestStatusPriority(status: RankingProfileRequestStatus): number {
     case "APPROVED":
       return 4;
     case "PENDING":
+    case "PENDING_INCOMING":
       return 3;
     case "REJECTED":
       return 2;
@@ -97,7 +101,7 @@ export async function getRankingProfileRequestStatuses(
         {
           requesterId: { in: uniqueTargetIds },
           targetUserId: currentUserId,
-          status: "APPROVED",
+          status: { in: ["APPROVED", "PENDING"] },
         },
       ],
     },
@@ -116,12 +120,18 @@ export async function getRankingProfileRequestStatuses(
         : request.requesterId;
     if (!uniqueTargetIds.includes(targetUserId)) continue;
 
+    const requestStatus: RankingProfileRequestStatus =
+      request.requesterId === currentUserId
+        ? request.status
+        : request.status === "PENDING"
+          ? "PENDING_INCOMING"
+          : request.status;
     const currentStatus = statusMap[targetUserId];
     if (
       !currentStatus ||
-      requestStatusPriority(request.status) > requestStatusPriority(currentStatus)
+      requestStatusPriority(requestStatus) > requestStatusPriority(currentStatus)
     ) {
-      statusMap[targetUserId] = request.status;
+      statusMap[targetUserId] = requestStatus;
     }
   }
 

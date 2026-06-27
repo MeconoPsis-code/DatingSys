@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const links = [
   {
@@ -98,9 +99,35 @@ const links = [
   },
 ];
 
+type AdminNavLink = (typeof links)[number];
+
+const mobilePrimaryHrefs = ["/dashboard", "/users", "/scoring-admin", "/reports"];
+
+const mobilePrimaryLinks = mobilePrimaryHrefs
+  .map((href) => links.find((link) => link.href === href))
+  .filter((link): link is AdminNavLink => Boolean(link));
+
+const mobileMoreLinks = links.filter((link) => !mobilePrimaryHrefs.includes(link.href));
+
+const moreIcon = (
+  <svg viewBox="0 0 24 24" className="h-5 w-5">
+    <circle cx="5" cy="12" r="1.5" />
+    <circle cx="12" cy="12" r="1.5" />
+    <circle cx="19" cy="12" r="1.5" />
+  </svg>
+);
+
+const returnToUserIcon = (
+  <svg viewBox="0 0 24 24" className="h-5 w-5">
+    <path d="M19 12H5" />
+    <path d="m12 19-7-7 7-7" />
+  </svg>
+);
+
 export function AdminSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   const isActive = (href: string) => {
     const url = new URL(href, "http://localhost");
@@ -118,8 +145,103 @@ export function AdminSidebar() {
     return keys.every((key) => searchParams.get(key) === url.searchParams.get(key));
   };
 
+  useEffect(() => {
+    if (!isMoreOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsMoreOpen(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMoreOpen]);
+
+  const isMoreActive = mobileMoreLinks.some((link) => isActive(link.href));
+
+  const renderMobileLink = (link: AdminNavLink) => {
+    const active = isActive(link.href);
+
+    return (
+      <Link
+        key={link.label}
+        href={link.href}
+        onClick={() => setIsMoreOpen(false)}
+        className={`relative flex min-w-0 flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold transition-colors min-[360px]:text-[11px] ${
+          active ? "text-brand-blue" : "text-brand-muted hover:text-brand-text"
+        }`}
+      >
+        <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+          {link.icon}
+        </span>
+        <span className="truncate">{link.label}</span>
+      </Link>
+    );
+  };
+
   return (
     <>
+    {isMoreOpen && (
+      <button
+        type="button"
+        aria-label="关闭更多菜单"
+        className="fixed inset-0 z-40 bg-black/20 md:hidden"
+        onClick={() => setIsMoreOpen(false)}
+      />
+    )}
+
+    {isMoreOpen && (
+      <div
+        id="admin-mobile-more-menu"
+        className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[60] overflow-hidden rounded-2xl border border-[#e9edf5] bg-white shadow-[0_18px_46px_rgba(15,23,42,0.16)] md:hidden"
+      >
+        <div className="flex items-center justify-between border-b border-[#eef2f7] px-4 py-3">
+          <span className="text-sm font-extrabold text-brand-blue">更多</span>
+          <button
+            type="button"
+            aria-label="关闭更多菜单"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-brand-muted hover:bg-slate-100 hover:text-brand-text"
+            onClick={() => setIsMoreOpen(false)}
+          >
+            ×
+          </button>
+        </div>
+        <div className="grid gap-1 p-2">
+          {mobileMoreLinks.map((link) => {
+            const active = isActive(link.href);
+            return (
+              <Link
+                key={link.label}
+                href={link.href}
+                onClick={() => setIsMoreOpen(false)}
+                className={`flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors ${
+                  active
+                    ? "border border-brand-blue/20 bg-blue-1 text-brand-blue"
+                    : "text-brand-muted hover:bg-blue-1 hover:text-brand-blue"
+                }`}
+              >
+                <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+                  {link.icon}
+                </span>
+                {link.label}
+              </Link>
+            );
+          })}
+        </div>
+        <div className="border-t border-[#eef2f7] p-2">
+          <Link
+            href="/profile"
+            onClick={() => setIsMoreOpen(false)}
+            className="flex h-11 items-center gap-3 rounded-xl bg-blue-1 px-3 text-sm font-extrabold text-brand-blue transition-colors hover:bg-blue-2"
+          >
+            <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+              {returnToUserIcon}
+            </span>
+            返回用户端
+          </Link>
+        </div>
+      </div>
+    )}
+
     <aside className="hidden w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7 overflow-y-auto md:flex">
       {/* Brand area */}
       <div className="side-brand mb-6 flex h-[92px] items-center gap-3 bg-brand-blue rounded-b-[20px] px-[28px] text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]">
@@ -166,24 +288,24 @@ export function AdminSidebar() {
       </div>
     </aside>
 
-    <nav className="fixed bottom-0 left-0 right-0 z-50 flex overflow-x-auto border-t border-[#e9edf5] bg-white px-1 safe-bottom md:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {links.map((link) => {
-        const active = isActive(link.href);
-        return (
-          <Link
-            key={link.label}
-            href={link.href}
-            className={`relative flex min-w-[72px] flex-none flex-col items-center gap-1 py-2.5 text-[11px] font-semibold transition-colors ${
-              active ? "text-brand-blue" : "text-brand-muted hover:text-brand-text"
-            }`}
-          >
-            <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
-              {link.icon}
-            </span>
-            <span className="max-w-[68px] truncate">{link.label}</span>
-          </Link>
-        );
-      })}
+    <nav className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 border-t border-[#e9edf5] bg-white px-1 safe-bottom md:hidden">
+      {mobilePrimaryLinks.map(renderMobileLink)}
+      <button
+        type="button"
+        aria-controls="admin-mobile-more-menu"
+        aria-expanded={isMoreOpen}
+        onClick={() => setIsMoreOpen((open) => !open)}
+        className={`relative flex min-w-0 flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold transition-colors min-[360px]:text-[11px] ${
+          isMoreOpen || isMoreActive
+            ? "text-brand-blue"
+            : "text-brand-muted hover:text-brand-text"
+        }`}
+      >
+        <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-current [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+          {moreIcon}
+        </span>
+        <span className="truncate">更多</span>
+      </button>
     </nav>
     </>
   );

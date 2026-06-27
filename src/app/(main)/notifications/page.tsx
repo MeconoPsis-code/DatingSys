@@ -73,6 +73,17 @@ const TYPE_ICONS: Record<string, { icon: React.ReactNode; color: string }> = {
     ),
     color: "bg-red-500/15 text-red-500",
   },
+  PHOTO_REVOKED: {
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        <path d="M4.3 4.3 20 20" />
+        <path d="M6 8a6 6 0 0 1 9.33-4.98" />
+        <path d="M18 8c0 7 3 9 3 9H8" />
+      </svg>
+    ),
+    color: "bg-red-500/15 text-red-500",
+  },
   SYSTEM: {
     icon: (
       <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
@@ -106,6 +117,8 @@ const NOTIF_LINK_MAP: Record<string, string> = {
   SCORING_COMPLETE: "/match-preferences",
   RANKING_INVITE: "/me#ranking-setting",
   VIEW_REQUEST_RECEIVED: "/requests",
+  VIEW_REQUEST_APPROVED: "/requests",
+  PHOTO_REVOKED: "/profile/edit",
 };
 
 function renderMessage(n: NotificationItem) {

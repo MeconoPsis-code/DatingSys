@@ -258,12 +258,24 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
           &ldquo;{request.message}&rdquo;
         </div>
       )}
-      {request.status === "APPROVED" && request.requesterQQ && (
-        <div className="mt-3 flex items-center gap-1.5 text-xs text-emerald-400">
-          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-          <span>对方已通过，可在匹配页面查看完整资料</span>
+      {request.status === "APPROVED" && (
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-1.5 text-xs text-emerald-400">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span>对方已通过，你们已可互相查看完整资料</span>
+          </div>
+          <Link
+            href={`/matches/${request.targetUserId}`}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            查看完整资料
+          </Link>
         </div>
       )}
       {request.status === "REJECTED" && (

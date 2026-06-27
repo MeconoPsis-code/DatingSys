@@ -102,6 +102,34 @@ function getAvatarColor(userId: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+function requestStatusPriority(status: string): number {
+  switch (status) {
+    case "APPROVED":
+      return 5;
+    case "PENDING":
+    case "PENDING_INCOMING":
+      return 4;
+    case "REJECTED":
+      return 3;
+    case "EXPIRED":
+    case "CANCELLED":
+      return 2;
+    default:
+      return 1;
+  }
+}
+
+function setBestRequestStatus(
+  map: Record<string, string>,
+  userId: string,
+  status: string
+) {
+  const current = map[userId];
+  if (!current || requestStatusPriority(status) > requestStatusPriority(current)) {
+    map[userId] = status;
+  }
+}
+
 /* ─── Match Card ─────────────────────────────────────── */
 
 function MutualMatchCard({
@@ -259,6 +287,17 @@ function MutualMatchCard({
               </Link>
             )}
           </div>
+        ) : viewRequestStatus === "PENDING_INCOMING" ? (
+          <Link
+            href="/requests"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-xs font-medium text-amber-500 transition-all hover:bg-amber-500/15 sm:inline-flex sm:w-auto sm:py-1.5"
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <rect width="20" height="16" x="2" y="4" rx="2" />
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+            </svg>
+            对方已申请查看你 · 去处理
+          </Link>
         ) : viewRequestStatus === "PENDING" ? (
           <span className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-3 py-2 text-center text-xs text-[hsl(var(--muted-foreground))] sm:inline-flex sm:w-auto sm:py-1.5">
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
@@ -385,20 +424,35 @@ export default function MutualMatchesPage() {
     }
   }, [page]);
 
-  // Load outgoing view requests to track approval status
+  // Load view requests in both directions to track pair-level access/status.
   const fetchViewRequests = useCallback(async () => {
     try {
-      const res = await fetch("/api/view-requests?type=outgoing&status=all&pageSize=100");
-      if (res.ok) {
-        const data = await res.json();
-        const map: Record<string, string> = {};
-        for (const req of data.data || []) {
-          if (!map[req.targetUserId] || req.status === "PENDING" || req.status === "APPROVED") {
-            map[req.targetUserId] = req.status;
+      const [outRes, inRes] = await Promise.all([
+        fetch("/api/view-requests?type=outgoing&status=all&pageSize=100"),
+        fetch("/api/view-requests?type=incoming&status=all&pageSize=100"),
+      ]);
+
+      const map: Record<string, string> = {};
+
+      if (outRes.ok) {
+        const outData = await outRes.json();
+        for (const req of outData.data || []) {
+          setBestRequestStatus(map, req.targetUserId, req.status);
+        }
+      }
+
+      if (inRes.ok) {
+        const inData = await inRes.json();
+        for (const req of inData.data || []) {
+          if (req.status === "APPROVED") {
+            setBestRequestStatus(map, req.requesterId, "APPROVED");
+          } else if (req.status === "PENDING") {
+            setBestRequestStatus(map, req.requesterId, "PENDING_INCOMING");
           }
         }
-        setViewRequestMap(map);
       }
+
+      setViewRequestMap(map);
     } catch {
       // non-critical
     }
@@ -445,6 +499,18 @@ export default function MutualMatchesPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        const code = data.error?.code;
+        if (code === "ALREADY_APPROVED" || code === "INCOMING_PENDING" || code === "DUPLICATE") {
+          setViewRequestMap((prev) => ({
+            ...prev,
+            [targetUserId]:
+              code === "ALREADY_APPROVED"
+                ? "APPROVED"
+                : code === "INCOMING_PENDING"
+                  ? "PENDING_INCOMING"
+                  : "PENDING",
+          }));
+        }
         throw new Error(data.error?.message || "申请失败");
       }
       setViewRequestMap((prev) => ({ ...prev, [targetUserId]: "PENDING" }));

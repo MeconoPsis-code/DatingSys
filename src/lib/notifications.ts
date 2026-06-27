@@ -59,6 +59,16 @@ export const notify = {
     );
   },
 
+  /** Published profile photos were revoked after an abnormal-photo report */
+  async photosRevoked(userId: string, reason: string, cooldownDays: number) {
+    await create(
+      userId,
+      "PHOTO_REVOKED",
+      "照片已被撤销",
+      `你的照片因违反「${reason}」已被撤销。在重新发布照片前，系统会将你视为未上传照片用户。你可以在 ${cooldownDays} 天后重新上传并发布照片。`
+    );
+  },
+
   /** Someone sent you a view request */
   async viewRequestReceived(userId: string, requesterName: string) {
     await create(
@@ -75,7 +85,7 @@ export const notify = {
       userId,
       "VIEW_REQUEST_APPROVED",
       "资料查看申请已通过",
-      `${targetName || "对方"} 已通过了你的资料查看申请，可前往匹配页面查看完整资料。`
+      `${targetName || "对方"} 已通过了你的资料查看申请，可前往「申请管理」或匹配页面查看完整资料。`
     );
   },
 

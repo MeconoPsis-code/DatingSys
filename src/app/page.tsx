@@ -3,6 +3,7 @@ import { getSessionPayload } from "@/lib/session";
 
 export default async function LandingPage() {
   const session = await getSessionPayload();
+  const ctaHref = session ? "/me" : "/login";
 
   return (
     <div className="relative flex min-h-screen min-h-dvh w-full items-start justify-center bg-[#fafbfe] px-0 pb-6 pt-20 font-sans sm:pt-24 lg:h-screen lg:items-center lg:overflow-hidden lg:p-0">
@@ -50,7 +51,7 @@ export default async function LandingPage() {
 
             {/* CTA Button */}
             <div className="landing-animate-fadeInLeft animation-delay-300">
-              <a href="/login" className="relative inline-flex h-[68px] items-center justify-center gap-3.5 overflow-hidden rounded-xl bg-brand-blue px-16 text-[22px] font-semibold text-white shadow-[0_10px_24px_rgba(22,119,255,0.25)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-brand-blue/95 hover:shadow-[0_12px_30px_rgba(22,119,255,0.35)] active:translate-y-px active:shadow-[0_6px_16px_rgba(22,119,255,0.2)]">
+              <a href={ctaHref} className="relative inline-flex h-[68px] items-center justify-center gap-3.5 overflow-hidden rounded-xl bg-brand-blue px-16 text-[22px] font-semibold text-white shadow-[0_10px_24px_rgba(22,119,255,0.25)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-brand-blue/95 hover:shadow-[0_12px_30px_rgba(22,119,255,0.35)] active:translate-y-px active:shadow-[0_6px_16px_rgba(22,119,255,0.2)]">
                 <span className="flex h-[22px] w-[22px] items-center justify-center">
                   <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -240,7 +241,7 @@ export default async function LandingPage() {
           {/* CTA & Agreements */}
           <section className="landing-animate-fadeInUp animation-delay-200 flex w-full flex-col items-center">
             {/* Login Button */}
-            <a href="/login" className="flex h-12 w-full max-w-[320px] items-center justify-center gap-2 rounded-xl bg-brand-blue text-[15.5px] font-semibold text-white no-underline shadow-[0_8px_20px_rgba(22,119,255,0.22)] transition-all hover:bg-brand-blue/95 hover:shadow-[0_10px_24px_rgba(22,119,255,0.3)]">
+            <a href={ctaHref} className="flex h-12 w-full max-w-[320px] items-center justify-center gap-2 rounded-xl bg-brand-blue text-[15.5px] font-semibold text-white no-underline shadow-[0_8px_20px_rgba(22,119,255,0.22)] transition-all hover:bg-brand-blue/95 hover:shadow-[0_10px_24px_rgba(22,119,255,0.3)]">
               <span className="flex h-[17px] w-[17px] items-center justify-center">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
                   <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/>
@@ -258,19 +259,19 @@ export default async function LandingPage() {
           </section>
 
           {/* Feature Grid Row */}
-          <section className="landing-animate-fadeInUp animation-delay-300 mt-6 grid w-full grid-cols-1 gap-2 border-t border-brand-blue/5 py-4 min-[390px]:grid-cols-3">
-            <div className="flex flex-col items-center text-center">
+          <section className="landing-animate-fadeInUp animation-delay-300 mt-6 grid w-full grid-cols-3 gap-1.5 border-t border-brand-blue/5 py-4 min-[390px]:gap-2">
+            <div className="flex min-w-0 flex-col items-center text-center">
               <div className="mb-1.5 flex h-8.5 w-8.5 items-center justify-center rounded-full bg-brand-blue/5 transition-all duration-200 hover:bg-brand-blue/10">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-brand-blue">
                   <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                   <circle cx="9" cy="7" r="4" />
                 </svg>
               </div>
-              <span className="text-[11px] font-bold leading-tight text-brand-text">群认证专属</span>
-              <span className="text-[10px] leading-tight text-brand-muted">仅限认证成员</span>
+              <span className="whitespace-nowrap text-[11px] font-bold leading-tight text-brand-text">群认证专属</span>
+              <span className="whitespace-nowrap text-[10px] leading-tight text-brand-muted">仅限认证成员</span>
             </div>
 
-            <div className="flex flex-col items-center text-center">
+            <div className="flex min-w-0 flex-col items-center text-center">
               <div className="mb-1.5 flex h-8.5 w-8.5 items-center justify-center rounded-full bg-brand-blue/5 transition-all duration-200 hover:bg-brand-blue/10">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-brand-blue">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -278,19 +279,19 @@ export default async function LandingPage() {
                   <line x1="16" y1="13" x2="8" y2="13" />
                 </svg>
               </div>
-              <span className="text-[11px] font-bold leading-tight text-brand-text">资料智能匹配</span>
-              <span className="text-[10px] leading-tight text-brand-muted">快速找到同好</span>
+              <span className="whitespace-nowrap text-[11px] font-bold leading-tight text-brand-text">资料智能匹配</span>
+              <span className="whitespace-nowrap text-[10px] leading-tight text-brand-muted">快速找到同好</span>
             </div>
 
-            <div className="flex flex-col items-center text-center">
+            <div className="flex min-w-0 flex-col items-center text-center">
               <div className="mb-1.5 flex h-8.5 w-8.5 items-center justify-center rounded-full bg-brand-blue/5 transition-all duration-200 hover:bg-brand-blue/10">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-brand-blue">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                   <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                 </svg>
               </div>
-              <span className="text-[11px] font-bold leading-tight text-brand-text">隐私双向保护</span>
-              <span className="text-[10px] leading-tight text-brand-muted">解锁可见敏感资料</span>
+              <span className="whitespace-nowrap text-[11px] font-bold leading-tight text-brand-text">隐私双向保护</span>
+              <span className="whitespace-nowrap text-[10px] leading-tight text-brand-muted">解锁可见敏感资料</span>
             </div>
           </section>
 

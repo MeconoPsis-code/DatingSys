@@ -13,30 +13,49 @@ export async function POST(req: Request) {
     const session = await requireAuth();
     const body = await req.json();
     const { targetUserId, message } = body;
+    const normalizedTargetUserId =
+      typeof targetUserId === 'string' ? targetUserId.trim() : '';
 
     // Validate targetUserId is provided
-    if (!targetUserId) {
+    if (!normalizedTargetUserId) {
       return error('VALIDATION', '缺少目标用户ID', 400);
     }
 
     // Cannot request self
-    if (targetUserId === session.id) {
+    if (normalizedTargetUserId === session.id) {
       return error('VALIDATION', '不能向自己发送查看申请', 400);
     }
 
-    // Check no existing PENDING request from this user to this target
-    const existing = await db.viewRequest.findFirst({
-      where: { requesterId: session.id, targetUserId, status: 'PENDING' },
+    // Check active requests in both directions. Approval is mutual, and
+    // a pending incoming request should be handled rather than duplicated.
+    const activeRequests = await db.viewRequest.findMany({
+      where: {
+        status: { in: ['PENDING', 'APPROVED'] },
+        OR: [
+          { requesterId: session.id, targetUserId: normalizedTargetUserId },
+          { requesterId: normalizedTargetUserId, targetUserId: session.id },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
     });
-    if (existing) {
-      return error('DUPLICATE', '已有待处理的查看申请', 400);
+    const activeRequest =
+      activeRequests.find((request) => request.status === 'APPROVED') ??
+      activeRequests.find((request) => request.status === 'PENDING');
+    if (activeRequest?.status === 'APPROVED') {
+      return error('ALREADY_APPROVED', '你们已经可以互相查看资料', 400);
+    }
+    if (activeRequest?.status === 'PENDING') {
+      if (activeRequest.requesterId === session.id) {
+        return error('DUPLICATE', '已有待处理的查看申请', 400);
+      }
+      return error('INCOMING_PENDING', '对方已向你发起申请，请前往「收到的申请」处理', 400);
     }
 
     // 7-day cooldown after rejection
     const lastRejected = await db.viewRequest.findFirst({
       where: {
         requesterId: session.id,
-        targetUserId,
+        targetUserId: normalizedTargetUserId,
         status: 'REJECTED',
       },
       orderBy: { respondedAt: 'desc' },
@@ -52,7 +71,7 @@ export async function POST(req: Request) {
 
     // Verify the target user exists and has an active profile
     const targetUser = await db.user.findUnique({
-      where: { id: targetUserId },
+      where: { id: normalizedTargetUserId },
       include: { profile: { select: { status: true } } },
     });
 
@@ -68,7 +87,7 @@ export async function POST(req: Request) {
     const request = await db.viewRequest.create({
       data: {
         requesterId: session.id,
-        targetUserId,
+        targetUserId: normalizedTargetUserId,
         message: message || null,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
@@ -79,7 +98,7 @@ export async function POST(req: Request) {
       where: { userId: session.id },
       select: { nickname: true },
     });
-    await notify.viewRequestReceived(targetUserId, requesterIdentity?.nickname || "匿名用户");
+    await notify.viewRequestReceived(normalizedTargetUserId, requesterIdentity?.nickname || "匿名用户");
 
     return success(request, 201);
   } catch (err) {

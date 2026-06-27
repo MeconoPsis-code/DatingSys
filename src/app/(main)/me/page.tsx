@@ -99,15 +99,15 @@ function InfoRow({ icon, label, value, badge }: {
   badge?: { label: string; cls: string };
 }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-[hsl(var(--border)/0.3)] px-1 py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:gap-3">
-      <span className="shrink-0 flex items-center justify-center">{icon}</span>
-      <span className="text-sm text-[hsl(var(--muted-foreground))] sm:w-24 sm:shrink-0">{label}</span>
+    <div className="flex items-center gap-3 border-b border-[hsl(var(--border)/0.3)] px-1 py-3 last:border-b-0">
+      <span className="flex shrink-0 items-center justify-center">{icon}</span>
+      <span className="w-20 shrink-0 text-sm text-[hsl(var(--muted-foreground))] sm:w-24">{label}</span>
       {badge ? (
-        <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${badge.cls}`}>
+        <span className={`ml-auto inline-flex shrink-0 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium sm:ml-0 ${badge.cls}`}>
           {badge.label}
         </span>
       ) : (
-        <span className="min-w-0 break-words text-sm font-medium text-[hsl(var(--foreground))]">{value || "—"}</span>
+        <span className="min-w-0 flex-1 break-words text-sm font-medium text-[hsl(var(--foreground))]">{value || "—"}</span>
       )}
     </div>
   );
@@ -500,6 +500,8 @@ export default function MePage() {
     SCORING_COMPLETE: "/match-preferences",
     RANKING_INVITE: "/me#ranking-setting",
     VIEW_REQUEST_RECEIVED: "/requests",
+    VIEW_REQUEST_APPROVED: "/requests",
+    PHOTO_REVOKED: "/profile/edit",
   };
 
   function renderNotifMessage(n: NotificationItem) {

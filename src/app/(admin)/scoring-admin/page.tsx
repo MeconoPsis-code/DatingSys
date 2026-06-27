@@ -505,26 +505,45 @@ function TaskCard({
               );
             })}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm("确定要撤销该用户的照片吗？照片将被删除，用户需要重新上传。")) {
-                onRevokePhotos(task.id);
-              }
-            }}
-            className="flex items-center rounded-lg bg-red-500/15 border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:bg-red-500/25"
-          >
-            <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-              <polyline points="3 6 5 6 21 6" />
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-            撤销照片并要求重新上传
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm("确认照片违规并撤销该用户的照片吗？照片将被删除，用户会收到包含举报原因的通知。")) {
+                  onRevokePhotos(task.id);
+                }
+              }}
+              className="flex items-center rounded-lg bg-red-500/15 border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:bg-red-500/25"
+            >
+              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+              违规，撤销照片
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm("确认照片不违规并重新发起评分吗？举报记录将被清除，任务会回到评分队列。")) {
+                  onRescore(task.id);
+                }
+              }}
+              className="flex items-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/20"
+            >
+              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                <path d="M16 16h5v5" />
+              </svg>
+              不违规，重新评分
+            </button>
+          </div>
         </div>
       )}
 
       {/* Actions for non-REVIEW tasks — SUPER_ADMIN only */}
-      {task.status !== "REVIEW" && isSuperAdmin && (
+      {task.status !== "REVIEW" && task.photoReports.length === 0 && isSuperAdmin && (
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -644,7 +663,7 @@ export default function ScoringAdminPage() {
       const res = await fetch(`/api/admin/scoring/${taskId}/revoke-photos`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "操作失败");
-      alert("照片已撤销，用户需要重新上传");
+      alert(data.data?.message || "照片已撤销，用户已收到通知");
       fetchTasks();
     } catch (err) {
       alert(err instanceof Error ? err.message : "操作失败");

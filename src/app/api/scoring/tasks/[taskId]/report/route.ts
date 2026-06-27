@@ -1,7 +1,8 @@
-import { requireRole } from '@/lib/auth';
+import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { NextRequest } from 'next/server';
+import { can } from '@/lib/rbac';
 
 /**
  * POST /api/scoring/tasks/[taskId]/report
@@ -13,7 +14,10 @@ export async function POST(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
-    const session = await requireRole('SCORER');
+    const session = await requireAuth();
+    if (!can(session.role, 'SCORE_PHOTO')) {
+      return error('FORBIDDEN', '无权操作此任务', 403);
+    }
     const { taskId } = await params;
     const body = await req.json();
     const reason = (body.reason as string)?.trim();
@@ -28,6 +32,10 @@ export async function POST(
     const task = await db.ratingTask.findUnique({ where: { id: taskId } });
     if (!task) {
       return error('NOT_FOUND', '任务不存在', 404);
+    }
+
+    if (!['PENDING', 'SCORING'].includes(task.status)) {
+      return error('CONFLICT', '该任务当前不可举报', 409);
     }
 
     // Verify scorer is in the snapshot

@@ -1016,13 +1016,14 @@ export default function ProfileEditPage() {
       </section>
 
       {/* Sticky action buttons */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[hsl(var(--border))] bg-[hsl(var(--background))] safe-bottom md:left-64">
-        <div className="mx-auto flex max-w-3xl gap-3 px-4 py-3">
+      <div className="fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 px-3 md:bottom-4 md:left-64 md:px-4">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]/95 p-3 shadow-[0_18px_42px_rgba(15,23,42,0.14)] backdrop-blur">
+          <div className="flex gap-3">
           <button
             type="button"
             onClick={() => handleSubmit("DRAFT")}
             disabled={submitting}
-            className="flex-1 rounded-lg border border-[hsl(var(--border))] px-4 py-2.5 text-sm font-semibold text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] active:scale-[0.98] disabled:opacity-50"
+            className="flex min-h-12 flex-1 items-center justify-center rounded-xl border border-[hsl(var(--border))] bg-white px-3 py-2.5 text-center text-xs font-semibold leading-tight text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] active:scale-[0.98] disabled:opacity-50 sm:text-sm"
           >
             {submitting ? "保存中..." : originalProfileStatus === "ACTIVE" ? "保存草稿（不影响已发布资料）" : "保存草稿"}
           </button>
@@ -1030,10 +1031,11 @@ export default function ProfileEditPage() {
             type="button"
             onClick={() => handleSubmit("ACTIVE")}
             disabled={submitting || !form.consent || !cooldowns.canEdit || !cooldowns.canPublish}
-            className="flex-1 rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
+            className="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-brand-blue px-3 py-2.5 text-center text-xs font-semibold leading-tight text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 sm:text-sm"
           >
             {submitting ? "保存中..." : !cooldowns.canPublish ? `${cooldowns.publishCooldownRemaining}天后可发布` : !cooldowns.canEdit ? `${cooldowns.editCooldownRemaining}天后可修改` : "发布资料"}
           </button>
+          </div>
         </div>
       </div>
 

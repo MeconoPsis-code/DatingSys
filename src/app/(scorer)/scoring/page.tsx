@@ -74,6 +74,7 @@ export default function ScoringPage() {
       if (!res.ok) throw new Error(data.error?.message || "举报失败");
       setShowReportModal(false);
       setReportReason("");
+      await advanceAfterTaskHandled();
       alert("举报已提交，管理员将会审核");
     } catch (err) {
       alert(err instanceof Error ? err.message : "举报失败");
@@ -116,6 +117,20 @@ export default function ScoringPage() {
   const currentTask = tasks[currentIndex] ?? null;
   const totalPending = tasks.length;
 
+  async function advanceAfterTaskHandled() {
+    const remaining = tasks.filter((_, i) => i !== currentIndex);
+    if (remaining.length > 0) {
+      setTasks(remaining);
+      setCurrentIndex(Math.min(currentIndex, remaining.length - 1));
+      setPhotoIndex(0);
+      setScores({ contour: 5, skin: 5, harmony: 5, styling: 5, charisma: 5 });
+      setSubmitError(null);
+      return;
+    }
+
+    await fetchTasks();
+  }
+
   async function handleSubmitScore() {
     if (!currentTask) return;
     setSubmitting(true);
@@ -136,17 +151,7 @@ export default function ScoringPage() {
       setTimeout(() => setShowSuccess(false), 800);
 
       // Move to next task or refresh
-      const remaining = tasks.filter((_, i) => i !== currentIndex);
-      if (remaining.length > 0) {
-        setTasks(remaining);
-        setCurrentIndex(0);
-        setPhotoIndex(0);
-        setScores({ contour: 5, skin: 5, harmony: 5, styling: 5, charisma: 5 });
-        setSubmitError(null);
-      } else {
-        // No more tasks — refresh from API
-        await fetchTasks();
-      }
+      await advanceAfterTaskHandled();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "提交失败");
     } finally {

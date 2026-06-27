@@ -31,6 +31,8 @@ function requestButtonText(status: RankingProfileRequestStatus | undefined): str
       return "查看资料";
     case "PENDING":
       return "待审核";
+    case "PENDING_INCOMING":
+      return "待你处理";
     case "REJECTED":
       return "重新申请";
     case "EXPIRED":
@@ -67,6 +69,14 @@ export function RankingTable({
       if (!res.ok) {
         if (data.error?.code === "DUPLICATE") {
           setRequestStatuses((prev) => ({ ...prev, [userId]: "PENDING" }));
+          return;
+        }
+        if (data.error?.code === "INCOMING_PENDING") {
+          setRequestStatuses((prev) => ({ ...prev, [userId]: "PENDING_INCOMING" }));
+          return;
+        }
+        if (data.error?.code === "ALREADY_APPROVED") {
+          setRequestStatuses((prev) => ({ ...prev, [userId]: "APPROVED" }));
           return;
         }
         if (res.status === 401) {
@@ -148,6 +158,13 @@ export function RankingTable({
                   <span className="inline-flex h-9 items-center justify-center rounded-xl bg-slate-100 px-3 text-xs font-bold text-brand-muted sm:h-8">
                     {requestButtonText(status)}
                   </span>
+                ) : status === "PENDING_INCOMING" ? (
+                  <Link
+                    href="/requests"
+                    className="inline-flex h-9 items-center justify-center rounded-xl border border-amber-400/40 bg-amber-50 px-3 text-xs font-bold text-amber-600 transition-all hover:bg-amber-100 sm:h-8"
+                  >
+                    {requestButtonText(status)}
+                  </Link>
                 ) : (
                   <button
                     type="button"

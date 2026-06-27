@@ -55,8 +55,8 @@ export async function POST(
     return error("NOT_FOUND", "评分任务不存在", 404);
   }
 
-  if (task.status === "COMPLETED") {
-    return error("CONFLICT", "该任务已完成评分", 409);
+  if (!["PENDING", "SCORING"].includes(task.status)) {
+    return error("CONFLICT", "该任务当前不可评分", 409);
   }
 
   // Verify scorer is in the snapshot

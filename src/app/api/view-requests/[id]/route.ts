@@ -40,13 +40,34 @@ export async function PUT(
       return error('INVALID_STATUS', '该申请已被处理', 400);
     }
 
-    // Update
-    const updated = await db.viewRequest.update({
-      where: { id },
-      data: {
-        status: action === 'approve' ? 'APPROVED' : 'REJECTED',
-        respondedAt: new Date(),
-      },
+    const respondedAt = new Date();
+
+    // Update. If legacy opposite-direction pending rows exist, approve them
+    // too so both request lists and match cards converge on the mutual state.
+    const updated = await db.$transaction(async (tx) => {
+      const handled = await tx.viewRequest.update({
+        where: { id },
+        data: {
+          status: action === 'approve' ? 'APPROVED' : 'REJECTED',
+          respondedAt,
+        },
+      });
+
+      if (action === 'approve') {
+        await tx.viewRequest.updateMany({
+          where: {
+            requesterId: viewRequest.targetUserId,
+            targetUserId: viewRequest.requesterId,
+            status: 'PENDING',
+          },
+          data: {
+            status: 'APPROVED',
+            respondedAt,
+          },
+        });
+      }
+
+      return handled;
     });
 
     // Notify the requester about the response
