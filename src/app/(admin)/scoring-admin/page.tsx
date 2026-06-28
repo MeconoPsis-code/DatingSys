@@ -293,41 +293,41 @@ function TaskCard({
   const avgScore = task.finalScore ?? calculatedAvg;
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 transition-all hover:border-[hsl(var(--primary)/0.2)]">
+    <div className="min-w-0 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 transition-all hover:border-[hsl(var(--primary)/0.2)] sm:p-5">
       {/* Header */}
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
-              {task.ratedUserNickname || task.ratedUserQQ || truncateId(task.ratedUserId)}
-            </span>
-            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${badge.cls}`}>
-              {badge.label}
-            </span>
-          </div>
-          <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
+      <div className="mb-3 rounded-lg bg-[hsl(var(--secondary)/0.25)] px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-semibold leading-5 text-[hsl(var(--foreground))]">
+            {task.ratedUserNickname || task.ratedUserQQ || truncateId(task.ratedUserId)}
+          </p>
+          <p className="mt-1 break-all text-xs text-[hsl(var(--muted-foreground))]">
             QQ: {task.ratedUserQQ || "—"}
           </p>
         </div>
-        <span className="shrink-0 text-[11px] text-[hsl(var(--muted-foreground))]">
-          {formatDate(task.createdAt)}
-        </span>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${badge.cls}`}>
+            {badge.label}
+          </span>
+          <span className="text-[11px] text-[hsl(var(--muted-foreground))]">
+            {formatDate(task.createdAt)}
+          </span>
+        </div>
       </div>
 
       {/* Photos */}
       {task.photos.length > 0 && (
-        <div className="mb-3 flex gap-2 overflow-x-auto rounded-lg bg-[hsl(var(--secondary)/0.3)] p-2">
+        <div className="mb-3 grid grid-cols-2 gap-2 rounded-lg bg-[hsl(var(--secondary)/0.3)] p-2 sm:flex sm:flex-wrap">
           {task.photos.map((photo, i) => (
             <button
               key={photo.id}
               type="button"
               onClick={() => setLightboxIdx(i)}
-              className="shrink-0 overflow-hidden rounded-lg border border-[hsl(var(--border)/0.5)] transition-all hover:border-[hsl(var(--primary)/0.5)] hover:scale-[1.03] focus:outline-none"
+              className="aspect-square overflow-hidden rounded-lg border border-[hsl(var(--border)/0.5)] transition-all hover:border-[hsl(var(--primary)/0.5)] hover:scale-[1.03] focus:outline-none sm:h-32 sm:w-32 sm:shrink-0"
             >
               <img
                 src={photo.url}
                 alt={`照片 ${photo.order + 1}`}
-                className="h-32 w-32 object-cover"
+                className="h-full w-full object-cover"
               />
             </button>
           ))}
@@ -373,17 +373,17 @@ function TaskCard({
       {/* Scorer details */}
       <div className="mb-3">
         <p className="mb-2 text-xs font-medium text-[hsl(var(--muted-foreground))]">评分详情:</p>
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
           {/* Scored entries */}
           {task.scores.map((s) => (
             <div
               key={s.id}
-              className="flex items-center justify-between rounded-md bg-[hsl(var(--secondary)/0.3)] px-2.5 py-1.5"
+              className="flex min-w-0 items-center justify-between rounded-md bg-[hsl(var(--secondary)/0.3)] px-2.5 py-1.5"
             >
               <span className="truncate text-xs text-[hsl(var(--foreground))]">
                 {s.scorerNickname || s.scorerQQ || truncateId(s.scorerUserId)}
               </span>
-              <span className={`ml-2 text-xs font-bold ${scoreColor(s.score)}`}>
+              <span className={`ml-2 shrink-0 text-xs font-bold ${scoreColor(s.score)}`}>
                 {s.score.toFixed(1)}
               </span>
             </div>
@@ -398,12 +398,12 @@ function TaskCard({
               return (
                 <div
                   key={id}
-                  className="flex items-center justify-between rounded-md bg-[hsl(var(--secondary)/0.15)] px-2.5 py-1.5"
+                  className="flex min-w-0 items-center justify-between rounded-md bg-[hsl(var(--secondary)/0.15)] px-2.5 py-1.5"
                 >
                   <span className="truncate text-xs text-[hsl(var(--muted-foreground))]">
                     {displayName}
                   </span>
-                  <span className="ml-2 text-[10px] text-[hsl(var(--muted-foreground))]">
+                  <span className="ml-2 shrink-0 text-[10px] text-[hsl(var(--muted-foreground))]">
                     未评分
                   </span>
                 </div>
@@ -417,8 +417,8 @@ function TaskCard({
         <>
           {task.pendingActionType ? (
             <div className="mb-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-xs font-medium text-blue-400 flex items-center gap-1.5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-1.5 text-xs font-medium text-blue-400 sm:items-center">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
@@ -429,7 +429,7 @@ function TaskCard({
                       : `已提交「直接设定评分 ${task.pendingActionValue?.toFixed(1)} 分」，将在倒计时结束后生效`}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   <span className="font-mono text-sm font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
                     {timeLeft || "10:00"}
                   </span>
@@ -706,14 +706,14 @@ export default function ScoringAdminPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">评分管理</h1>
         {isSuperAdmin && (
           <button
             type="button"
             disabled={fixing}
             onClick={handleFixStuck}
-            className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20 disabled:opacity-50"
+            className="w-fit rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20 disabled:opacity-50"
           >
             {fixing ? "修复中..." : "修复卡住的任务"}
           </button>
@@ -721,7 +721,8 @@ export default function ScoringAdminPage() {
       </div>
 
       {/* Status tabs */}
-      <div className="flex flex-wrap gap-1 rounded-xl bg-[hsl(var(--secondary))] p-1">
+      <div className="rounded-xl bg-[hsl(var(--secondary))] p-1">
+        <div className="grid grid-cols-3 gap-1 sm:flex sm:flex-wrap">
         {STATUS_TABS
           .filter((tab) => !('superOnly' in tab && tab.superOnly) || isSuperAdmin)
           .map((tab) => (
@@ -729,7 +730,7 @@ export default function ScoringAdminPage() {
             key={tab.value}
             type="button"
             onClick={() => { setStatusFilter(tab.value); setPage(1); }}
-            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium transition-all ${
+            className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:justify-start sm:px-4 ${
               statusFilter === tab.value
                 ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
                 : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
@@ -745,6 +746,7 @@ export default function ScoringAdminPage() {
             {tab.label}
           </button>
         ))}
+        </div>
       </div>
 
       <div className="text-xs text-[hsl(var(--muted-foreground))]">共 {total} 个评分任务</div>
