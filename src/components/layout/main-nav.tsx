@@ -143,6 +143,12 @@ const ROLE_WEIGHT: Record<UserRole, number> = {
   SUPER_ADMIN: 3,
 };
 
+const PRIVILEGED_NAV_HREFS = new Set([
+  "/scoring",
+  "/scoring-review",
+  "/dashboard",
+]);
+
 const ACCENT_STYLES: Record<
   NavAccent,
   {
@@ -202,6 +208,52 @@ export function MainNav() {
         }
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const media = window.matchMedia("(hover: none) and (pointer: coarse)");
+    const viewport = window.visualViewport;
+
+    if (!viewport || !media.matches) {
+      root.style.setProperty("--mobile-nav-lift", "0px");
+      return;
+    }
+
+    const updateMobileNavLift = () => {
+      const activeElement = document.activeElement;
+      const isEditing =
+        activeElement instanceof HTMLElement &&
+        ["INPUT", "SELECT", "TEXTAREA"].includes(activeElement.tagName);
+
+      const bottomInset = Math.max(
+        0,
+        window.innerHeight - viewport.height - viewport.offsetTop
+      );
+
+      const lift =
+        !isEditing && bottomInset > 0 && bottomInset < 120
+          ? Math.min(Math.round(bottomInset), 56)
+          : 0;
+
+      root.style.setProperty("--mobile-nav-lift", `${lift}px`);
+    };
+
+    updateMobileNavLift();
+    viewport.addEventListener("resize", updateMobileNavLift);
+    viewport.addEventListener("scroll", updateMobileNavLift);
+    window.addEventListener("orientationchange", updateMobileNavLift);
+    window.addEventListener("focusin", updateMobileNavLift);
+    window.addEventListener("focusout", updateMobileNavLift);
+
+    return () => {
+      viewport.removeEventListener("resize", updateMobileNavLift);
+      viewport.removeEventListener("scroll", updateMobileNavLift);
+      window.removeEventListener("orientationchange", updateMobileNavLift);
+      window.removeEventListener("focusin", updateMobileNavLift);
+      window.removeEventListener("focusout", updateMobileNavLift);
+      root.style.setProperty("--mobile-nav-lift", "0px");
+    };
   }, []);
 
   // Fetch badge counts on mount and poll every 30s
@@ -264,6 +316,30 @@ export function MainNav() {
 
   const isSystemActive = managementSection.some((tab) => isActive(tab.href));
 
+  async function handleNavClick(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    href: string
+  ) {
+    if (!PRIVILEGED_NAV_HREFS.has(href)) {
+      setIsSystemMenuOpen(false);
+      return;
+    }
+
+    event.preventDefault();
+    setIsSystemMenuOpen(false);
+
+    try {
+      await fetch("/api/auth/refresh", {
+        method: "POST",
+        cache: "no-store",
+      });
+    } catch {
+      // Continue navigation; server-side guards will handle unauthorized users.
+    }
+
+    window.location.assign(href);
+  }
+
   const renderDesktopSection = (
     title: string,
     accent: NavAccent,
@@ -284,6 +360,7 @@ export function MainNav() {
             <Link
               key={tab.href}
               href={tab.href}
+              onClick={(event) => handleNavClick(event, tab.href)}
               className={`menu-item relative flex h-11 items-center gap-3 rounded-[13px] px-3.5 text-sm font-semibold transition-all duration-200 ${
                 active ? styles.active : styles.inactive
               }`}
@@ -313,7 +390,7 @@ export function MainNav() {
       <Link
         key={tab.href}
         href={tab.href}
-        onClick={() => setIsSystemMenuOpen(false)}
+        onClick={(event) => handleNavClick(event, tab.href)}
         className={`relative flex min-w-0 flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold transition-colors min-[360px]:text-[11px] ${
           active ? styles.mobileActive : "text-brand-muted hover:text-brand-text"
         }`}
@@ -345,7 +422,11 @@ export function MainNav() {
       {isSystemMenuOpen && (
         <div
           id="mobile-system-menu"
-          className="fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[60] overflow-hidden rounded-2xl border border-[#e9edf5] bg-white shadow-[0_18px_46px_rgba(15,23,42,0.16)] md:hidden"
+          className="fixed inset-x-3 z-[60] overflow-hidden rounded-2xl border border-[#e9edf5] bg-white shadow-[0_18px_46px_rgba(15,23,42,0.16)] md:hidden"
+          style={{
+            bottom:
+              "calc(4.75rem + env(safe-area-inset-bottom, 0px) + var(--mobile-nav-lift, 0px))",
+          }}
         >
           <div className="flex items-center justify-between border-b border-[#eef2f7] px-4 py-3">
             <span className="text-sm font-extrabold text-[#d48806]">系统</span>
@@ -365,7 +446,7 @@ export function MainNav() {
                 <Link
                   key={tab.href}
                   href={tab.href}
-                  onClick={() => setIsSystemMenuOpen(false)}
+                  onClick={(event) => handleNavClick(event, tab.href)}
                   className={`flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition-colors ${
                     active
                       ? "border border-[#ffe58f] bg-gold-1 text-[#d48806]"
@@ -401,7 +482,10 @@ export function MainNav() {
       </aside>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-6 border-t border-[#e9edf5] bg-white px-1 safe-bottom md:hidden">
+      <nav
+        className="fixed left-0 right-0 z-50 grid grid-cols-6 border-t border-[#e9edf5] bg-white px-1 safe-bottom md:hidden"
+        style={{ bottom: "var(--mobile-nav-lift, 0px)" }}
+      >
         {userSection.map((tab) => renderMobileLink(tab, "blue"))}
         <button
           type="button"

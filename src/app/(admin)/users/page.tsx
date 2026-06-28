@@ -543,19 +543,19 @@ export default function AdminUsersPage() {
 
       {/* Table */}
       {!loading && (
-        <div className="overflow-x-auto rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] [-webkit-overflow-scrolling:touch]">
+          <table className="min-w-[1120px] table-fixed border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
-                <th className="px-4 py-3 font-medium">QQ号</th>
-                <th className="px-4 py-3 font-medium">昵称</th>
-                <th className="px-4 py-3 font-medium">角色</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">群认证</th>
-                <th className="px-4 py-3 font-medium">资料</th>
-                <th className="px-4 py-3 font-medium">处罚</th>
-                <th className="px-4 py-3 font-medium">注册时间</th>
-                <th className="px-4 py-3 font-medium">操作</th>
+                <th className="w-[130px] px-4 py-3 font-medium whitespace-nowrap">QQ号</th>
+                <th className="w-[150px] px-4 py-3 font-medium whitespace-nowrap">昵称</th>
+                <th className="w-[150px] px-4 py-3 font-medium whitespace-nowrap">角色</th>
+                <th className="w-[110px] px-4 py-3 font-medium whitespace-nowrap">状态</th>
+                <th className="w-[130px] px-4 py-3 font-medium whitespace-nowrap">群认证</th>
+                <th className="w-[120px] px-4 py-3 font-medium whitespace-nowrap">资料</th>
+                <th className="w-[80px] px-4 py-3 font-medium whitespace-nowrap">处罚</th>
+                <th className="w-[150px] px-4 py-3 font-medium whitespace-nowrap">注册时间</th>
+                <th className="w-[200px] px-4 py-3 font-medium whitespace-nowrap">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -570,8 +570,10 @@ export default function AdminUsersPage() {
                     key={user.id}
                     className="border-b border-[hsl(var(--border)/0.5)] transition-colors hover:bg-[hsl(var(--secondary)/0.5)]"
                   >
-                    <td className="px-4 py-3 font-mono text-xs">{user.qqNumber || "—"}</td>
-                    <td className="px-4 py-3">{user.nickname || "—"}</td>
+                    <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">{user.qqNumber || "—"}</td>
+                    <td className="px-4 py-3">
+                      <span className="block truncate">{user.nickname || "—"}</span>
+                    </td>
                     <td className="px-4 py-3 text-xs">
                       {isSuperAdmin ? (
                         <RoleSelector user={user} onChanged={fetchUsers} />
@@ -582,17 +584,17 @@ export default function AdminUsersPage() {
                         />
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <Badge label={statusInfo.label} cls={statusInfo.cls} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {memberInfo ? (
                         <Badge label={memberInfo.label} cls={memberInfo.cls} />
                       ) : (
                         <span className="text-xs text-[hsl(var(--muted-foreground))]">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       {user.hasProfile ? (
                         <span className="text-emerald-400 text-xs">✓ 已填写</span>
                       ) : (
@@ -608,11 +610,11 @@ export default function AdminUsersPage() {
                         <span className="text-xs text-[hsl(var(--muted-foreground))]">0</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-[hsl(var(--muted-foreground))]">
+                    <td className="px-4 py-3 text-xs whitespace-nowrap text-[hsl(var(--muted-foreground))]">
                       {formatDate(user.createdAt)}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-1.5">
+                      <div className="flex flex-nowrap gap-1.5">
                         <Link
                           href={`/users/${user.id}`}
                           className="rounded-md bg-[hsl(var(--secondary))] px-2.5 py-1 text-[11px] font-medium text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--primary)/0.15)] hover:text-[hsl(var(--primary))]"

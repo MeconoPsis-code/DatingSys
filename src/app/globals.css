@@ -69,12 +69,28 @@
   border-color: hsl(var(--border));
 }
 
+html {
+  min-height: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
+  min-height: 100dvh;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   font-feature-settings: "rlig" 1, "calt" 1;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
 }
 
 /* ─── Scrollbar ─────────────────────────────────────── */
@@ -101,6 +117,34 @@ body {
 
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (hover: none) and (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+
+    .ios-webview-shell {
+      height: auto !important;
+      min-height: 100svh;
+      overflow: visible !important;
+    }
+
+    .ios-webview-auth-shell {
+      min-height: 100svh;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .ios-webview-scroll {
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
 }
 
 /* ─── Landing Page Redesign Custom Styles ──────────────── */
@@ -570,4 +614,3 @@ body {
 .dual-range-input:focus-visible::-webkit-slider-thumb {
   box-shadow: 0 0 0 3px hsl(var(--ring) / 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
 }
-

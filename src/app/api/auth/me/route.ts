@@ -9,11 +9,12 @@ import { db } from "@/lib/db";
  */
 export async function GET() {
   const session = await getSession();
+  const noStoreHeaders = { "Cache-Control": "no-store" };
 
   if (!session) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "请先登录" } },
-      { status: 401 }
+      { status: 401, headers: noStoreHeaders }
     );
   }
 
@@ -50,30 +51,33 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json({
-    data: {
-      id: session.id,
-      role: session.role,
-      status: session.status,
-      qqNumber: session.qqNumber,
-      nickname: session.nickname,
-      avatarUrl: session.avatarUrl,
-      membershipStatus: session.membershipStatus,
-      activePenalties,
-      profile: user?.profile ? {
-        birthDate: user.profile.birthDate,
-        provinceCode: user.profile.provinceCode,
-        cityCode: user.profile.cityCode,
-      } : null,
-      ratingProfile: user?.ratingProfile
-        ? {
-            ratingStatus: user.ratingProfile.ratingStatus,
-            finalScore: user.ratingProfile.finalScore,
-            scoreCompletedAt: user.ratingProfile.scoreCompletedAt,
-            rankingOptIn: user.ratingProfile.rankingOptIn,
-            rankingOptInUpdatedAt: user.ratingProfile.rankingOptInUpdatedAt,
-          }
-        : null,
+  return NextResponse.json(
+    {
+      data: {
+        id: session.id,
+        role: session.role,
+        status: session.status,
+        qqNumber: session.qqNumber,
+        nickname: session.nickname,
+        avatarUrl: session.avatarUrl,
+        membershipStatus: session.membershipStatus,
+        activePenalties,
+        profile: user?.profile ? {
+          birthDate: user.profile.birthDate,
+          provinceCode: user.profile.provinceCode,
+          cityCode: user.profile.cityCode,
+        } : null,
+        ratingProfile: user?.ratingProfile
+          ? {
+              ratingStatus: user.ratingProfile.ratingStatus,
+              finalScore: user.ratingProfile.finalScore,
+              scoreCompletedAt: user.ratingProfile.scoreCompletedAt,
+              rankingOptIn: user.ratingProfile.rankingOptIn,
+              rankingOptInUpdatedAt: user.ratingProfile.rankingOptInUpdatedAt,
+            }
+          : null,
+      },
     },
-  });
+    { headers: noStoreHeaders }
+  );
 }

@@ -12,11 +12,12 @@ import { db } from "@/lib/db";
  */
 export async function POST() {
   const session = await getSession();
+  const noStoreHeaders = { "Cache-Control": "no-store" };
 
   if (!session) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "请先登录" } },
-      { status: 401 }
+      { status: 401, headers: noStoreHeaders }
     );
   }
 
@@ -29,7 +30,10 @@ export async function POST() {
   // Re-create session with updated hasProfile flag
   await createSession(session.id, session.role, !!profile);
 
-  return NextResponse.json({
-    data: { success: true, hasProfile: !!profile },
-  });
+  return NextResponse.json(
+    {
+      data: { success: true, hasProfile: !!profile, role: session.role },
+    },
+    { headers: noStoreHeaders }
+  );
 }

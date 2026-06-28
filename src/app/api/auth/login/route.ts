@@ -10,13 +10,14 @@ import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
  * Standard login with QQ号 + passcode.
  */
 export async function POST(req: NextRequest) {
+  const noStoreHeaders = { "Cache-Control": "no-store" };
   const body = await req.json();
   const { qqNumber, passcode } = body;
 
   if (!qqNumber || !passcode) {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "请输入QQ号和密码" } },
-      { status: 422 }
+      { status: 422, headers: noStoreHeaders }
     );
   }
 
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
   if (!user || !user.passwordHash) {
     return NextResponse.json(
       { error: { code: "AUTH_FAILED", message: "QQ号或密码错误" } },
-      { status: 401 }
+      { status: 401, headers: noStoreHeaders }
     );
   }
 
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
   if (user.status === "BANNED") {
     return NextResponse.json(
       { error: { code: "ACCOUNT_LOCKED", message: "账号已被封禁，请联系管理员" } },
-      { status: 403 }
+      { status: 403, headers: noStoreHeaders }
     );
   }
 
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
   if (!valid) {
     return NextResponse.json(
       { error: { code: "AUTH_FAILED", message: "QQ号或密码错误" } },
-      { status: 401 }
+      { status: 401, headers: noStoreHeaders }
     );
   }
 
@@ -77,7 +78,10 @@ export async function POST(req: NextRequest) {
     userAgent: req.headers.get("user-agent"),
   });
 
-  return NextResponse.json({
-    data: { success: true, message: "登录成功" },
-  });
+  return NextResponse.json(
+    {
+      data: { success: true, message: "登录成功" },
+    },
+    { headers: noStoreHeaders }
+  );
 }

@@ -568,6 +568,24 @@ export default function MePage() {
     }
   }
 
+  async function handlePrivilegedLinkClick(
+    event: React.MouseEvent<HTMLAnchorElement>,
+    href: string
+  ) {
+    event.preventDefault();
+
+    try {
+      await fetch("/api/auth/refresh", {
+        method: "POST",
+        cache: "no-store",
+      });
+    } catch {
+      // Continue navigation; route guards will handle invalid sessions.
+    }
+
+    window.location.assign(href);
+  }
+
   async function handleRankingToggle(optIn: boolean) {
     const localCooldown = getRankingOptInCooldown(
       me?.ratingProfile?.rankingOptInUpdatedAt,
@@ -1020,6 +1038,7 @@ export default function MePage() {
           {isScorer && (
             <Link
               href="/scoring"
+              onClick={(event) => handlePrivilegedLinkClick(event, "/scoring")}
               className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-pink-500/10 text-pink-500 shrink-0">
@@ -1036,6 +1055,7 @@ export default function MePage() {
           {isAdmin && (
             <Link
               href="/dashboard"
+              onClick={(event) => handlePrivilegedLinkClick(event, "/dashboard")}
               className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/10 text-blue-600 shrink-0">

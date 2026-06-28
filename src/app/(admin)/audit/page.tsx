@@ -74,78 +74,72 @@ function LogEntry({
     : "text-[hsl(var(--foreground))]";
 
   return (
-    <div className="border-b border-[hsl(var(--border)/0.3)] last:border-b-0">
-      <button
-        type="button"
+    <>
+      <tr
         onClick={onToggle}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[hsl(var(--secondary)/0.3)]"
+        className="cursor-pointer border-b border-[hsl(var(--border)/0.3)] transition-colors hover:bg-[hsl(var(--secondary)/0.3)]"
       >
-        {/* Expand indicator */}
-        <span className={`text-[10px] text-[hsl(var(--muted-foreground))] transition-transform ${expanded ? "rotate-90" : ""}`}>
-          ▶
-        </span>
-
-        {/* Time */}
-        <span className="w-40 shrink-0 font-mono text-[11px] text-[hsl(var(--muted-foreground))]">
+        <td className="w-12 px-4 py-3 align-top">
+          <span className={`inline-block text-[10px] text-[hsl(var(--muted-foreground))] transition-transform ${expanded ? "rotate-90" : ""}`}>
+            ▶
+          </span>
+        </td>
+        <td className="w-[170px] px-4 py-3 align-top font-mono text-[11px] whitespace-nowrap text-[hsl(var(--muted-foreground))]">
           {formatDateTime(log.createdAt)}
-        </span>
-
-        {/* Action */}
-        <span className={`w-44 shrink-0 font-mono text-xs font-medium ${actionColor}`}>
+        </td>
+        <td className={`w-[240px] px-4 py-3 align-top font-mono text-xs font-medium break-all ${actionColor}`}>
           {log.action}
-        </span>
-
-        {/* Actor */}
-        <span className="w-32 shrink-0 truncate text-xs text-[hsl(var(--muted-foreground))]">
-          {log.actorNickname || log.actorQQ || "系统"}
-        </span>
-
-        {/* Target */}
-        <span className="truncate text-xs text-[hsl(var(--muted-foreground))]">
-          {log.targetType ? `${log.targetType}` : "—"}
-        </span>
-      </button>
+        </td>
+        <td className="w-[170px] px-4 py-3 align-top text-xs text-[hsl(var(--muted-foreground))]">
+          <span className="block truncate">{log.actorNickname || log.actorQQ || "系统"}</span>
+        </td>
+        <td className="w-[420px] px-4 py-3 align-top text-xs leading-5 break-all text-[hsl(var(--muted-foreground))]">
+          {log.targetType ? `${log.targetType}${log.targetId ? ` · ${log.targetId}` : ""}` : "—"}
+        </td>
+      </tr>
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="border-t border-[hsl(var(--border)/0.2)] bg-[hsl(var(--secondary)/0.2)] px-4 py-3">
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-[hsl(var(--muted-foreground))]">操作ID: </span>
-              <span className="font-mono text-[hsl(var(--foreground))]">{log.id}</span>
-            </div>
-            <div>
-              <span className="text-[hsl(var(--muted-foreground))]">操作人ID: </span>
-              <span className="font-mono text-[hsl(var(--foreground))]">{log.actorUserId || "—"}</span>
-            </div>
-            <div>
-              <span className="text-[hsl(var(--muted-foreground))]">目标类型: </span>
-              <span className="text-[hsl(var(--foreground))]">{log.targetType || "—"}</span>
-            </div>
-            <div>
-              <span className="text-[hsl(var(--muted-foreground))]">目标ID: </span>
-              <span className="font-mono text-[hsl(var(--foreground))]">{log.targetId || "—"}</span>
-            </div>
-            {log.ip && (
+        <tr className="border-b border-[hsl(var(--border)/0.3)] bg-[hsl(var(--secondary)/0.2)]">
+          <td colSpan={5} className="px-4 py-3">
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
-                <span className="text-[hsl(var(--muted-foreground))]">IP: </span>
-                <span className="font-mono text-[hsl(var(--foreground))]">{log.ip}</span>
+                <span className="text-[hsl(var(--muted-foreground))]">操作ID: </span>
+                <span className="font-mono text-[hsl(var(--foreground))]">{log.id}</span>
+              </div>
+              <div>
+                <span className="text-[hsl(var(--muted-foreground))]">操作人ID: </span>
+                <span className="font-mono text-[hsl(var(--foreground))]">{log.actorUserId || "—"}</span>
+              </div>
+              <div>
+                <span className="text-[hsl(var(--muted-foreground))]">目标类型: </span>
+                <span className="text-[hsl(var(--foreground))]">{log.targetType || "—"}</span>
+              </div>
+              <div>
+                <span className="text-[hsl(var(--muted-foreground))]">目标ID: </span>
+                <span className="font-mono text-[hsl(var(--foreground))]">{log.targetId || "—"}</span>
+              </div>
+              {log.ip && (
+                <div>
+                  <span className="text-[hsl(var(--muted-foreground))]">IP: </span>
+                  <span className="font-mono text-[hsl(var(--foreground))]">{log.ip}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Metadata */}
+            {log.metadata && Object.keys(log.metadata).length > 0 && (
+              <div className="mt-3">
+                <p className="mb-1 text-[11px] font-medium text-[hsl(var(--muted-foreground))]">详细信息:</p>
+                <pre className="overflow-x-auto rounded-lg bg-[hsl(var(--secondary))] p-2 font-mono text-[11px] text-[hsl(var(--foreground))]">
+                  {JSON.stringify(log.metadata, null, 2)}
+                </pre>
               </div>
             )}
-          </div>
-
-          {/* Metadata */}
-          {log.metadata && Object.keys(log.metadata).length > 0 && (
-            <div className="mt-3">
-              <p className="mb-1 text-[11px] font-medium text-[hsl(var(--muted-foreground))]">详细信息:</p>
-              <pre className="overflow-x-auto rounded-lg bg-[hsl(var(--secondary))] p-2 font-mono text-[11px] text-[hsl(var(--foreground))]">
-                {JSON.stringify(log.metadata, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
+          </td>
+        </tr>
       )}
-    </div>
+    </>
   );
 }
 
@@ -293,24 +287,28 @@ export default function AuditLogPage() {
 
       {/* Log entries */}
       {!loading && (
-        <div className="overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
-          {/* Header row */}
-          <div className="flex items-center gap-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] px-4 py-2.5 text-[11px] font-medium text-[hsl(var(--muted-foreground))]">
-            <span className="w-4" />
-            <span className="w-40 shrink-0">时间</span>
-            <span className="w-44 shrink-0">操作</span>
-            <span className="w-32 shrink-0">操作人</span>
-            <span>目标</span>
-          </div>
-
-          {logs.map((log) => (
-            <LogEntry
-              key={log.id}
-              log={log}
-              expanded={expandedId === log.id}
-              onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)}
-            />
-          ))}
+        <div className="overflow-x-auto rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] [-webkit-overflow-scrolling:touch]">
+          <table className="min-w-[1048px] table-fixed border-collapse text-left">
+            <thead>
+              <tr className="border-b border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] text-[11px] font-medium text-[hsl(var(--muted-foreground))]">
+                <th className="w-12 px-4 py-2.5" />
+                <th className="w-[170px] px-4 py-2.5 whitespace-nowrap">时间</th>
+                <th className="w-[240px] px-4 py-2.5 whitespace-nowrap">操作</th>
+                <th className="w-[170px] px-4 py-2.5 whitespace-nowrap">操作人</th>
+                <th className="w-[420px] px-4 py-2.5 whitespace-nowrap">操作信息</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => (
+                <LogEntry
+                  key={log.id}
+                  log={log}
+                  expanded={expandedId === log.id}
+                  onToggle={() => setExpandedId(expandedId === log.id ? null : log.id)}
+                />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

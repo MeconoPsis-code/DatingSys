@@ -416,12 +416,12 @@ export default function MembershipPage() {
 
       {/* ─── Member List ─────────────────────────────── */}
       {!loading && members.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] [-webkit-overflow-scrolling:touch]">
+          <table className="min-w-[760px] table-fixed border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
                 {selectableMembers.length > 0 && (
-                  <th className="px-4 py-3 font-medium">
+                  <th className="w-[56px] px-4 py-3 font-medium">
                     <input
                       type="checkbox"
                       checked={allSelectableChecked}
@@ -430,10 +430,10 @@ export default function MembershipPage() {
                     />
                   </th>
                 )}
-                <th className="px-4 py-3 font-medium">成员</th>
-                <th className="px-4 py-3 font-medium">QQ号</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">认证时间</th>
+                <th className="w-[240px] px-4 py-3 font-medium whitespace-nowrap">成员</th>
+                <th className="w-[150px] px-4 py-3 font-medium whitespace-nowrap">QQ号</th>
+                <th className="w-[140px] px-4 py-3 font-medium whitespace-nowrap">状态</th>
+                <th className="w-[170px] px-4 py-3 font-medium whitespace-nowrap">认证时间</th>
 
               </tr>
             </thead>
@@ -482,18 +482,18 @@ export default function MembershipPage() {
                         <div className={m.avatarUrl ? "hidden" : ""}>
                           <AvatarFallback name={m.nickname || m.qqNumber} />
                         </div>
-                        <span className="font-medium text-[hsl(var(--foreground))]">
+                        <span className="min-w-0 truncate font-medium text-[hsl(var(--foreground))]">
                           {m.nickname || "—"}
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-[hsl(var(--muted-foreground))]">
+                    <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-[hsl(var(--muted-foreground))]">
                       {m.qqNumber}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <Badge label={badge.label} cls={badge.cls} />
                     </td>
-                    <td className="px-4 py-3 text-xs text-[hsl(var(--muted-foreground))]">
+                    <td className="px-4 py-3 text-xs whitespace-nowrap text-[hsl(var(--muted-foreground))]">
                       {formatDate(m.verifiedAt)}
                     </td>
 

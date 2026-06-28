@@ -35,7 +35,7 @@ export default async function AnnouncementsPage() {
   ]);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#fafbfe] px-3 py-24 text-brand-text sm:px-4 sm:py-28">
+    <div className="relative min-h-screen min-h-dvh overflow-hidden bg-[#fafbfe] px-3 py-24 text-brand-text sm:px-4 sm:py-28">
       <PublicTopNav active="announcements" isLoggedIn={Boolean(session)} />
 
       <div className="pointer-events-none absolute -right-28 top-12 h-80 w-80 rounded-full bg-[#ebf2ff]" />
