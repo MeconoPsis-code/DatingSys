@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { getSignedUrl } from "@/lib/storage";
 import { success, error } from "@/lib/api-response";
+import { getOnDutyScorerIds, isScorerOnDuty } from "@/lib/scorer-duty";
 
 /**
  * GET /api/scoring/tasks
@@ -26,6 +27,13 @@ export async function GET(req: Request) {
   }
 
   if (statusFilter === "pending") {
+    const isOnDuty = await isScorerOnDuty({ scorerId: session.id });
+    if (!isOnDuty) {
+      return success({ tasks: [] });
+    }
+
+    const onDutyScorerIds = await getOnDutyScorerIds();
+
     // Tasks not yet scored by this user
     const tasks = await db.ratingTask.findMany({
       where: {
@@ -51,23 +59,15 @@ export async function GET(req: Request) {
           },
         },
         scores: {
-          select: { id: true },
+          select: { id: true, scorerUserId: true },
         },
       },
       orderBy: { createdAt: "asc" },
     });
 
-    const assignedTasks = tasks.filter((task) => {
-      const scorerSnapshot = task.scorerSnapshot as unknown;
-      return (
-        Array.isArray(scorerSnapshot) &&
-        scorerSnapshot.map(String).includes(session.id)
-      );
-    });
-
     // Enrich with photos + signed URLs
     const enriched = await Promise.all(
-      assignedTasks.map(async (task) => {
+      tasks.map(async (task) => {
         const photos = await db.profilePhoto.findMany({
           where: {
             profile: { userId: task.ratedUserId },
@@ -83,13 +83,14 @@ export async function GET(req: Request) {
           }))
         );
 
-        const scorerSnapshot = task.scorerSnapshot as string[];
-        const scoredCount = task.scores.length;
-        // Exclude SUPER_ADMIN from total (they review, not score)
-        const eligibleInSnapshot = await db.user.count({
-          where: { id: { in: scorerSnapshot }, role: { in: ["SCORER", "ADMIN"] } },
-        });
-        const totalScorers = eligibleInSnapshot;
+        const eligibleScorerIds = onDutyScorerIds.filter(
+          (id) => id !== task.ratedUserId
+        );
+        const eligibleScorerIdSet = new Set(eligibleScorerIds);
+        const scoredCount = task.scores.filter((score) =>
+          eligibleScorerIdSet.has(score.scorerUserId)
+        ).length;
+        const totalScorers = eligibleScorerIds.length;
 
         return {
           id: task.id,

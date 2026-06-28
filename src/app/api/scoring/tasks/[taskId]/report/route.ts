@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { NextRequest } from 'next/server';
 import { can } from '@/lib/rbac';
+import { isScorerOnDuty } from '@/lib/scorer-duty';
 
 /**
  * POST /api/scoring/tasks/[taskId]/report
@@ -38,9 +39,12 @@ export async function POST(
       return error('CONFLICT', '该任务当前不可举报', 409);
     }
 
-    // Verify scorer is in the snapshot
-    const scorerSnapshot = task.scorerSnapshot as string[];
-    if (!scorerSnapshot.includes(session.id)) {
+    // Verify scorer is on today's live duty roster.
+    const isOnDuty = await isScorerOnDuty({
+      scorerId: session.id,
+      excludeUserId: task.ratedUserId,
+    });
+    if (!isOnDuty) {
       return error('FORBIDDEN', '无权操作此任务', 403);
     }
 

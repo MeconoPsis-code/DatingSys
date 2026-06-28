@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
+import { getOnDutyScorerIds } from '@/lib/scorer-duty';
 
 /**
  * POST /api/admin/scoring/fix-stuck
@@ -39,30 +40,14 @@ export async function POST() {
         scorerIds = rawSnapshot.map(String);
       }
 
-      // Count eligible scorers in the snapshot (exclude SUPER_ADMIN and rated user)
-      let eligibleCount = 0;
-      if (scorerIds.length > 0) {
-        eligibleCount = await db.user.count({
-          where: {
-            id: { in: scorerIds, not: task.ratedUserId },
-            role: { in: ['SCORER', 'ADMIN'] },
-          },
-        });
-      }
-
-      // If snapshot is empty or has no eligible scorers, fall back:
-      // count all active SCORER/ADMIN users (excluding the rated user)
-      if (eligibleCount === 0) {
-        eligibleCount = await db.user.count({
-          where: {
-            role: { in: ['SCORER', 'ADMIN'] },
-            status: 'ACTIVE',
-            id: { not: task.ratedUserId },
-          },
-        });
-      }
-
-      const scoredCount = task.scores.length;
+      const eligibleScorerIds = await getOnDutyScorerIds({
+        excludeUserId: task.ratedUserId,
+      });
+      const eligibleScorerIdSet = new Set(eligibleScorerIds);
+      const eligibleCount = eligibleScorerIds.length;
+      const scoredCount = task.scores.filter((score) =>
+        eligibleScorerIdSet.has(score.scorerUserId)
+      ).length;
       const shouldPromote = eligibleCount > 0 && scoredCount >= eligibleCount;
 
       debugInfo.push({

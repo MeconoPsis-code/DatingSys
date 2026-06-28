@@ -4,6 +4,7 @@ import { can } from "@/lib/rbac";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
+import { getOnDutyScorerIds } from "@/lib/scorer-duty";
 
 // Valid scores: 0, 0.1, 0.2, ..., 10
 function isValidScore(score: number): boolean {
@@ -59,10 +60,12 @@ export async function POST(
     return error("CONFLICT", "该任务当前不可评分", 409);
   }
 
-  // Verify scorer is in the snapshot
-  const scorerSnapshot = task.scorerSnapshot as string[];
-  if (!scorerSnapshot.includes(session.id)) {
-    return error("FORBIDDEN", "你不在此任务的评分人名单中", 403);
+  // Verify scorer is on today's live duty roster.
+  const eligibleScorerIds = await getOnDutyScorerIds({
+    excludeUserId: task.ratedUserId,
+  });
+  if (!eligibleScorerIds.includes(session.id)) {
+    return error("FORBIDDEN", "你不在今日评分值班名单中", 403);
   }
 
   // Check for duplicate score
@@ -88,17 +91,14 @@ export async function POST(
     });
   }
 
-  // Check if all eligible scorers have scored
-  // Filter out SUPER_ADMIN and the rated user from snapshot
-  const eligibleScorers = await db.user.findMany({
+  // Check if all currently on-duty eligible scorers have scored.
+  const eligibleCount = eligibleScorerIds.length;
+  const totalScored = await db.ratingScore.count({
     where: {
-      id: { in: scorerSnapshot, not: task.ratedUserId },
-      role: { in: ["SCORER", "ADMIN"] },
+      ratingTaskId: taskId,
+      scorerUserId: { in: eligibleScorerIds },
     },
-    select: { id: true },
   });
-  const eligibleCount = eligibleScorers.length;
-  const totalScored = task.scores.length + 1; // +1 for the one we just created
   const allDone = totalScored >= eligibleCount;
 
   if (allDone) {

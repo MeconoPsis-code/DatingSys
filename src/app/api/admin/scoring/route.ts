@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { error, paginated } from '@/lib/api-response';
 import { getSignedUrl } from '@/lib/storage';
 import { commitExpiredActions } from '@/lib/scoring-revocation';
+import { getOnDutyScorers } from '@/lib/scorer-duty';
 
 // ── GET /api/admin/scoring — admin scoring management ──
 
@@ -54,29 +55,40 @@ export async function GET(req: Request) {
       }),
     ]);
 
-    const snapshotScorerIds = Array.from(
+    const onDutyScorerIds = (await getOnDutyScorers()).map((scorer) => scorer.id);
+    const reportScorerIds = tasks.flatMap((task) => {
+      const reports = task.photoReports as Array<{ reporterId?: string }> | null;
+      return Array.isArray(reports)
+        ? reports.map((report) => report.reporterId).filter(Boolean).map(String)
+        : [];
+    });
+    const knownScorerIds = Array.from(
       new Set(
-        tasks.flatMap((task) => {
-          const snapshot = task.scorerSnapshot as unknown;
-          return Array.isArray(snapshot) ? snapshot.map(String) : [];
-        })
+        [
+          ...onDutyScorerIds,
+          ...reportScorerIds,
+          ...tasks.flatMap((task) => {
+            const snapshot = task.scorerSnapshot as unknown;
+            return Array.isArray(snapshot) ? snapshot.map(String) : [];
+          }),
+        ]
       )
     );
 
-    const snapshotScorers = await db.user.findMany({
-      where: { id: { in: snapshotScorerIds } },
+    const knownScorers = await db.user.findMany({
+      where: { id: { in: knownScorerIds } },
       include: { authIdentities: { select: { nickname: true }, take: 1 } },
     });
 
     const scorerNameMap: Record<string, { nickname: string | null; qq: string | null }> = {};
-    const eligibleSnapshotScorerIds = new Set<string>();
-    for (const u of snapshotScorers) {
+    const eligibleScorerIds = new Set<string>();
+    for (const u of knownScorers) {
       scorerNameMap[u.id] = {
         nickname: u.authIdentities[0]?.nickname ?? null,
         qq: u.qqNumber,
       };
       if (u.role === 'SCORER' || u.role === 'ADMIN') {
-        eligibleSnapshotScorerIds.add(u.id);
+        eligibleScorerIds.add(u.id);
       }
     }
 
@@ -87,9 +99,13 @@ export async function GET(req: Request) {
         const scorerSnapshot = Array.isArray(t.scorerSnapshot)
           ? t.scorerSnapshot.map(String)
           : [];
-        const assignedScorerList = scorerSnapshot.filter(
-          (id) => id !== t.ratedUserId && eligibleSnapshotScorerIds.has(id)
+        const scorerSource = ['PENDING', 'SCORING'].includes(t.status)
+          ? onDutyScorerIds
+          : scorerSnapshot;
+        const liveAssignedScorerList = scorerSource.filter(
+          (id) => id !== t.ratedUserId && eligibleScorerIds.has(id)
         );
+        const assignedScorerSet = new Set(liveAssignedScorerList);
 
         const photosWithUrls = await Promise.all(
           photos.map(async (p) => ({
@@ -106,7 +122,7 @@ export async function GET(req: Request) {
           ratedUserQQ: t.ratedUser.qqNumber,
           photoObjectKey: t.photoObjectKey,
           status: t.status,
-          scorerSnapshot: assignedScorerList,
+          scorerSnapshot: liveAssignedScorerList,
           scorerNames: scorerNameMap,
           scores: t.scores.map((s) => ({
             id: s.id,
@@ -116,8 +132,8 @@ export async function GET(req: Request) {
             score: s.score,
             createdAt: s.createdAt,
           })),
-          scoredCount: t.scores.length,
-          totalScorers: assignedScorerList.length,
+          scoredCount: t.scores.filter((score) => assignedScorerSet.has(score.scorerUserId)).length,
+          totalScorers: liveAssignedScorerList.length,
           photos: photosWithUrls,
           completedAt: t.completedAt,
           createdAt: t.createdAt,

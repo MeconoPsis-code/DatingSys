@@ -51,3 +51,36 @@ export async function getOnDutyScorers({
     select: { id: true },
   });
 }
+
+export async function getOnDutyScorerIds(options?: {
+  excludeUserId?: string;
+  weekday?: DutyWeekday;
+}): Promise<string[]> {
+  const scorers = await getOnDutyScorers(options);
+  return scorers.map((scorer) => scorer.id);
+}
+
+export async function isScorerOnDuty({
+  scorerId,
+  excludeUserId,
+  weekday = getChinaDutyWeekday(),
+}: {
+  scorerId: string;
+  excludeUserId?: string;
+  weekday?: DutyWeekday;
+}): Promise<boolean> {
+  if (excludeUserId && scorerId === excludeUserId) return false;
+
+  const count = await db.user.count({
+    where: {
+      id: scorerId,
+      role: { in: ["SCORER", "ADMIN"] },
+      status: "ACTIVE",
+      dutySchedules: {
+        some: { weekday },
+      },
+    },
+  });
+
+  return count > 0;
+}
