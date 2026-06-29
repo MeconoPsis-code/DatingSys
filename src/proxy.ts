@@ -5,6 +5,16 @@ import { UserRole } from "@prisma/client";
 
 const COOKIE_NAME = "date-session";
 const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === "true";
+const MAINTENANCE_BYPASS_COOKIE_NAME = "date-maintenance-bypass";
+const MAINTENANCE_BYPASS_QUERY_PARAM = "bypass";
+const MAINTENANCE_BYPASS_HEADER = "x-maintenance-bypass";
+const MAINTENANCE_BYPASS_MAX_AGE_SECONDS = 60 * 60 * 24;
+const MAINTENANCE_BYPASS_TOKENS = [
+  process.env.MAINTENANCE_BYPASS_TOKEN,
+  ...(process.env.MAINTENANCE_BYPASS_TOKENS?.split(",") ?? []),
+]
+  .map((token) => token?.trim())
+  .filter((token): token is string => Boolean(token));
 
 // Routes that are always accessible (no auth required)
 const PUBLIC_PATHS = [
@@ -75,6 +85,50 @@ function isMaintenanceAllowedPath(pathname: string): boolean {
   );
 }
 
+function isValidMaintenanceBypassToken(token: string | null | undefined): boolean {
+  if (!token) {
+    return false;
+  }
+
+  return MAINTENANCE_BYPASS_TOKENS.includes(token.trim());
+}
+
+function hasMaintenanceBypass(req: NextRequest): boolean {
+  return (
+    isValidMaintenanceBypassToken(
+      req.cookies.get(MAINTENANCE_BYPASS_COOKIE_NAME)?.value
+    ) || isValidMaintenanceBypassToken(req.headers.get(MAINTENANCE_BYPASS_HEADER))
+  );
+}
+
+function grantMaintenanceBypass(req: NextRequest): NextResponse | null {
+  const bypassToken = req.nextUrl.searchParams
+    .get(MAINTENANCE_BYPASS_QUERY_PARAM)
+    ?.trim();
+
+  if (!bypassToken || !isValidMaintenanceBypassToken(bypassToken)) {
+    return null;
+  }
+
+  const redirectUrl = req.nextUrl.clone();
+  redirectUrl.searchParams.delete(MAINTENANCE_BYPASS_QUERY_PARAM);
+
+  if (redirectUrl.pathname === "/maintenance") {
+    redirectUrl.pathname = "/";
+  }
+
+  const response = NextResponse.redirect(redirectUrl);
+  response.cookies.set(MAINTENANCE_BYPASS_COOKIE_NAME, bypassToken, {
+    httpOnly: true,
+    maxAge: MAINTENANCE_BYPASS_MAX_AGE_SECONDS,
+    path: "/",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+
+  return response;
+}
+
 function isPublicAssetPath(pathname: string): boolean {
   return (
     pathname.endsWith(".png") ||
@@ -90,15 +144,22 @@ function isPublicAssetPath(pathname: string): boolean {
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (MAINTENANCE_MODE && !isMaintenanceAllowedPath(pathname)) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json(
-        { error: { code: "MAINTENANCE", message: "系统升级维护中" } },
-        { status: 503 }
-      );
+  if (MAINTENANCE_MODE) {
+    const bypassGrantResponse = grantMaintenanceBypass(req);
+    if (bypassGrantResponse) {
+      return bypassGrantResponse;
     }
 
-    return NextResponse.redirect(new URL("/maintenance", req.url));
+    if (!hasMaintenanceBypass(req) && !isMaintenanceAllowedPath(pathname)) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json(
+          { error: { code: "MAINTENANCE", message: "系统升级维护中" } },
+          { status: 503 }
+        );
+      }
+
+      return NextResponse.redirect(new URL("/maintenance", req.url));
+    }
   }
 
   // 1. Public routes — always allowed

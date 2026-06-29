@@ -30,16 +30,18 @@ cp .env.example .env
 
 Edit `.env` and fill in the required values:
 
-| Variable              | Description                                    | Example                 |
-| --------------------- | ---------------------------------------------- | ----------------------- |
-| `BOT_QQ_NUMBER`       | Bot's QQ number                                | `3450526668`            |
-| `BOT_TARGET_GROUP_ID` | Target QQ group number                         | `922673885`             |
-| `BOT_WEBHOOK_TOKEN`   | Token for NapCat webhook HMAC signature        | `your-random-token`     |
-| `NAPCAT_ACCESS_TOKEN` | Token for calling NapCat HTTP API              | `your-random-token`     |
-| `JWT_SECRET`          | Secret for JWT authentication                  | `random-32-byte-string` |
-| `SMTP_USER`           | QQ email address for sending codes             | `your-email@qq.com`     |
-| `SMTP_PASS`           | QQ SMTP authorization code (not your password) | `abcdefghijklmnop`      |
-| `SMTP_FROM`           | Sender email address                           | `your-email@qq.com`     |
+| Variable                    | Description                                               | Example                   |
+| --------------------------- | --------------------------------------------------------- | ------------------------- |
+| `BOT_QQ_NUMBER`             | Bot's QQ number                                           | `3450526668`              |
+| `BOT_TARGET_GROUP_ID`       | Target QQ group number                                    | `922673885`               |
+| `BOT_WEBHOOK_TOKEN`         | Token for NapCat webhook HMAC signature                   | `your-random-token`       |
+| `NAPCAT_ACCESS_TOKEN`       | Token for calling NapCat HTTP API                         | `your-random-token`       |
+| `JWT_SECRET`                | Secret for JWT authentication                             | `random-32-byte-string`   |
+| `MAINTENANCE_MODE`          | Redirect normal traffic to the maintenance page           | `false`                   |
+| `MAINTENANCE_BYPASS_TOKENS` | Comma-separated developer bypass tokens, server-side only | `dev-token-1,dev-token-2` |
+| `SMTP_USER`                 | QQ email address for sending codes                        | `your-email@qq.com`       |
+| `SMTP_PASS`                 | QQ SMTP authorization code (not your password)            | `abcdefghijklmnop`        |
+| `SMTP_FROM`                 | Sender email address                                      | `your-email@qq.com`       |
 
 > **How to get QQ SMTP authorization code:**
 > QQ Mail → Settings (设置) → Account (账户) → POP3/SMTP service → Enable → Generate authorization code.
