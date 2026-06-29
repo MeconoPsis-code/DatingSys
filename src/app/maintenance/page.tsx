@@ -33,8 +33,8 @@ export default function MaintenancePage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-blue/70 sm:text-sm sm:tracking-[0.22em]">
             TenMatch Notice
           </p>
-          <h1 className="mt-2 font-['PingFang_SC','Microsoft_YaHei','SimHei',sans-serif] text-[32px] font-black leading-tight tracking-[0.02em] text-brand-ink sm:text-5xl">
-            系统升级中…
+          <h1 className="mt-2 text-[28px] font-extrabold tracking-[-0.5px] text-brand-blue sm:text-4xl">
+            系统升级中...
           </h1>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-7 text-brand-muted sm:mt-3">
             我们正在进行系统维护与版本升级，维护时间请留意 QQ 群内通知。
