@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 interface ConfirmModalProps {
   open: boolean;
@@ -31,25 +32,40 @@ export function ConfirmModal({
 }: ConfirmModalProps) {
   const [input, setInput] = useState("");
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
   const isMatch = input === confirmText;
+  const handleClose = () => {
+    if (loading) return;
+    setInput("");
+    onClose();
+  };
+  const handleConfirm = () => {
+    if (!isMatch || loading) return;
+    setInput("");
+    onConfirm();
+  };
 
   const btnClass =
     variant === "danger"
       ? "bg-[hsl(var(--destructive))] text-white hover:opacity-90"
       : "bg-brand-blue text-white shadow-md shadow-brand-blue/20 hover:scale-[1.02] hover:bg-brand-blue/90";
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="strong-confirm-title"
+      className="fixed inset-0 z-[1000] flex items-center justify-center overflow-y-auto overscroll-contain px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))]"
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={() => { if (!loading) { setInput(""); onClose(); } }}
+        onClick={handleClose}
       />
 
       {/* Modal card */}
-      <div className="relative z-10 mx-4 w-full max-w-md rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl">
+      <div className="relative z-10 w-full max-w-md max-h-[calc(100svh-2rem)] overflow-y-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-xl sm:p-6">
         {/* Icon + Title */}
         <div className="mb-4 flex items-center gap-3">
           <div
@@ -61,7 +77,7 @@ export function ConfirmModal({
           >
             <span className="text-lg">{variant === "danger" ? "⚠️" : "✏️"}</span>
           </div>
-          <h3 className="text-lg font-semibold text-[hsl(var(--foreground))]">
+          <h3 id="strong-confirm-title" className="text-lg font-semibold text-[hsl(var(--foreground))]">
             {title}
           </h3>
         </div>
@@ -96,6 +112,7 @@ export function ConfirmModal({
           </label>
           <input
             type="text"
+            data-testid="strong-confirm-input"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={confirmText}
@@ -108,7 +125,7 @@ export function ConfirmModal({
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => { setInput(""); onClose(); }}
+            onClick={handleClose}
             disabled={loading}
             className="flex-1 rounded-lg border border-[hsl(var(--border))] px-4 py-2.5 text-sm font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))] disabled:opacity-50"
           >
@@ -116,7 +133,7 @@ export function ConfirmModal({
           </button>
           <button
             type="button"
-            onClick={() => { onConfirm(); setInput(""); }}
+            onClick={handleConfirm}
             disabled={!isMatch || loading}
             className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all disabled:opacity-50 disabled:hover:scale-100 ${btnClass}`}
           >
@@ -131,6 +148,7 @@ export function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

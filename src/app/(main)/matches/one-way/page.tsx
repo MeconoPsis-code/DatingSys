@@ -244,11 +244,13 @@ function OneWayMatchCard({
   onRequestView,
   viewRequestStatus,
   currentUserHasPhotos,
+  viewDetail,
 }: {
   match: OneWayMatch;
   onRequestView: (userId: string) => void;
   viewRequestStatus: string | null;
   currentUserHasPhotos: boolean;
+  viewDetail: { qqNumber: string | null } | null;
 }) {
   const isMeFitsThem = match.direction === "me_fits_them";
   const directionLabel = isMeFitsThem ? "我符合他" : "他符合我";
@@ -257,7 +259,6 @@ function OneWayMatchCard({
       ? match.targetAgainstMyExpectations
       : match.meAgainstTargetExpectations
   ).filter((check) => !check.matched);
-  const [showReport, setShowReport] = useState(false);
 
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-all hover:border-[hsl(var(--primary)/0.3)] sm:p-5">
@@ -392,16 +393,26 @@ function OneWayMatchCard({
           </span>
         )}
         {viewRequestStatus === "APPROVED" && (
-          <Link
-            href={`/matches/${match.userId}`}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-2 text-center text-xs font-medium text-white transition-all hover:scale-[1.02] sm:inline-flex sm:w-auto sm:py-1.5"
-          >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-            已通过 · 查看完整资料
-          </Link>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Link
+              href={`/matches/${match.userId}`}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-2 text-center text-xs font-medium text-white transition-all hover:scale-[1.02] sm:inline-flex sm:w-auto sm:py-1.5"
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+              已通过 · 查看完整资料
+            </Link>
+            {viewDetail?.qqNumber && (
+              <Link
+                href={`/report?targetQQ=${encodeURIComponent(viewDetail.qqNumber)}`}
+                className="flex w-full items-center justify-center rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-600 active:scale-[0.98] sm:w-auto sm:py-1.5"
+              >
+                举报
+              </Link>
+            )}
+          </div>
         )}
         {viewRequestStatus === "REJECTED" && (
           <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-3 py-2 text-center text-xs text-[hsl(0,60%,65%)] sm:inline-flex sm:w-auto sm:py-1.5">
@@ -430,30 +441,6 @@ function OneWayMatchCard({
         )}
       </div>
 
-      {/* Report */}
-      <div className="mt-3 flex items-center gap-2">
-        <div className="flex-1" />
-        <button
-          type="button"
-          onClick={() => setShowReport(!showReport)}
-          className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))] transition-all hover:border-[hsl(0,60%,50%/0.5)] hover:text-[hsl(0,60%,65%)]"
-        >
-          举报
-        </button>
-      </div>
-
-      {/* Report section (expandable) */}
-      {showReport && (
-        <div className="mt-3 rounded-lg border border-[hsl(0,60%,50%/0.2)] bg-[hsl(0,60%,50%/0.05)] p-3">
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            如需举报，请前往
-            <Link href={`/report?target=${match.userId}`} className="ml-1 text-[hsl(var(--primary))] underline">
-              举报页面
-            </Link>
-            提交详细信息。
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -469,6 +456,7 @@ export default function OneWayMatchesPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
   const [viewRequestMap, setViewRequestMap] = useState<Record<string, string>>({});
+  const [approvedDetails, setApprovedDetails] = useState<Record<string, { qqNumber: string | null }>>({});
   const [requesting, setRequesting] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | MatchDirection>("all");
@@ -551,9 +539,37 @@ export default function OneWayMatchesPage() {
   }, []);
 
   useEffect(() => {
-    fetchMatches();
-    fetchViewRequests();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void fetchMatches();
+      void fetchViewRequests();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [fetchMatches, fetchViewRequests]);
+
+  useEffect(() => {
+    const approvedUserIds = Object.entries(viewRequestMap)
+      .filter(([, status]) => status === "APPROVED")
+      .map(([userId]) => userId);
+
+    for (const userId of approvedUserIds) {
+      if (approvedDetails[userId]) continue;
+      fetch(`/api/matches/${userId}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.data?.qqNumber !== undefined) {
+            setApprovedDetails((prev) => ({
+              ...prev,
+              [userId]: { qqNumber: data.data.qqNumber },
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [viewRequestMap, approvedDetails]);
 
   async function sendViewRequest(targetUserId: string) {
     setRequesting(true);
@@ -740,6 +756,7 @@ export default function OneWayMatchesPage() {
               onRequestView={(userId) => setConfirmTarget(userId)}
               viewRequestStatus={viewRequestMap[match.userId] ?? null}
               currentUserHasPhotos={currentUserHasPhotos}
+              viewDetail={approvedDetails[match.userId] ?? null}
             />
           ))}
         </div>

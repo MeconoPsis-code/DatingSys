@@ -9,6 +9,7 @@ import { MBTI_OPTIONS } from "@/data/mbti";
 import { DualRangeSlider } from "@/components/DualRangeSlider";
 import { PhotoUploader } from "@/components/profile/photo-uploader";
 import { AlertModal } from "@/components/ui/alert-modal";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import {
   buildGroupCardForProfile,
   normalizeNicknameInput,
@@ -103,6 +104,8 @@ function range(start: number, end: number): number[] {
 const YEARS = range(1960, 2010).reverse();
 const MONTHS = range(1, 12);
 const DAYS = range(1, 31);
+const PUBLISH_CONFIRM_TEXT = "确认提交并发布我的资料";
+const PUBLISH_CONFIRM_DESCRIPTION = "提交后 7 天内不能修改，请确认所有信息无误。";
 
 function isUnder18(birthYear: number, birthMonth: number, birthDay: number): boolean {
   const today = new Date();
@@ -153,6 +156,7 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showAgeAlert, setShowAgeAlert] = useState(false);
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
 
   // Computed cities
   const cities = useMemo(
@@ -389,7 +393,7 @@ export default function SignupPage() {
       return;
     }
 
-    await doSubmitProfile("ACTIVE");
+    setPublishConfirmOpen(true);
   }
 
   /* ── Step indicator ── */
@@ -599,6 +603,20 @@ export default function SignupPage() {
             onConfirm={async () => {
               setShowAgeAlert(false);
               await doSubmitProfile("DRAFT");
+            }}
+          />
+          <ConfirmModal
+            open={publishConfirmOpen}
+            title="确认提交"
+            description={PUBLISH_CONFIRM_DESCRIPTION}
+            confirmText={PUBLISH_CONFIRM_TEXT}
+            buttonLabel="确认发布"
+            variant="primary"
+            loading={loading}
+            onClose={() => setPublishConfirmOpen(false)}
+            onConfirm={() => {
+              setPublishConfirmOpen(false);
+              void doSubmitProfile("ACTIVE");
             }}
           />
         </>

@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense, useRef } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-/* ─── Types ──────────────────────────────────────────── */
+interface ReportableTarget {
+  targetQQ: string;
+  nickname: string | null;
+  approvedAt: string | null;
+}
 
 interface MyReport {
   id: string;
-  targetUserId: string;
   targetNickname: string | null;
   targetQQ: string | null;
   type: string;
@@ -30,8 +33,6 @@ interface EvidenceFile {
   previewUrl: string;
 }
 
-/* ─── Constants ──────────────────────────────────────── */
-
 const REPORT_TYPES: { value: string; label: string }[] = [
   { value: "FAKE_INFO", label: "虚假信息" },
   { value: "STOLEN_PHOTO", label: "盗用照片" },
@@ -43,14 +44,14 @@ const REPORT_TYPES: { value: string; label: string }[] = [
 ];
 
 const TYPE_LABELS: Record<string, string> = Object.fromEntries(
-  REPORT_TYPES.map((t) => [t.value, t.label])
+  REPORT_TYPES.map((type) => [type.value, type.label])
 );
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "待处理", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-  REVIEWING: { label: "审核中", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
-  ACCEPTED: { label: "已采纳", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-  REJECTED: { label: "已驳回", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
+  PENDING: { label: "待处理", cls: "bg-amber-500/15 text-amber-500 border-amber-500/30" },
+  REVIEWING: { label: "审核中", cls: "bg-blue-500/15 text-blue-500 border-blue-500/30" },
+  ACCEPTED: { label: "已采纳", cls: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30" },
+  REJECTED: { label: "已驳回", cls: "bg-red-500/15 text-red-500 border-red-500/30" },
 };
 
 const MAX_EVIDENCE_FILES = 6;
@@ -66,12 +67,15 @@ function formatDate(d: string) {
   });
 }
 
-/* ─── Report Form ────────────────────────────────────── */
-
-function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; onSubmitted: () => void }) {
+function ReportForm({
+  target,
+  onSubmitted,
+}: {
+  target: ReportableTarget;
+  onSubmitted: () => void;
+}) {
   const evidenceInputRef = useRef<HTMLInputElement>(null);
   const evidenceFilesRef = useRef<EvidenceFile[]>([]);
-  const [targetUserId, setTargetUserId] = useState(prefillTarget || "");
   const [type, setType] = useState("");
   const [description, setDescription] = useState("");
   const [evidenceFiles, setEvidenceFiles] = useState<EvidenceFile[]>([]);
@@ -89,7 +93,8 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
   }, []);
 
   function clearEvidenceFiles() {
-    evidenceFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    evidenceFilesRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    evidenceFilesRef.current = [];
     setEvidenceFiles([]);
     if (evidenceInputRef.current) evidenceInputRef.current.value = "";
   }
@@ -132,15 +137,14 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
 
   function removeEvidenceFile(id: string) {
     setEvidenceFiles((prev) => {
-      const target = prev.find((item) => item.id === id);
-      if (target) URL.revokeObjectURL(target.previewUrl);
+      const targetFile = prev.find((item) => item.id === id);
+      if (targetFile) URL.revokeObjectURL(targetFile.previewUrl);
       return prev.filter((item) => item.id !== id);
     });
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!targetUserId.trim()) return setMsg({ text: "请输入被举报用户的QQ号", ok: false });
     if (!type) return setMsg({ text: "请选择举报类型", ok: false });
     if (description.trim().length < 5) return setMsg({ text: "描述至少5个字", ok: false });
 
@@ -148,7 +152,7 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
     setMsg(null);
     try {
       const formData = new FormData();
-      formData.append("targetUserId", targetUserId.trim());
+      formData.append("targetQQ", target.targetQQ);
       formData.append("type", type);
       formData.append("description", description.trim());
       evidenceFiles.forEach((item) => {
@@ -161,10 +165,10 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "提交失败");
+
       setMsg({ text: "举报已提交，我们会尽快处理", ok: true });
       setType("");
       setDescription("");
-      setTargetUserId("");
       clearEvidenceFiles();
       onSubmitted();
     } catch (err) {
@@ -175,53 +179,49 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
   }
 
   const inputCls =
-    "w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-3 py-2.5 text-sm text-[hsl(var(--foreground))] outline-none focus:border-[hsl(var(--primary))] transition-colors";
+    "w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-3 py-2.5 text-sm text-[hsl(var(--foreground))] outline-none transition-colors focus:border-[hsl(var(--primary))]";
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
-      <h2 className="mb-5 text-base font-semibold text-[hsl(var(--foreground))]">📝 提交举报</h2>
+    <form
+      onSubmit={handleSubmit}
+      className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-6"
+    >
+      <h2 className="mb-5 text-base font-semibold text-[hsl(var(--foreground))]">
+        提交举报
+      </h2>
 
-      {/* Target user */}
-      <div className="mb-4">
-        <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
-          被举报用户QQ号 <span className="text-[hsl(var(--destructive))]">*</span>
-        </label>
-        <input
-          type="text"
-          value={targetUserId}
-          onChange={(e) => setTargetUserId(e.target.value)}
-          placeholder="输入对方的QQ号..."
-          className={inputCls}
-        />
-        <p className="mt-1 text-[11px] text-[hsl(var(--muted-foreground))]">
-          可从匹配详情页或聊天中获取对方QQ号
-        </p>
+      <div className="mb-4 rounded-xl border border-brand-blue/20 bg-blue-1 px-4 py-3">
+        <div className="text-xs font-medium text-brand-blue">已选择举报对象</div>
+        <div className="mt-1 text-sm font-semibold text-[hsl(var(--foreground))]">
+          {target.nickname || "匿名用户"}
+        </div>
+        <div className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
+          QQ: {target.targetQQ}
+        </div>
       </div>
 
-      {/* Type */}
       <div className="mb-4">
         <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
           举报类型 <span className="text-[hsl(var(--destructive))]">*</span>
         </label>
         <div className="flex flex-wrap gap-2">
-          {REPORT_TYPES.map((t) => (
+          {REPORT_TYPES.map((reportType) => (
             <button
-              key={t.value}
+              key={reportType.value}
               type="button"
-              onClick={() => setType(t.value)}
+              onClick={() => setType(reportType.value)}
               className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
-                type === t.value
+                type === reportType.value
                   ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"
                   : "border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary)/0.3)]"
               }`}
             >
-              {t.label}
+              {reportType.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Description */}
       <div className="mb-5">
         <label className="mb-1.5 block text-sm font-medium text-[hsl(var(--foreground))]">
           详细描述 <span className="text-[hsl(var(--destructive))]">*</span>
@@ -239,7 +239,6 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
         </p>
       </div>
 
-      {/* Evidence */}
       <div className="mb-5">
         <div className="mb-2 flex items-center justify-between gap-3">
           <label className="block text-sm font-medium text-[hsl(var(--foreground))]">
@@ -269,18 +268,8 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
                   className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-all hover:bg-[hsl(var(--destructive))] group-hover:opacity-100"
                   aria-label="移除证据图片"
                 >
-                  <svg
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M6 18L18 6M6 6l12 12"
-                    />
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2">
@@ -297,19 +286,6 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
           disabled={evidenceFiles.length >= MAX_EVIDENCE_FILES || submitting}
           className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.45)] px-4 py-3 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-all hover:border-[hsl(var(--primary)/0.45)] hover:text-[hsl(var(--primary))] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
           添加截图或图片证据
         </button>
         <input
@@ -326,7 +302,9 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
       </div>
 
       {msg && (
-        <p className={`mb-3 text-sm ${msg.ok ? "text-emerald-400" : "text-red-400"}`}>{msg.text}</p>
+        <p className={`mb-3 text-sm ${msg.ok ? "text-emerald-500" : "text-red-500"}`}>
+          {msg.text}
+        </p>
       )}
 
       <button
@@ -334,98 +312,196 @@ function ReportForm({ prefillTarget, onSubmitted }: { prefillTarget?: string; on
         disabled={submitting}
         className="w-full rounded-lg bg-gradient-to-r from-[hsl(0,70%,50%)] to-[hsl(15,70%,50%)] py-2.5 text-sm font-semibold text-white transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
       >
-        {submitting ? "提交中..." : "🚨 提交举报"}
+        {submitting ? "提交中..." : "提交举报"}
       </button>
     </form>
   );
 }
 
-/* ─── Main Page ──────────────────────────────────────── */
-
 function UserReportsContent() {
   const searchParams = useSearchParams();
-  const prefillTarget = searchParams.get("target") || undefined;
+  const prefillTargetQQ = searchParams.get("targetQQ") || undefined;
+  const [targets, setTargets] = useState<ReportableTarget[]>([]);
   const [reports, setReports] = useState<MyReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingTargets, setLoadingTargets] = useState(true);
+  const [loadingReports, setLoadingReports] = useState(true);
+  const [selectedTargetQQ, setSelectedTargetQQ] = useState<string | null>(null);
+
+  const fetchTargets = useCallback(async () => {
+    setLoadingTargets(true);
+    try {
+      const res = await fetch("/api/reports/targets");
+      if (res.ok) {
+        const data = await res.json();
+        setTargets(data.data || []);
+      }
+    } finally {
+      setLoadingTargets(false);
+    }
+  }, []);
 
   const fetchReports = useCallback(async () => {
+    setLoadingReports(true);
     try {
       const res = await fetch("/api/reports?pageSize=50");
       if (res.ok) {
         const data = await res.json();
         setReports(data.data || []);
       }
-    } catch {
-      // non-critical
     } finally {
-      setLoading(false);
+      setLoadingReports(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void fetchTargets();
+      void fetchReports();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchTargets, fetchReports]);
+
+  const effectiveTargetQQ = selectedTargetQQ ?? prefillTargetQQ ?? null;
+  const selectedTarget =
+    targets.find((target) => target.targetQQ === effectiveTargetQQ) ??
+    targets[0] ??
+    null;
+
+  async function handleReportSubmitted() {
+    await Promise.all([fetchReports(), fetchTargets()]);
+  }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">🚨 举报中心</h1>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">举报中心</h1>
 
-      {/* Report form */}
-      <ReportForm prefillTarget={prefillTarget} onSubmitted={fetchReports} />
+      <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-6">
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">
+            可举报对象
+          </h2>
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+            只有已通过资料查看申请、已经能互相查看资料的用户会出现在这里。点击选取举报用户。
+          </p>
+        </div>
 
-      {/* My reports history */}
-      <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
-        <h2 className="mb-4 text-base font-semibold text-[hsl(var(--foreground))]">📋 我的举报记录</h2>
+        {loadingTargets && (
+          <div className="flex items-center justify-center py-6">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent" />
+          </div>
+        )}
 
-        {loading && (
+        {!loadingTargets && targets.length === 0 && (
+          <p className="rounded-xl bg-[hsl(var(--secondary)/0.45)] px-4 py-5 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            暂无可举报对象
+          </p>
+        )}
+
+        {!loadingTargets && targets.length > 0 && (
+          <div className="space-y-3">
+            {targets.map((target) => {
+              const selected = target.targetQQ === selectedTarget?.targetQQ;
+              return (
+                <button
+                  type="button"
+                  key={target.targetQQ}
+                  aria-pressed={selected}
+                  onClick={() => setSelectedTargetQQ(target.targetQQ)}
+                  className={`flex w-full flex-col gap-3 rounded-xl border px-4 py-3 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[hsl(var(--card))] sm:flex-row sm:items-center sm:justify-between ${
+                    selected
+                      ? "border-red-500 bg-red-500 text-white shadow-sm shadow-red-500/20"
+                      : "border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] text-[hsl(var(--foreground))] hover:border-red-300 hover:bg-red-50/70"
+                  }`}
+                >
+                  <div>
+                    <div className={`text-sm font-semibold ${selected ? "text-white" : "text-[hsl(var(--foreground))]"}`}>
+                      {target.nickname || "匿名用户"}
+                    </div>
+                    <div className={`text-xs ${selected ? "text-white/85" : "text-[hsl(var(--muted-foreground))]"}`}>
+                      QQ: {target.targetQQ}
+                    </div>
+                  </div>
+                  {selected && (
+                    <span className="inline-flex w-fit items-center justify-center rounded-full bg-white/20 px-3 py-1 text-xs font-semibold text-white">
+                      已选择
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {selectedTarget && (
+        <ReportForm
+          key={selectedTarget.targetQQ}
+          target={selectedTarget}
+          onSubmitted={handleReportSubmitted}
+        />
+      )}
+
+      <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 sm:p-6">
+        <h2 className="mb-4 text-base font-semibold text-[hsl(var(--foreground))]">
+          我的举报记录
+        </h2>
+
+        {loadingReports && (
           <div className="flex items-center justify-center py-8">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent" />
           </div>
         )}
 
-        {!loading && reports.length === 0 && (
+        {!loadingReports && reports.length === 0 && (
           <p className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">
             暂无举报记录
           </p>
         )}
 
-        {!loading && reports.length > 0 && (
+        {!loadingReports && reports.length > 0 && (
           <div className="space-y-3">
-            {reports.map((r) => {
-              const statusInfo = STATUS_LABELS[r.status] || { label: r.status, cls: "" };
+            {reports.map((report) => {
+              const statusInfo = STATUS_LABELS[report.status] || {
+                label: report.status,
+                cls: "",
+              };
               return (
                 <div
-                  key={r.id}
+                  key={report.id}
                   className="rounded-lg border border-[hsl(var(--border)/0.5)] bg-[hsl(var(--secondary)/0.3)] p-4"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-[hsl(var(--foreground))]">
-                          {TYPE_LABELS[r.type] || r.type}
+                          {TYPE_LABELS[report.type] || report.type}
                         </span>
                         <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusInfo.cls}`}>
                           {statusInfo.label}
                         </span>
                       </div>
                       <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
-                        举报对象: {r.targetNickname || r.targetQQ || r.targetUserId}
+                        举报对象: {report.targetNickname || report.targetQQ || "匿名用户"}
                       </p>
                     </div>
                     <span className="shrink-0 text-[11px] text-[hsl(var(--muted-foreground))]">
-                      {formatDate(r.createdAt)}
+                      {formatDate(report.createdAt)}
                     </span>
                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
-                    {r.description}
+                    {report.description}
                   </p>
-                  {r.evidence.length > 0 && (
+                  {report.evidence.length > 0 && (
                     <div className="mt-3">
                       <p className="mb-2 text-[11px] font-medium text-[hsl(var(--foreground))]">
-                        证据图片 ({r.evidence.length})
+                        证据图片 ({report.evidence.length})
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {r.evidence.map((item, index) => (
+                        {report.evidence.map((item, index) => (
                           <a
                             key={item.key}
                             href={item.url}
@@ -445,10 +521,14 @@ function UserReportsContent() {
                       </div>
                     </div>
                   )}
-                  {r.resolution && (
+                  {report.resolution && (
                     <div className="mt-2 rounded-md bg-[hsl(var(--secondary)/0.5)] px-3 py-2">
-                      <p className="text-[11px] font-medium text-[hsl(var(--foreground))]">处理结果:</p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))]">{r.resolution}</p>
+                      <p className="text-[11px] font-medium text-[hsl(var(--foreground))]">
+                        处理结果:
+                      </p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                        {report.resolution}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -456,7 +536,7 @@ function UserReportsContent() {
             })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

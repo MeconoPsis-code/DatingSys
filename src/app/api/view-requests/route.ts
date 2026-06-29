@@ -184,8 +184,9 @@ export async function GET(req: Request) {
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       requesterNickname: r.requester.authIdentities[0]?.nickname ?? null,
-      requesterQQ: r.requester.qqNumber ?? null,
+      requesterQQ: r.status === 'APPROVED' ? (r.requester.qqNumber ?? null) : null,
       targetNickname: r.target.authIdentities[0]?.nickname ?? null,
+      targetQQ: r.status === 'APPROVED' ? (r.target.qqNumber ?? null) : null,
       // Include requester profile summary for incoming requests (so target can see who's asking)
       ...(type === 'incoming' && r.requester.profile ? {
         requesterProfile: {

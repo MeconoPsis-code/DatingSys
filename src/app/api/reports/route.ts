@@ -7,6 +7,7 @@ import {
   ReportEvidenceError,
   uploadReportEvidenceFiles,
 } from '@/lib/report-evidence';
+import { hasReportableContext } from '@/lib/report-targets';
 import { Prisma } from '@prisma/client';
 
 // ── POST /api/reports — user submits a report ──────────
@@ -22,7 +23,10 @@ export async function POST(req: Request) {
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
-      targetQQ = String(formData.get('targetUserId') || '');
+      if (formData.has('targetUserId')) {
+        return error('DEPRECATED_FIELD', '举报接口不再接受targetUserId，请使用targetQQ', 400);
+      }
+      targetQQ = String(formData.get('targetQQ') || '');
       type = String(formData.get('type') || '');
       description = String(formData.get('description') || '');
       evidenceFiles = formData
@@ -31,14 +35,20 @@ export async function POST(req: Request) {
     } else {
       const body = await req.json();
       const parsed = body as {
-        targetUserId: string;
-        type: string;
-        description: string;
+        targetQQ?: unknown;
+        targetUserId?: unknown;
+        type?: unknown;
+        description?: unknown;
       };
-      targetQQ = parsed.targetUserId;
-      type = parsed.type;
-      description = parsed.description;
+      if (parsed.targetUserId !== undefined) {
+        return error('DEPRECATED_FIELD', '举报接口不再接受targetUserId，请使用targetQQ', 400);
+      }
+      targetQQ = typeof parsed.targetQQ === 'string' ? parsed.targetQQ : '';
+      type = typeof parsed.type === 'string' ? parsed.type : '';
+      description = typeof parsed.description === 'string' ? parsed.description : '';
     }
+    const normalizedTargetQQ = targetQQ.trim();
+    const normalizedDescription = description.trim();
 
     // Validate
     const validTypes = [
@@ -50,36 +60,44 @@ export async function POST(req: Request) {
       'MALICIOUS',
       'OTHER',
     ];
-    if (!targetQQ) {
-      return error('MISSING_TARGET', '请输入被举报用户的QQ号', 400);
+    if (!normalizedTargetQQ) {
+      return error('MISSING_TARGET', '请选择被举报用户', 400);
     }
     if (!validTypes.includes(type)) {
       return error('INVALID_TYPE', '无效的举报类型', 400);
     }
-    if (!description || description.trim().length < 5) {
+    if (!normalizedDescription || normalizedDescription.length < 5) {
       return error('INVALID_DESCRIPTION', '举报描述至少5个字', 400);
     }
-    if (description.trim().length > 1000) {
+    if (normalizedDescription.length > 1000) {
       return error('DESCRIPTION_TOO_LONG', '举报描述不能超过1000字', 400);
     }
 
     // Look up user by QQ number
-    const target = await db.user.findUnique({ where: { qqNumber: targetQQ.trim() } });
-    if (!target) {
-      return error('NOT_FOUND', '未找到该QQ号对应的用户', 404);
+    const target = await db.user.findUnique({
+      where: { qqNumber: normalizedTargetQQ },
+      include: { profile: { select: { status: true } } },
+    });
+    if (!target || target.status !== 'ACTIVE' || target.profile?.status !== 'ACTIVE') {
+      return error('NOT_FOUND', '未找到可举报的用户', 404);
     }
-    const targetUserId = target.id;
+    const targetId = target.id;
 
     // Cannot report yourself
-    if (targetUserId === session.id) {
+    if (targetId === session.id) {
       return error('SELF_REPORT', '不能举报自己', 400);
+    }
+
+    const canReportTarget = await hasReportableContext(session.id, targetId);
+    if (!canReportTarget) {
+      return error('FORBIDDEN_TARGET', '只能举报已通过资料查看申请的用户', 403);
     }
 
     // Check for duplicate pending report
     const existing = await db.report.findFirst({
       where: {
         reporterId: session.id,
-        targetUserId,
+        targetUserId: targetId,
         status: { in: ['PENDING', 'REVIEWING'] },
       },
     });
@@ -94,9 +112,9 @@ export async function POST(req: Request) {
       report = await db.report.create({
         data: {
           reporterId: session.id,
-          targetUserId,
+          targetUserId: targetId,
           type: type as 'FAKE_INFO' | 'STOLEN_PHOTO' | 'IMPERSONATION' | 'HARASSMENT' | 'SCAM' | 'MALICIOUS' | 'OTHER',
-          description: description.trim(),
+          description: normalizedDescription,
           evidenceObjectKeys: evidenceKeys.length > 0
             ? (evidenceKeys as Prisma.InputJsonValue)
             : undefined,
@@ -114,7 +132,7 @@ export async function POST(req: Request) {
         action: 'REPORT_CREATE',
         targetType: 'Report',
         targetId: report.id,
-        metadata: { targetUserId, type, evidenceCount: evidenceKeys.length },
+        metadata: { targetQQ: normalizedTargetQQ, type, evidenceCount: evidenceKeys.length },
       },
     });
 
@@ -164,7 +182,6 @@ export async function GET(req: Request) {
     const data = await Promise.all(
       reports.map(async (r) => ({
         id: r.id,
-        targetUserId: r.targetUserId,
         targetNickname: r.target.authIdentities[0]?.nickname ?? null,
         targetQQ: r.target.qqNumber,
         type: r.type,

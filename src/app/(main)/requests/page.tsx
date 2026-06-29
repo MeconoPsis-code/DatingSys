@@ -30,6 +30,7 @@ interface ViewRequest {
   requesterNickname: string | null;
   requesterQQ: string | null;
   targetNickname: string | null;
+  targetQQ: string | null;
   requesterProfile?: RequesterProfile;
 }
 
@@ -211,7 +212,7 @@ function IncomingRequestCard({
 
       {/* View requester profile link for APPROVED requests */}
       {request.status === "APPROVED" && (
-        <div className="mt-3">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
           <Link
             href={`/matches/${request.requesterId}`}
             className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
@@ -222,6 +223,14 @@ function IncomingRequestCard({
             </svg>
             查看完整资料
           </Link>
+          {request.requesterQQ && (
+            <Link
+              href={`/report?targetQQ=${encodeURIComponent(request.requesterQQ)}`}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-600 active:scale-[0.98]"
+            >
+              举报
+            </Link>
+          )}
         </div>
       )}
     </div>
@@ -276,6 +285,14 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
             </svg>
             查看完整资料
           </Link>
+          {request.targetQQ && (
+            <Link
+              href={`/report?targetQQ=${encodeURIComponent(request.targetQQ)}`}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-600 active:scale-[0.98]"
+            >
+              举报
+            </Link>
+          )}
         </div>
       )}
       {request.status === "REJECTED" && (
@@ -333,8 +350,15 @@ export default function RequestsPage() {
   }, []);
 
   useEffect(() => {
-    fetchRequests();
-    fetchPendingCount();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void fetchRequests();
+      void fetchPendingCount();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [fetchRequests, fetchPendingCount]);
 
   async function handleRespond(id: string, action: "approve" | "reject") {

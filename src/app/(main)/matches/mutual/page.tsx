@@ -143,7 +143,6 @@ function MutualMatchCard({
   onRequestView: (userId: string) => void;
   viewDetail: { qqNumber: string | null } | null;
 }) {
-  const [showReport, setShowReport] = useState(false);
   const [qqCopied, setQqCopied] = useState(false);
 
   function handleCopyQQ(qq: string) {
@@ -272,6 +271,12 @@ function MutualMatchCard({
                 {qqCopied && (
                   <span className="text-[10px] text-emerald-400">已复制</span>
                 )}
+                <Link
+                  href={`/report?targetQQ=${encodeURIComponent(viewDetail.qqNumber)}`}
+                  className="flex w-full items-center justify-center rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-600 active:scale-[0.98] sm:w-auto sm:py-1.5"
+                >
+                  举报
+                </Link>
               </div>
             )}
             {match.hasPhotos && match.currentUserHasPhotos && (
@@ -332,30 +337,6 @@ function MutualMatchCard({
         )}
       </div>
 
-      {/* Report */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1" />
-        <button
-          type="button"
-          onClick={() => setShowReport(!showReport)}
-          className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs text-[hsl(var(--muted-foreground))] transition-all hover:border-[hsl(0,60%,50%/0.5)] hover:text-[hsl(0,60%,65%)]"
-        >
-          举报
-        </button>
-      </div>
-
-      {/* Report section (expandable) */}
-      {showReport && (
-        <div className="mt-3 rounded-lg border border-[hsl(0,60%,50%/0.2)] bg-[hsl(0,60%,50%/0.05)] p-3">
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            如需举报，请前往
-            <Link href={`/report?target=${match.userId}`} className="ml-1 text-[hsl(var(--primary))] underline">
-              举报页面
-            </Link>
-            提交详细信息。
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -481,8 +462,15 @@ export default function MutualMatchesPage() {
   }, [viewRequestMap, approvedDetails]);
 
   useEffect(() => {
-    fetchMatches();
-    fetchViewRequests();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void fetchMatches();
+      void fetchViewRequests();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [fetchMatches, fetchViewRequests]);
 
   function handlePageChange(newPage: number) {
