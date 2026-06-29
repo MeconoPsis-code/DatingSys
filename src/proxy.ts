@@ -4,6 +4,7 @@ import { hasRole } from "@/lib/rbac";
 import { UserRole } from "@prisma/client";
 
 const COOKIE_NAME = "date-session";
+const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === "true";
 
 // Routes that are always accessible (no auth required)
 const PUBLIC_PATHS = [
@@ -66,8 +67,39 @@ function isScorerPath(pathname: string): boolean {
   );
 }
 
+function isMaintenanceAllowedPath(pathname: string): boolean {
+  return (
+    pathname === "/maintenance" ||
+    pathname.startsWith("/api/health") ||
+    isPublicAssetPath(pathname)
+  );
+}
+
+function isPublicAssetPath(pathname: string): boolean {
+  return (
+    pathname.endsWith(".png") ||
+    pathname.endsWith(".jpg") ||
+    pathname.endsWith(".jpeg") ||
+    pathname.endsWith(".svg") ||
+    pathname.endsWith(".gif") ||
+    pathname.endsWith(".webp") ||
+    pathname.endsWith(".ico")
+  );
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  if (MAINTENANCE_MODE && !isMaintenanceAllowedPath(pathname)) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: { code: "MAINTENANCE", message: "系统升级维护中" } },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.redirect(new URL("/maintenance", req.url));
+  }
 
   // 1. Public routes — always allowed
   if (isPublicPath(pathname)) {
