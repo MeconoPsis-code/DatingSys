@@ -17,6 +17,7 @@ export interface ProfileDraftData {
   preference?: Prisma.InputJsonValue;
   deleteAllPhotos?: boolean;
   photos?: DraftPhotoRecord[];
+  photoRevokedAt?: string;
 }
 
 interface PublishedPhotoLike {
@@ -71,6 +72,7 @@ export function readProfileDraftData(value: unknown): ProfileDraftData {
     preference: isRecord(value.preference) ? (value.preference as Prisma.InputJsonValue) : undefined,
     deleteAllPhotos: value.deleteAllPhotos === true,
     photos: normalizeDraftPhotos(value.photos),
+    photoRevokedAt: typeof value.photoRevokedAt === "string" ? value.photoRevokedAt : undefined,
   };
 }
 
@@ -100,6 +102,7 @@ export function toDraftJson(data: ProfileDraftData): Prisma.InputJsonValue {
   if (data.profile !== undefined) output.profile = data.profile;
   if (data.preference !== undefined) output.preference = data.preference;
   if (data.deleteAllPhotos !== undefined) output.deleteAllPhotos = data.deleteAllPhotos;
+  if (data.photoRevokedAt !== undefined) output.photoRevokedAt = data.photoRevokedAt;
   if (data.photos !== undefined) {
     output.photos = orderDraftPhotos(data.photos) as unknown as Prisma.InputJsonValue;
   }

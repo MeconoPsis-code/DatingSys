@@ -142,6 +142,8 @@ export default function ProfileEditPage() {
     publishCooldownRemaining: number;
     canEdit: boolean;
     editCooldownRemaining: number;
+    editCooldownRemainingText?: string;
+    isPhotoRevokeCooldown?: boolean;
   }>({ canPublish: true, publishCooldownRemaining: 0, canEdit: true, editCooldownRemaining: 0 });
 
   // Confirm modal state
@@ -531,7 +533,12 @@ export default function ProfileEditPage() {
             <path d="M55 35V65" stroke="currentColor" strokeWidth={8} strokeLinecap="round" />
             <circle cx="55" cy="80" r="4" fill="currentColor" />
           </svg>
-          <span>发布后 {7} 天内不能再次修改发布。还需等待 {cooldowns.editCooldownRemaining} 天。可先保存草稿，草稿不影响已发布资料。</span>
+          <span>
+            {cooldowns.isPhotoRevokeCooldown
+              ? `照片被撤销后需要等待 ${cooldowns.editCooldownRemainingText || `${cooldowns.editCooldownRemaining}天`} 才能重新发布。`
+              : `发布后 ${7} 天内不能再次修改发布。还需等待 ${cooldowns.editCooldownRemainingText || `${cooldowns.editCooldownRemaining}天`}。`}
+            可先保存草稿，草稿不影响已发布资料。
+          </span>
         </div>
       )}
       {!cooldowns.canPublish && (
@@ -1033,7 +1040,7 @@ export default function ProfileEditPage() {
             disabled={submitting || !form.consent || !cooldowns.canEdit || !cooldowns.canPublish}
             className="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-brand-blue px-3 py-2.5 text-center text-xs font-semibold leading-tight text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 sm:text-sm"
           >
-            {submitting ? "保存中..." : !cooldowns.canPublish ? `${cooldowns.publishCooldownRemaining}天后可发布` : !cooldowns.canEdit ? `${cooldowns.editCooldownRemaining}天后可修改` : "发布资料"}
+            {submitting ? "保存中..." : !cooldowns.canPublish ? `${cooldowns.publishCooldownRemaining}天后可发布` : !cooldowns.canEdit ? `${cooldowns.editCooldownRemainingText || `${cooldowns.editCooldownRemaining}天`}后可发布` : "发布资料"}
           </button>
           </div>
         </div>

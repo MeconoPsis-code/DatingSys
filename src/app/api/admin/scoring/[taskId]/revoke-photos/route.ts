@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { deleteFile } from '@/lib/storage';
 import { notify } from '@/lib/notifications';
-import { EDIT_COOLDOWN_DAYS } from '@/lib/validations/profile';
+import { PHOTO_REVOKE_REPUBLISH_COOLDOWN_HOURS } from '@/lib/validations/profile';
 import {
   orderDraftPhotos,
   readProfileDraftData,
@@ -102,7 +102,7 @@ export async function POST(
                 ),
               }
             : null;
-        const remainingDraftPhotos = draftPhotoUpdate?.photos ?? [];
+        const remainingDraftPhotos = draftPhotoUpdate?.photos ?? draftData.photos;
 
         await tx.profile.update({
           where: { id: profile.id },
@@ -110,15 +110,16 @@ export async function POST(
             lastSubmittedAt: cooldownStartedAt,
             photoMatchPref: null,
             highScoreOnly: false,
-            ...(draftPhotoUpdate
-              ? {
-                  draftData: toDraftJson({
-                    ...draftData,
+            draftData: toDraftJson({
+              ...draftData,
+              photoRevokedAt: cooldownStartedAt.toISOString(),
+              ...(remainingDraftPhotos !== undefined
+                ? {
                     photos: remainingDraftPhotos,
                     deleteAllPhotos: remainingDraftPhotos.length === 0,
-                  }),
-                }
-              : {}),
+                  }
+                : {}),
+            }),
           },
         });
       }
@@ -140,7 +141,11 @@ export async function POST(
 
     await Promise.all(photoStorageKeys.map((key) => deleteFile(key).catch(() => {})));
 
-    await notify.photosRevoked(task.ratedUserId, reasonSummary, EDIT_COOLDOWN_DAYS);
+    await notify.photosRevoked(
+      task.ratedUserId,
+      reasonSummary,
+      `${PHOTO_REVOKE_REPUBLISH_COOLDOWN_HOURS} 小时`
+    );
 
     return success({
       message: '照片已撤销，用户已收到违规原因通知',

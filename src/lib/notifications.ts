@@ -60,12 +60,12 @@ export const notify = {
   },
 
   /** Published profile photos were revoked after an abnormal-photo report */
-  async photosRevoked(userId: string, reason: string, cooldownDays: number) {
+  async photosRevoked(userId: string, reason: string, cooldownLabel: string) {
     await create(
       userId,
       "PHOTO_REVOKED",
       "照片已被撤销",
-      `你的照片因违反「${reason}」已被撤销。在重新发布照片前，系统会将你视为未上传照片用户。你可以在 ${cooldownDays} 天后重新上传并发布照片。`
+      `你的照片因违反「${reason}」已被撤销。在重新发布照片前，系统会将你视为未上传照片用户。你可以在 ${cooldownLabel} 后重新上传并发布照片。`
     );
   },
 

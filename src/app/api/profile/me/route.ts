@@ -6,6 +6,7 @@ import {
   profileFormSchema,
   CLEAR_COOLDOWN_DAYS,
   EDIT_COOLDOWN_DAYS,
+  PHOTO_REVOKE_REPUBLISH_COOLDOWN_MS,
 } from "@/lib/validations/profile";
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
@@ -35,6 +36,59 @@ function daysSince(date: Date | null | undefined): number | null {
   return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function parseDateString(value: string | undefined): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatCooldownRemaining(ms: number): string {
+  const safeMs = Math.max(0, ms);
+  if (safeMs <= 0) return "0分钟";
+
+  const totalMinutes = Math.ceil(safeMs / (60 * 1000));
+  if (totalMinutes < 60) return `${totalMinutes}分钟`;
+
+  const totalHours = Math.ceil(safeMs / (60 * 60 * 1000));
+  if (totalHours < 24) return `${totalHours}小时`;
+
+  return `${Math.ceil(safeMs / DAY_MS)}天`;
+}
+
+function getEditCooldownInfo(profile: {
+  lastSubmittedAt: Date | null;
+  draftData: unknown;
+} | null | undefined) {
+  if (!profile?.lastSubmittedAt) {
+    return {
+      isActive: false,
+      remainingMs: 0,
+      remainingDays: 0,
+      remainingText: "",
+      isPhotoRevokeCooldown: false,
+    };
+  }
+
+  const draftData = readProfileDraftData(profile.draftData);
+  const photoRevokedAt = parseDateString(draftData.photoRevokedAt);
+  const isPhotoRevokeCooldown = photoRevokedAt !== null;
+  const cooldownMs = isPhotoRevokeCooldown
+    ? PHOTO_REVOKE_REPUBLISH_COOLDOWN_MS
+    : EDIT_COOLDOWN_DAYS * DAY_MS;
+  const elapsedMs = Date.now() - profile.lastSubmittedAt.getTime();
+  const remainingMs = Math.max(0, cooldownMs - elapsedMs);
+
+  return {
+    isActive: remainingMs > 0,
+    remainingMs,
+    remainingDays: Math.ceil(remainingMs / DAY_MS),
+    remainingText: formatCooldownRemaining(remainingMs),
+    isPhotoRevokeCooldown,
+  };
+}
+
 /**
  * GET /api/profile/me
  *
@@ -61,7 +115,7 @@ export async function GET() {
 
   // Calculate cooldown info for the UI
   const clearDays = daysSince(user?.lastProfileClearedAt);
-  const editDays = daysSince(user?.profile?.lastSubmittedAt);
+  const editCooldown = getEditCooldownInfo(user?.profile);
 
   // hasPublishedBefore: true if the profile was ever published (lastSubmittedAt is set on publish)
   const hasPublishedBefore = user?.profile?.lastSubmittedAt != null;
@@ -74,11 +128,10 @@ export async function GET() {
         ? CLEAR_COOLDOWN_DAYS - clearDays
         : 0,
     canEdit:
-      !hasPublishedBefore || editDays === null || editDays >= EDIT_COOLDOWN_DAYS,
-    editCooldownRemaining:
-      hasPublishedBefore && editDays !== null && editDays < EDIT_COOLDOWN_DAYS
-        ? EDIT_COOLDOWN_DAYS - editDays
-        : 0,
+      !hasPublishedBefore || !editCooldown.isActive,
+    editCooldownRemaining: editCooldown.remainingDays,
+    editCooldownRemainingText: editCooldown.remainingText,
+    isPhotoRevokeCooldown: editCooldown.isPhotoRevokeCooldown,
   };
 
   const hasPhotos = (user?.profile?.photos?.length ?? 0) > 0;
@@ -190,12 +243,14 @@ export async function PUT(req: Request) {
     profileStatus === "ACTIVE" &&
     user?.profile?.lastSubmittedAt
   ) {
-    const editDays = daysSince(user.profile.lastSubmittedAt);
-    if (editDays !== null && editDays < EDIT_COOLDOWN_DAYS) {
-      const remaining = EDIT_COOLDOWN_DAYS - editDays;
+    const editCooldown = getEditCooldownInfo(user.profile);
+    if (editCooldown.isActive) {
+      const cooldownLabel = editCooldown.isPhotoRevokeCooldown
+        ? "照片撤销后"
+        : `发布后 ${EDIT_COOLDOWN_DAYS} 天内`;
       return error(
         "COOLDOWN",
-        `发布后 ${EDIT_COOLDOWN_DAYS} 天内不能再次发布。还需等待 ${remaining} 天。`,
+        `${cooldownLabel}不能再次发布。还需等待 ${editCooldown.remainingText}。`,
         429
       );
     }

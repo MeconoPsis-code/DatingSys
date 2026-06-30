@@ -15,6 +15,9 @@ const MAX_SELF_INTRO = 500;
 
 export const CLEAR_COOLDOWN_DAYS = 30;
 export const EDIT_COOLDOWN_DAYS = 7;
+export const PHOTO_REVOKE_REPUBLISH_COOLDOWN_HOURS = 5;
+export const PHOTO_REVOKE_REPUBLISH_COOLDOWN_MS =
+  PHOTO_REVOKE_REPUBLISH_COOLDOWN_HOURS * 60 * 60 * 1000;
 
 // ── Helper: age from DOB ────────────────────────────────
 
