@@ -5,6 +5,7 @@ import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
 import { getOnDutyScorerIds } from "@/lib/scorer-duty";
+import { getAssignedScorerIdsForTask, SCOREABLE_TASK_STATUSES } from "@/lib/scoring";
 
 // Valid scores: 0, 0.1, 0.2, ..., 10
 function isValidScore(score: number): boolean {
@@ -56,14 +57,20 @@ export async function POST(
     return error("NOT_FOUND", "评分任务不存在", 404);
   }
 
-  if (!["PENDING", "SCORING"].includes(task.status)) {
+  if (!SCOREABLE_TASK_STATUSES.includes(task.status as (typeof SCOREABLE_TASK_STATUSES)[number])) {
     return error("CONFLICT", "该任务当前不可评分", 409);
   }
 
-  // Verify scorer is on today's live duty roster.
-  const eligibleScorerIds = await getOnDutyScorerIds({
+  const onDutyScorerIds = await getOnDutyScorerIds({
     excludeUserId: task.ratedUserId,
   });
+  const eligibleScorerIds = getAssignedScorerIdsForTask({
+    status: task.status,
+    ratedUserId: task.ratedUserId,
+    scorerSnapshot: task.scorerSnapshot,
+    onDutyScorerIds,
+  });
+
   if (!eligibleScorerIds.includes(session.id)) {
     return error("FORBIDDEN", "你不在今日评分值班名单中", 403);
   }
@@ -83,11 +90,23 @@ export async function POST(
     },
   });
 
-  // Update task status to SCORING if still PENDING
+  // Normal queue tasks move into SCORING after the first score. Focused
+  // rescore tasks keep NEEDS_RESCORE so assignment stays on the snapshot.
   if (task.status === "PENDING") {
     await db.ratingTask.update({
       where: { id: taskId },
       data: { status: "SCORING" },
+    });
+
+    await db.ratingProfile.upsert({
+      where: { userId: task.ratedUserId },
+      create: {
+        userId: task.ratedUserId,
+        ratingStatus: "SCORING",
+      },
+      update: {
+        ratingStatus: "SCORING",
+      },
     });
   }
 
@@ -139,7 +158,7 @@ export async function POST(
   });
 
   return success({
-    message: allDone ? "评分完成，已计算最终分数" : "评分已提交",
+    message: allDone ? "评分已全部提交，等待管理员发布" : "评分已提交",
     allDone,
     progress: {
       scored: totalScored,

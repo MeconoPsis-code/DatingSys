@@ -132,6 +132,15 @@ pnpm prisma studio              # 打开数据库可视化管理界面
 docker compose up -d            # 启动基础设施
 docker compose down             # 停止基础设施
 docker compose down -v          # 停止并删除所有数据卷
+
+# Rebuild on production server
+pnpm install --frozen-lockfile
+pnpm prisma generate
+pnpm prisma migrate deploy
+pnpm build
+
+pm2 restart tenmatch --update-env
+pm2 status
 ```
 
 ---

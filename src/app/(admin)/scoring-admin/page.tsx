@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 /* ─── Lightbox ───────────────────────────────────────── */
 
@@ -123,6 +123,7 @@ interface ScoringTask {
   completedAt: string | null;
   createdAt: string;
   finalScore: number | null;
+  liveScore: number | null;
   photoReports: PhotoReport[];
   pendingActionType: string | null;
   pendingActionValue: number | null;
@@ -136,6 +137,7 @@ const STATUS_TABS = [
   { value: "", label: "全部" },
   { value: "REVIEW", label: "待审核", superOnly: true },
   { value: "REPORTED", label: "被举报" },
+  { value: "NEEDS_RESCORE", label: "需重评" },
   { value: "PENDING", label: "待评分" },
   { value: "SCORING", label: "评分中" },
   { value: "COMPLETED", label: "已完成" },
@@ -147,6 +149,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   REVIEW: { label: "待审核", cls: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]" },
   COMPLETED: { label: "已完成", cls: "bg-[#f6ffed] text-[#389e0d] border-[#b7eb8f]" },
   REPORTED: { label: "被举报", cls: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]" },
+  NEEDS_RESCORE: { label: "需重评", cls: "bg-[#fff7e6] text-[#d46b08] border-[#ffd591]" },
 };
 
 function formatDate(d: string) {
@@ -240,44 +243,39 @@ function TaskCard({
 }: {
   task: ScoringTask;
   isSuperAdmin: boolean;
-  onRescore: (taskId: string) => void;
+  onRescore: (taskId: string, mode?: "reporters_and_unscored") => void;
   onApprove: (taskId: string) => void;
   onOverride: (taskId: string, score: number) => void;
   onRevokePhotos: (taskId: string) => void;
   onRevoke: (taskId: string) => void;
 }) {
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
-  const [timeLeft, setTimeLeft] = useState<string>("");
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (!task.pendingActionExpiresAt) {
-      setTimeLeft("");
       return;
     }
 
-    const targetTime = new Date(task.pendingActionExpiresAt).getTime();
-
-    function updateTimer() {
-      const now = new Date().getTime();
-      const diff = targetTime - now;
-
-      if (diff <= 0) {
-        setTimeLeft("00:00");
-        return;
-      }
-
-      const totalSec = Math.floor(diff / 1000);
-      const m = Math.floor(totalSec / 60);
-      const s = totalSec % 60;
-      const mm = String(m).padStart(2, "0");
-      const ss = String(s).padStart(2, "0");
-      setTimeLeft(`${mm}:${ss}`);
-    }
-
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [task.pendingActionExpiresAt]);
+
+  const timeLeft = useMemo(() => {
+    if (!task.pendingActionExpiresAt) return "";
+
+    const targetTime = new Date(task.pendingActionExpiresAt).getTime();
+    const diff = targetTime - now;
+
+    if (diff <= 0) return "00:00";
+
+    const totalSec = Math.floor(diff / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    const mm = String(m).padStart(2, "0");
+    const ss = String(s).padStart(2, "0");
+    return `${mm}:${ss}`;
+  }, [task.pendingActionExpiresAt, now]);
   const badge = STATUS_BADGE[task.status] || { label: task.status, cls: "" };
   const progress = task.totalScorers > 0 ? task.scoredCount / task.totalScorers : 0;
   const progressPct = Math.round(progress * 100);
@@ -285,12 +283,18 @@ function TaskCard({
   // Map scored user IDs
   const scoredUserIds = new Set(task.scores.map((s) => s.scorerUserId));
 
-  // Use API-provided finalScore (which includes overrides), fall back to calculated average
   const calculatedAvg =
-    task.scores.length > 0
+    task.liveScore ??
+    (task.scores.length > 0
       ? Math.round((task.scores.reduce((sum, s) => sum + s.score, 0) / task.scores.length) * 10) / 10
-      : null;
-  const avgScore = task.finalScore ?? calculatedAvg;
+      : null);
+  const displayScore = task.status === "COMPLETED" && task.finalScore !== null ? task.finalScore : calculatedAvg;
+  const scoreLabel = task.status === "COMPLETED" ? "已发布评分" : "实时均分";
+  const scoreFootnote =
+    task.status === "COMPLETED" && task.finalScore !== null && calculatedAvg !== task.finalScore
+      ? "手动设定"
+      : `基于 ${task.scores.length} 个评分`;
+  const canPublishLiveScore = isSuperAdmin && task.status !== "COMPLETED" && task.photoReports.length === 0 && calculatedAvg !== null;
 
   return (
     <div className="min-w-0 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 transition-all hover:border-[hsl(var(--primary)/0.2)] sm:p-5">
@@ -359,14 +363,17 @@ function TaskCard({
         </div>
       </div>
 
-      {/* Completed average */}
-      {(task.status === "COMPLETED" || task.status === "REVIEW") && avgScore !== null && (
+      {/* Live / published score */}
+      {displayScore !== null && (
         <div className="mb-3 flex items-center gap-2 rounded-lg bg-[hsl(var(--secondary)/0.5)] px-3 py-2">
-          <span className="text-xs text-[hsl(var(--muted-foreground))]">最终评分:</span>
-          <span className={`text-lg font-bold ${scoreColor(avgScore)}`}>
-            {avgScore.toFixed(1)}
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">{scoreLabel}:</span>
+          <span className={`text-lg font-bold ${scoreColor(displayScore)}`}>
+            {displayScore.toFixed(1)}
           </span>
           <span className="text-xs text-[hsl(var(--muted-foreground))]">/ 10</span>
+          <span className="ml-auto text-[11px] text-[hsl(var(--muted-foreground))]">
+            {scoreFootnote}
+          </span>
         </div>
       )}
 
@@ -524,8 +531,8 @@ function TaskCard({
             <button
               type="button"
               onClick={() => {
-                if (confirm("确认照片不违规并重新发起评分吗？举报记录将被清除，任务会回到评分队列。")) {
-                  onRescore(task.id);
+                if (confirm("确认照片不违规并继续评分吗？举报记录将被清除，仅举报评分员和未评分评分员会收到重新评分任务。")) {
+                  onRescore(task.id, "reporters_and_unscored");
                 }
               }}
               className="flex items-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/20"
@@ -545,6 +552,22 @@ function TaskCard({
       {/* Actions for non-REVIEW tasks — SUPER_ADMIN only */}
       {task.status !== "REVIEW" && task.photoReports.length === 0 && isSuperAdmin && (
         <div className="flex flex-wrap gap-2">
+          {canPublishLiveScore && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`确认发布当前实时评分 ${calculatedAvg?.toFixed(1)} 分吗？仍未评分的评分员将不再影响本次结果。`)) {
+                  onApprove(task.id);
+                }
+              }}
+              className="flex items-center rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/25"
+            >
+              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              发布当前评分
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -592,8 +615,8 @@ export default function ScoringAdminPage() {
       .catch(() => {});
   }, []);
 
-  const fetchTasks = useCallback(async () => {
-    setLoading(true);
+  const fetchTasks = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -613,17 +636,31 @@ export default function ScoringAdminPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [page, statusFilter]);
 
   useEffect(() => {
-    fetchTasks();
+    const timeout = window.setTimeout(() => {
+      void fetchTasks();
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [fetchTasks]);
 
-  async function handleRescore(taskId: string) {
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      fetchTasks({ silent: true });
+    }, 10000);
+    return () => window.clearInterval(interval);
+  }, [fetchTasks]);
+
+  async function handleRescore(taskId: string, mode?: "reporters_and_unscored") {
     try {
-      const res = await fetch(`/api/admin/scoring/${taskId}/rescore`, { method: "POST" });
+      const res = await fetch(`/api/admin/scoring/${taskId}/rescore`, {
+        method: "POST",
+        headers: mode ? { "Content-Type": "application/json" } : undefined,
+        body: mode ? JSON.stringify({ mode }) : undefined,
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "操作失败");
       fetchTasks();

@@ -2,6 +2,7 @@ import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { getOnDutyScorerIds } from '@/lib/scorer-duty';
+import { getAssignedScorerIdsForTask, parseScorerSnapshot } from '@/lib/scoring';
 
 /**
  * POST /api/admin/scoring/fix-stuck
@@ -12,10 +13,11 @@ export async function POST() {
   try {
     await requireRole('SUPER_ADMIN');
 
-    // Find ALL tasks that are not yet in REVIEW or COMPLETED
+    // Find tasks that are not yet in REVIEW or COMPLETED. REPORTED tasks
+    // must be resolved by a super admin before they can move forward.
     const stuckTasks = await db.ratingTask.findMany({
       where: {
-        status: { notIn: ['REVIEW', 'COMPLETED'] },
+        status: { notIn: ['REVIEW', 'COMPLETED', 'REPORTED'] },
       },
       include: {
         scores: { select: { id: true, scorerUserId: true } },
@@ -33,15 +35,15 @@ export async function POST() {
     }> = [];
 
     for (const task of stuckTasks) {
-      const rawSnapshot = task.scorerSnapshot;
-      // Safely parse scorer snapshot — handle both array and other formats
-      let scorerIds: string[] = [];
-      if (Array.isArray(rawSnapshot)) {
-        scorerIds = rawSnapshot.map(String);
-      }
-
-      const eligibleScorerIds = await getOnDutyScorerIds({
+      const scorerIds = parseScorerSnapshot(task.scorerSnapshot);
+      const onDutyScorerIds = await getOnDutyScorerIds({
         excludeUserId: task.ratedUserId,
+      });
+      const eligibleScorerIds = getAssignedScorerIdsForTask({
+        status: task.status,
+        ratedUserId: task.ratedUserId,
+        scorerSnapshot: task.scorerSnapshot,
+        onDutyScorerIds,
       });
       const eligibleScorerIdSet = new Set(eligibleScorerIds);
       const eligibleCount = eligibleScorerIds.length;

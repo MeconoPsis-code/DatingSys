@@ -35,6 +35,7 @@ export function PhotoUploader({
 }: PhotoUploaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
@@ -63,49 +64,98 @@ export function PhotoUploader({
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+      const selectedFiles = Array.from(e.target.files ?? []);
+      if (selectedFiles.length === 0) return;
 
       // Reset input so same file can be re-selected
       e.target.value = "";
 
-      // Client-side validation
-      if (!ALLOWED_TYPES.includes(file.type)) {
-        setError("仅支持 JPEG、PNG、WebP 格式");
+      const remainingSlots = maxPhotos - photos.length;
+      if (remainingSlots <= 0) {
+        setError(`最多上传 ${maxPhotos} 张照片`);
         return;
       }
-      if (file.size > MAX_FILE_SIZE) {
-        setError("照片大小不能超过 5MB");
+
+      const filesToUpload: File[] = [];
+      const skippedMessages: string[] = [];
+      let skippedForLimit = 0;
+
+      for (const file of selectedFiles) {
+        if (!ALLOWED_TYPES.includes(file.type)) {
+          skippedMessages.push(`${file.name || "未命名照片"} 格式不支持`);
+          continue;
+        }
+
+        if (file.size > MAX_FILE_SIZE) {
+          skippedMessages.push(`${file.name || "未命名照片"} 超过 5MB`);
+          continue;
+        }
+
+        if (filesToUpload.length >= remainingSlots) {
+          skippedForLimit++;
+          continue;
+        }
+
+        filesToUpload.push(file);
+      }
+
+      if (skippedForLimit > 0) {
+        skippedMessages.push(`已达到最多 ${maxPhotos} 张，跳过 ${skippedForLimit} 张`);
+      }
+
+      if (filesToUpload.length === 0) {
+        setError(skippedMessages.join("；") || "请选择有效的照片");
         return;
       }
 
       setError(null);
       setUploading(true);
+      setUploadProgress({ done: 0, total: filesToUpload.length });
+
+      let nextPhotos = [...photos];
+      const failedMessages: string[] = [];
+      let processedCount = 0;
 
       try {
-        const formData = new FormData();
-        formData.append("file", file);
+        for (const file of filesToUpload) {
+          try {
+            const formData = new FormData();
+            formData.append("file", file);
 
-        const res = await fetch(endpoint, {
-          method: "POST",
-          body: formData,
-        });
+            const res = await fetch(endpoint, {
+              method: "POST",
+              body: formData,
+            });
 
-        const data = await res.json();
+            const data = await res.json();
 
-        if (!res.ok) {
-          throw new Error(data.error?.message || "上传失败");
+            if (!res.ok) {
+              throw new Error(data.error?.message || "上传失败");
+            }
+
+            const newPhoto = data.data.photo as PhotoItem;
+            nextPhotos = [...nextPhotos, newPhoto];
+            onPhotosChange(nextPhotos);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : "上传失败";
+            failedMessages.push(`${file.name || "未命名照片"}：${message}`);
+          } finally {
+            processedCount++;
+            setUploadProgress({ done: processedCount, total: filesToUpload.length });
+          }
         }
 
-        const newPhoto = data.data.photo as PhotoItem;
-        onPhotosChange([...photos, newPhoto]);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "上传失败");
+        const resultMessages = [
+          ...skippedMessages,
+          ...(failedMessages.length > 0 ? [`${failedMessages.length} 张上传失败：${failedMessages.join("；")}`] : []),
+        ];
+        setError(resultMessages.length > 0 ? resultMessages.join("；") : null);
       } finally {
         setUploading(false);
+        setUploadProgress(null);
       }
     },
-    [endpoint, photos, onPhotosChange]
+    [endpoint, maxPhotos, photos, onPhotosChange]
   );
 
   const handleDelete = useCallback(
@@ -213,7 +263,9 @@ export function PhotoUploader({
             {uploading ? (
               <>
                 <span className="h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                <span className="text-xs">上传中...</span>
+                <span className="text-xs">
+                  {uploadProgress ? `上传 ${uploadProgress.done}/${uploadProgress.total}...` : "上传中..."}
+                </span>
               </>
             ) : (
               <>
@@ -242,7 +294,7 @@ export function PhotoUploader({
 
       {/* Info text */}
       <p className="text-xs text-[hsl(var(--muted-foreground))]">
-        支持 JPEG、PNG、WebP，单张不超过 5MB，最多 {maxPhotos} 张
+        支持一次选择多张 JPEG、PNG、WebP，单张不超过 5MB，最多 {maxPhotos} 张
       </p>
 
       {/* Hidden file input */}
@@ -250,6 +302,7 @@ export function PhotoUploader({
         ref={fileRef}
         type="file"
         accept="image/jpeg,image/png,image/webp"
+        multiple
         onChange={handleFileSelect}
         className="hidden"
       />

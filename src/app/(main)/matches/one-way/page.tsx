@@ -407,7 +407,7 @@ function OneWayMatchCard({
             {viewDetail?.qqNumber && (
               <Link
                 href={`/report?targetQQ=${encodeURIComponent(viewDetail.qqNumber)}`}
-                className="flex w-full items-center justify-center rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-600 active:scale-[0.98] sm:w-auto sm:py-1.5"
+                className="inline-flex self-end px-1 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-600 hover:underline sm:ml-auto sm:self-auto"
               >
                 举报
               </Link>

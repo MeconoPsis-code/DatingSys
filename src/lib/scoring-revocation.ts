@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { notify } from "@/lib/notifications";
+import { calculateAverageScore } from "@/lib/scoring";
 
 /**
  * Commits any rating task superadmin decisions whose 10-minute revocation window has expired.
@@ -23,6 +24,12 @@ export async function commitExpiredActions() {
 
   for (const task of expiredTasks) {
     try {
+      const approvedFinalScore =
+        task.pendingActionType === "APPROVE" ? calculateAverageScore(task.scores) : null;
+      if (task.pendingActionType === "APPROVE" && approvedFinalScore === null) {
+        continue;
+      }
+
       // Safely perform double-check and status change with updateMany
       const updated = await db.ratingTask.updateMany({
         where: {
@@ -45,13 +52,10 @@ export async function commitExpiredActions() {
         continue;
       }
 
-      const actorUserId = task.pendingActionActorId || "SYSTEM";
+      const actorUserId = task.pendingActionActorId || null;
 
       if (task.pendingActionType === "APPROVE") {
-        // Calculate average score
-        const avg =
-          task.scores.reduce((sum, s) => sum + s.score, 0) / task.scores.length;
-        const finalScore = Math.round(avg * 10) / 10;
+        const finalScore = approvedFinalScore as number;
 
         // Publish to user RatingProfile
         await db.ratingProfile.upsert({

@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { success, error } from "@/lib/api-response";
 import { CLEAR_COOLDOWN_DAYS } from "@/lib/validations/profile";
+import { ACTIVE_SCORING_TASK_STATUSES } from "@/lib/scoring";
 
 /**
  * POST /api/profile/clear
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
     db.ratingTask.deleteMany({
       where: {
         ratedUserId: session.id,
-        status: { in: ["PENDING", "SCORING"] },
+        status: { in: [...ACTIVE_SCORING_TASK_STATUSES] },
       },
     }),
     // Remove rating profile

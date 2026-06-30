@@ -3,7 +3,8 @@ import { requireAuth } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { getSignedUrl } from "@/lib/storage";
 import { success, error } from "@/lib/api-response";
-import { getOnDutyScorerIds, isScorerOnDuty } from "@/lib/scorer-duty";
+import { getOnDutyScorerIds } from "@/lib/scorer-duty";
+import { getAssignedScorerIdsForTask, SCOREABLE_TASK_STATUSES } from "@/lib/scoring";
 
 /**
  * GET /api/scoring/tasks
@@ -27,17 +28,12 @@ export async function GET(req: Request) {
   }
 
   if (statusFilter === "pending") {
-    const isOnDuty = await isScorerOnDuty({ scorerId: session.id });
-    if (!isOnDuty) {
-      return success({ tasks: [] });
-    }
-
     const onDutyScorerIds = await getOnDutyScorerIds();
 
     // Tasks not yet scored by this user
     const tasks = await db.ratingTask.findMany({
       where: {
-        status: { in: ["PENDING", "SCORING"] },
+        status: { in: [...SCOREABLE_TASK_STATUSES] },
         // Exclude scorer's own profile
         ratedUserId: { not: session.id },
         scores: {
@@ -65,9 +61,19 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "asc" },
     });
 
+    const visibleTasks = tasks.filter((task) => {
+      const eligibleScorerIds = getAssignedScorerIdsForTask({
+        status: task.status,
+        ratedUserId: task.ratedUserId,
+        scorerSnapshot: task.scorerSnapshot,
+        onDutyScorerIds,
+      });
+      return eligibleScorerIds.includes(session.id);
+    });
+
     // Enrich with photos + signed URLs
     const enriched = await Promise.all(
-      tasks.map(async (task) => {
+      visibleTasks.map(async (task) => {
         const photos = await db.profilePhoto.findMany({
           where: {
             profile: { userId: task.ratedUserId },
@@ -83,9 +89,12 @@ export async function GET(req: Request) {
           }))
         );
 
-        const eligibleScorerIds = onDutyScorerIds.filter(
-          (id) => id !== task.ratedUserId
-        );
+        const eligibleScorerIds = getAssignedScorerIdsForTask({
+          status: task.status,
+          ratedUserId: task.ratedUserId,
+          scorerSnapshot: task.scorerSnapshot,
+          onDutyScorerIds,
+        });
         const eligibleScorerIdSet = new Set(eligibleScorerIds);
         const scoredCount = task.scores.filter((score) =>
           eligibleScorerIdSet.has(score.scorerUserId)

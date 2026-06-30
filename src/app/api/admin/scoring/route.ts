@@ -4,6 +4,7 @@ import { error, paginated } from '@/lib/api-response';
 import { getSignedUrl } from '@/lib/storage';
 import { commitExpiredActions } from '@/lib/scoring-revocation';
 import { getOnDutyScorers } from '@/lib/scorer-duty';
+import { calculateAverageScore, getAssignedScorerIdsForTask, parsePhotoReports } from '@/lib/scoring';
 
 // ── GET /api/admin/scoring — admin scoring management ──
 
@@ -57,10 +58,7 @@ export async function GET(req: Request) {
 
     const onDutyScorerIds = (await getOnDutyScorers()).map((scorer) => scorer.id);
     const reportScorerIds = tasks.flatMap((task) => {
-      const reports = task.photoReports as Array<{ reporterId?: string }> | null;
-      return Array.isArray(reports)
-        ? reports.map((report) => report.reporterId).filter(Boolean).map(String)
-        : [];
+      return parsePhotoReports(task.photoReports).map((report) => report.reporterId);
     });
     const knownScorerIds = Array.from(
       new Set(
@@ -96,16 +94,17 @@ export async function GET(req: Request) {
       tasks.map(async (t) => {
         const photos = t.ratedUser.profile?.photos ?? [];
 
-        const scorerSnapshot = Array.isArray(t.scorerSnapshot)
-          ? t.scorerSnapshot.map(String)
-          : [];
-        const scorerSource = ['PENDING', 'SCORING'].includes(t.status)
-          ? onDutyScorerIds
-          : scorerSnapshot;
-        const liveAssignedScorerList = scorerSource.filter(
+        const assignedScorerIds = getAssignedScorerIdsForTask({
+          status: t.status,
+          ratedUserId: t.ratedUserId,
+          scorerSnapshot: t.scorerSnapshot,
+          onDutyScorerIds,
+        });
+        const liveAssignedScorerList = assignedScorerIds.filter(
           (id) => id !== t.ratedUserId && eligibleScorerIds.has(id)
         );
         const assignedScorerSet = new Set(liveAssignedScorerList);
+        const liveScore = calculateAverageScore(t.scores);
 
         const photosWithUrls = await Promise.all(
           photos.map(async (p) => ({
@@ -138,7 +137,8 @@ export async function GET(req: Request) {
           completedAt: t.completedAt,
           createdAt: t.createdAt,
           finalScore: t.ratedUser.ratingProfile?.finalScore ?? null,
-          photoReports: (t.photoReports as Array<{ reporterId: string; reason: string; createdAt: string }>) || [],
+          liveScore,
+          photoReports: parsePhotoReports(t.photoReports),
           pendingActionType: t.pendingActionType,
           pendingActionValue: t.pendingActionValue,
           pendingActionExpiresAt: t.pendingActionExpiresAt ? t.pendingActionExpiresAt.toISOString() : null,

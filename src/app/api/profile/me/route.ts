@@ -18,6 +18,7 @@ import {
 import { createLogger } from "@/lib/logger";
 import { commitExpiredActions } from "@/lib/scoring-revocation";
 import { getOnDutyScorers } from "@/lib/scorer-duty";
+import { ACTIVE_SCORING_TASK_STATUSES } from "@/lib/scoring";
 import {
   orderDraftPhotos,
   publishedPhotosToDraftPhotos,
@@ -334,7 +335,7 @@ export async function PUT(req: Request) {
       const existingTask = await db.ratingTask.findFirst({
         where: {
           ratedUserId: session.id,
-          status: { in: ["PENDING", "SCORING"] },
+          status: { in: [...ACTIVE_SCORING_TASK_STATUSES] },
         },
       });
 
@@ -386,7 +387,7 @@ export async function PUT(req: Request) {
       await db.ratingTask.deleteMany({
         where: {
           ratedUserId: session.id,
-          status: { in: ["PENDING", "SCORING"] },
+          status: { in: [...ACTIVE_SCORING_TASK_STATUSES] },
         },
       });
 

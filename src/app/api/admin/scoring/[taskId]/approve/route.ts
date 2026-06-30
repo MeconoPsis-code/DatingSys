@@ -2,10 +2,11 @@ import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { notify } from '@/lib/notifications';
+import { calculateAverageScore } from '@/lib/scoring';
 
 /**
  * POST /api/admin/scoring/[taskId]/approve
- * Super admin approves a REVIEW score — publishes it to the user's RatingProfile.
+ * Super admin publishes the current live average to the user's RatingProfile.
  */
 export async function POST(
   _req: Request,
@@ -15,41 +16,80 @@ export async function POST(
     const session = await requireRole('SUPER_ADMIN');
     const { taskId } = await params;
 
-    const task = await db.ratingTask.findUnique({
-      where: { id: taskId },
-      include: { scores: { select: { score: true } } },
+    const published = await db.$transaction(async (tx) => {
+      const task = await tx.ratingTask.findUnique({
+        where: { id: taskId },
+        include: { scores: { select: { score: true } } },
+      });
+
+      if (!task) {
+        throw { code: 'NOT_FOUND', message: '评分任务不存在', status: 404 };
+      }
+
+      if (!['PENDING', 'SCORING', 'NEEDS_RESCORE', 'REVIEW'].includes(task.status)) {
+        throw { code: 'INVALID_STATUS', message: '该任务当前不可发布评分', status: 400 };
+      }
+
+      const finalScore = calculateAverageScore(task.scores);
+      if (finalScore === null) {
+        throw { code: 'NO_SCORES', message: '当前还没有评分，无法发布最终分数', status: 400 };
+      }
+
+      const now = new Date();
+
+      await tx.ratingTask.update({
+        where: { id: taskId },
+        data: {
+          status: 'COMPLETED',
+          completedAt: now,
+          pendingActionType: null,
+          pendingActionValue: null,
+          pendingActionExpiresAt: null,
+          pendingActionActorId: null,
+        },
+      });
+
+      await tx.ratingProfile.upsert({
+        where: { userId: task.ratedUserId },
+        create: {
+          userId: task.ratedUserId,
+          ratingStatus: 'COMPLETED',
+          finalScore,
+          scoreCompletedAt: now,
+        },
+        update: {
+          ratingStatus: 'COMPLETED',
+          finalScore,
+          scoreCompletedAt: now,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: session.id,
+          action: 'ADMIN_APPROVE_SCORE',
+          targetType: 'RatingTask',
+          targetId: taskId,
+          metadata: {
+            ratedUserId: task.ratedUserId,
+            finalScore,
+            scoredCount: task.scores.length,
+            immediatePublish: true,
+          },
+        },
+      });
+
+      return {
+        ratedUserId: task.ratedUserId,
+        finalScore,
+      };
     });
 
-    if (!task) {
-      return error('NOT_FOUND', '评分任务不存在', 404);
-    }
-
-    if (task.status !== 'REVIEW') {
-      return error('INVALID_STATUS', '该任务不在待审核状态', 400);
-    }
-
-    // Compute final average
-    const avg =
-      task.scores.reduce((sum, s) => sum + s.score, 0) / task.scores.length;
-    const finalScore = Math.round(avg * 10) / 10;
-
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    // Save pending approve action
-    await db.ratingTask.update({
-      where: { id: taskId },
-      data: {
-        pendingActionType: 'APPROVE',
-        pendingActionValue: null,
-        pendingActionExpiresAt: expiresAt,
-        pendingActionActorId: session.id,
-      },
-    });
+    await notify.scoringComplete(published.ratedUserId, published.finalScore);
 
     return success({
-      message: '评分审核通过已提交，将在 10 分钟后生效',
-      finalScore,
-      pendingActionExpiresAt: expiresAt.toISOString(),
+      message: '已发布当前实时评分',
+      finalScore: published.finalScore,
     });
   } catch (err) {
     console.error('[admin/scoring/approve] POST error:', err);

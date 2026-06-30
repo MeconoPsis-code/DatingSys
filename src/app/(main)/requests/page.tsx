@@ -226,7 +226,7 @@ function IncomingRequestCard({
           {request.requesterQQ && (
             <Link
               href={`/report?targetQQ=${encodeURIComponent(request.requesterQQ)}`}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-600 active:scale-[0.98]"
+              className="inline-flex self-end px-1 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-600 hover:underline sm:ml-auto sm:self-auto"
             >
               举报
             </Link>
@@ -288,7 +288,7 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
           {request.targetQQ && (
             <Link
               href={`/report?targetQQ=${encodeURIComponent(request.targetQQ)}`}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-600 active:scale-[0.98]"
+              className="inline-flex self-end px-1 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-600 hover:underline sm:ml-auto sm:self-auto"
             >
               举报
             </Link>

@@ -358,16 +358,44 @@ export async function GET(req: Request) {
       });
     }
 
-    // Mutual match — full profile except qqNumber and photos
+    // Mutual match — profile summary only; identity is unlocked after an approved view request.
     const currentUserHasPhotos = profile.photos.length > 0 && ratingProfile !== null;
+    const pageTargetIds = pageItems.map((m) => m.userId);
+    const approvedViewRequests =
+      pageTargetIds.length > 0
+        ? await db.viewRequest.findMany({
+            where: {
+              status: 'APPROVED',
+              OR: [
+                {
+                  requesterId: session.id,
+                  targetUserId: { in: pageTargetIds },
+                },
+                {
+                  requesterId: { in: pageTargetIds },
+                  targetUserId: session.id,
+                },
+              ],
+            },
+            select: { requesterId: true, targetUserId: true },
+          })
+        : [];
+    const identityUnlockedIds = new Set(
+      approvedViewRequests.map((request) =>
+        request.requesterId === session.id ? request.targetUserId : request.requesterId
+      )
+    );
+
     const data = pageItems.map((m) => {
       const c = m.candidate;
       const p = c.profile!;
       const age = ageFromDate(p.birthDate);
+      const identityUnlocked = identityUnlockedIds.has(m.userId);
 
       return {
         userId: m.userId,
-        nickname: c.authIdentities[0]?.nickname ?? null,
+        nickname: identityUnlocked ? (c.authIdentities[0]?.nickname ?? null) : null,
+        identityUnlocked,
         age,
         heightCm: p.heightCm,
         weightKg: p.weightKg,

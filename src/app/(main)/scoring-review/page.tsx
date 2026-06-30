@@ -119,7 +119,10 @@ export default function ScoringReviewPage() {
   }, [tab]);
 
   useEffect(() => {
-    fetchTasks();
+    const timeout = window.setTimeout(() => {
+      void fetchTasks();
+    }, 0);
+    return () => window.clearTimeout(timeout);
   }, [fetchTasks]);
 
   function computeAverage(scores: ScoreEntry[]): number {
@@ -139,18 +142,7 @@ export default function ScoringReviewPage() {
       if (!res.ok) {
         throw new Error(data.error?.message || "审核失败");
       }
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                pendingActionType: "APPROVE",
-                pendingActionValue: null,
-                pendingActionExpiresAt: data.pendingActionExpiresAt || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-              }
-            : t
-        )
-      );
+      await fetchTasks();
       setOverrideMode(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : "审核失败");
@@ -171,18 +163,7 @@ export default function ScoringReviewPage() {
       if (!res.ok) {
         throw new Error(data.error?.message || "修改失败");
       }
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? {
-                ...t,
-                pendingActionType: "OVERRIDE",
-                pendingActionValue: overrideScore,
-                pendingActionExpiresAt: data.pendingActionExpiresAt || new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-              }
-            : t
-        )
-      );
+      await fetchTasks();
       setOverrideMode(false);
     } catch (err) {
       alert(err instanceof Error ? err.message : "修改失败");

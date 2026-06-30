@@ -11,6 +11,7 @@ import { usePathname } from "next/navigation";
 interface MutualMatch {
   userId: string;
   nickname: string | null;
+  identityUnlocked?: boolean;
   age: number;
   heightCm: number;
   weightKg: number;
@@ -81,11 +82,6 @@ function getAttrLabel(attr: string, custom?: string | null): string {
   return (ATTRIBUTE_LABELS as Record<string, string>)[attr] ?? attr;
 }
 
-function getInitial(nickname: string | null): string {
-  if (!nickname) return "?";
-  return nickname.charAt(0).toUpperCase();
-}
-
 const AVATAR_COLORS = [
   "from-[#1677ff] to-[#0958d9]",
   "from-[hsl(200,80%,55%)] to-[hsl(220,70%,50%)]",
@@ -94,12 +90,68 @@ const AVATAR_COLORS = [
   "from-[hsl(30,85%,55%)] to-[hsl(50,75%,50%)]",
 ];
 
-function getAvatarColor(userId: string): string {
+const MASKED_AVATAR_COLORS = [
+  "from-[#1677ff] to-[#0958d9]",
+  "from-[#14b8a6] to-[#0f766e]",
+  "from-[#f97316] to-[#ea580c]",
+  "from-[#a855f7] to-[#7e22ce]",
+  "from-[#ef4444] to-[#b91c1c]",
+  "from-[#22c55e] to-[#15803d]",
+  "from-[#06b6d4] to-[#0369a1]",
+  "from-[#64748b] to-[#334155]",
+];
+
+const MASKED_NAMES = [
+  "青岚",
+  "星河",
+  "云舒",
+  "晴川",
+  "安澜",
+  "清和",
+  "望舒",
+  "知远",
+  "明澈",
+  "初晴",
+  "云起",
+  "临川",
+  "听澜",
+  "南星",
+  "北辰",
+  "锦年",
+];
+
+const MASKED_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+function hashString(value: string): number {
   let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = (hash * 31 + userId.charCodeAt(i)) & 0xffffffff;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) & 0xffffffff;
   }
+  return Math.abs(hash);
+}
+
+function getInitial(nickname: string | null): string {
+  if (!nickname) return "?";
+  return nickname.charAt(0).toUpperCase();
+}
+
+function getAvatarColor(userId: string): string {
+  const hash = hashString(userId);
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function getMaskedIdentity(userId: string): {
+  name: string;
+  letter: string;
+  color: string;
+} {
+  const hash = hashString(userId);
+  const shiftedHash = hashString(`${userId}:masked`);
+  return {
+    name: MASKED_NAMES[hash % MASKED_NAMES.length],
+    letter: MASKED_LETTERS[shiftedHash % MASKED_LETTERS.length],
+    color: MASKED_AVATAR_COLORS[shiftedHash % MASKED_AVATAR_COLORS.length],
+  };
 }
 
 function requestStatusPriority(status: string): number {
@@ -144,6 +196,9 @@ function MutualMatchCard({
   viewDetail: { qqNumber: string | null } | null;
 }) {
   const [qqCopied, setQqCopied] = useState(false);
+  const identityUnlocked =
+    match.identityUnlocked === true || viewRequestStatus === "APPROVED";
+  const maskedIdentity = getMaskedIdentity(match.userId);
 
   function handleCopyQQ(qq: string) {
     if (navigator.clipboard?.writeText) {
@@ -176,14 +231,23 @@ function MutualMatchCard({
       {/* Header: avatar + name + badges */}
       <div className="mb-4 flex items-start gap-3">
         <div
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${getAvatarColor(match.userId)} text-lg font-bold text-white`}
+          aria-label={identityUnlocked ? "用户头像" : "随机头像"}
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${
+            identityUnlocked
+              ? getAvatarColor(match.userId)
+              : maskedIdentity.color
+          } text-lg font-bold text-white`}
         >
-          {getInitial(match.nickname)}
+          {identityUnlocked ? getInitial(match.nickname) : maskedIdentity.letter}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-base font-semibold text-[hsl(var(--foreground))]">
-              {match.nickname || "匿名用户"}
+              {identityUnlocked ? (
+                match.nickname || "匿名用户"
+              ) : (
+                maskedIdentity.name
+              )}
             </h3>
             {match.hasPhotos && (
               <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-brand-blue/30 bg-blue-1 px-2 py-0.5 text-[10px] font-medium text-brand-blue">
@@ -254,10 +318,10 @@ function MutualMatchCard({
       {/* View request / QQ reveal section */}
       <div className="mb-4">
         {viewRequestStatus === "APPROVED" ? (
-          <div className="flex flex-col gap-2 sm:items-start">
+          <div className="flex flex-col gap-2">
             {/* QQ number revealed */}
             {viewDetail?.qqNumber && (
-              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
+              <div className="flex w-full flex-col items-start gap-2 sm:flex-row sm:items-center">
                 <button
                   type="button"
                   onClick={() => handleCopyQQ(viewDetail.qqNumber!)}
@@ -273,7 +337,7 @@ function MutualMatchCard({
                 )}
                 <Link
                   href={`/report?targetQQ=${encodeURIComponent(viewDetail.qqNumber)}`}
-                  className="flex w-full items-center justify-center rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white shadow-sm shadow-red-500/20 transition-all hover:bg-red-600 active:scale-[0.98] sm:w-auto sm:py-1.5"
+                  className="inline-flex self-end px-1 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-600 hover:underline sm:ml-auto sm:self-auto"
                 >
                   举报
                 </Link>

@@ -3,7 +3,8 @@ import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { NextRequest } from 'next/server';
 import { can } from '@/lib/rbac';
-import { isScorerOnDuty } from '@/lib/scorer-duty';
+import { getOnDutyScorerIds } from '@/lib/scorer-duty';
+import { getAssignedScorerIdsForTask, SCOREABLE_TASK_STATUSES } from '@/lib/scoring';
 
 /**
  * POST /api/scoring/tasks/[taskId]/report
@@ -35,16 +36,20 @@ export async function POST(
       return error('NOT_FOUND', '任务不存在', 404);
     }
 
-    if (!['PENDING', 'SCORING'].includes(task.status)) {
+    if (!SCOREABLE_TASK_STATUSES.includes(task.status as (typeof SCOREABLE_TASK_STATUSES)[number])) {
       return error('CONFLICT', '该任务当前不可举报', 409);
     }
 
-    // Verify scorer is on today's live duty roster.
-    const isOnDuty = await isScorerOnDuty({
-      scorerId: session.id,
+    const onDutyScorerIds = await getOnDutyScorerIds({
       excludeUserId: task.ratedUserId,
     });
-    if (!isOnDuty) {
+    const assignedScorerIds = getAssignedScorerIdsForTask({
+      status: task.status,
+      ratedUserId: task.ratedUserId,
+      scorerSnapshot: task.scorerSnapshot,
+      onDutyScorerIds,
+    });
+    if (!assignedScorerIds.includes(session.id)) {
       return error('FORBIDDEN', '无权操作此任务', 403);
     }
 
@@ -65,6 +70,7 @@ export async function POST(
       where: { id: taskId },
       data: {
         photoReports: [...existing, newReport],
+        scorerSnapshot: assignedScorerIds,
         status: 'REPORTED',
       },
     });
