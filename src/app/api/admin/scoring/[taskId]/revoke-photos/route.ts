@@ -110,6 +110,7 @@ export async function POST(
             lastSubmittedAt: cooldownStartedAt,
             photoMatchPref: null,
             highScoreOnly: false,
+            matchPrefUpdatedAt: null,
             draftData: toDraftJson({
               ...draftData,
               photoRevokedAt: cooldownStartedAt.toISOString(),

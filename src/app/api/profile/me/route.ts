@@ -9,7 +9,7 @@ import {
   PHOTO_REVOKE_REPUBLISH_COOLDOWN_MS,
 } from "@/lib/validations/profile";
 import { success, error } from "@/lib/api-response";
-import { Prisma } from "@prisma/client";
+import { Attribute, Prisma } from "@prisma/client";
 import { notify } from "@/lib/notifications";
 import { napcatClient } from "@/server/bot/clients/napcat.client";
 import {
@@ -87,6 +87,17 @@ function getEditCooldownInfo(profile: {
     remainingText: formatCooldownRemaining(remainingMs),
     isPhotoRevokeCooldown,
   };
+}
+
+function resolveProfileAttribute(
+  attribute: Attribute | "" | null | undefined,
+  isSide?: boolean,
+  isOther?: boolean,
+): Attribute {
+  if (attribute) return attribute;
+  if (isSide) return Attribute.SIDE;
+  if (isOther) return Attribute.OTHER;
+  return Attribute.OTHER;
 }
 
 /**
@@ -183,6 +194,11 @@ export async function PUT(req: Request) {
 
   const { profile: profileData, preference: prefData, nickname: nicknameInput } = result.data;
   const profileStatus = profileData.status || "DRAFT";
+  const resolvedAttribute = resolveProfileAttribute(
+    profileData.attribute,
+    profileData.isSide,
+    profileData.isOther,
+  );
   const requestedNickname =
     typeof nicknameInput === "string" ? normalizeNicknameInput(nicknameInput) : null;
 
@@ -277,7 +293,7 @@ export async function PUT(req: Request) {
     provinceCode: profileData.provinceCode,
     cityCode: profileData.cityCode,
     locationType: profileData.locationType,
-    attribute: profileData.attribute,
+    attribute: resolvedAttribute,
     isSide: profileData.isSide ?? false,
     isOther: profileData.isOther ?? false,
     customAttribute: profileData.customAttribute ?? null,
@@ -288,6 +304,7 @@ export async function PUT(req: Request) {
     lastSubmittedAt: profileStatus === "ACTIVE" ? new Date() : undefined,
     photoMatchPref: profileData.photoMatchPref ?? null,
     highScoreOnly: profileData.highScoreOnly ?? false,
+    ...(profileData.photoMatchPref ? {} : { matchPrefUpdatedAt: null }),
     // Clear draft data when publishing
     ...(profileStatus === "ACTIVE" ? { draftData: Prisma.DbNull } : {}),
   };

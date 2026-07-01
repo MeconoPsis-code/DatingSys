@@ -630,14 +630,14 @@ export default function OneWayMatchesPage() {
       {/* Province filter toggle */}
       {!loading && !scoringPending && matches.length > 0 && (
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] p-0.5">
+          <div className="flex rounded-lg border border-brand-line bg-white/90 p-0.5 shadow-sm">
             <button
               type="button"
               onClick={() => setProvinceOnly(false)}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+              className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
                 !provinceOnly
-                  ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                  ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
+                  : "text-brand-muted hover:bg-white hover:text-brand-text"
               }`}
             >
               全部
@@ -645,10 +645,10 @@ export default function OneWayMatchesPage() {
             <button
               type="button"
               onClick={() => setProvinceOnly(true)}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+              className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
                 provinceOnly
-                  ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                  ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
+                  : "text-brand-muted hover:bg-white hover:text-brand-text"
               }`}
             >
               同省
@@ -695,10 +695,10 @@ export default function OneWayMatchesPage() {
           <button
             type="button"
             onClick={() => setFilter("all")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
               filter === "all"
-                ? "bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"
-                : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                ? "bg-brand-blue text-white"
+                : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
             }`}
           >
             全部 ({total})
@@ -706,10 +706,10 @@ export default function OneWayMatchesPage() {
           <button
             type="button"
             onClick={() => setFilter("me_fits_them")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
               filter === "me_fits_them"
-                ? "bg-blue-500/15 text-blue-400"
-                : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                ? "bg-brand-blue text-white"
+                : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
             }`}
           >
             我符合他 ({meFitsThemCount})
@@ -717,10 +717,10 @@ export default function OneWayMatchesPage() {
           <button
             type="button"
             onClick={() => setFilter("they_fit_me")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
               filter === "they_fit_me"
-                ? "bg-emerald-500/15 text-emerald-400"
-                : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                ? "bg-emerald-500 text-white"
+                : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
             }`}
           >
             他符合我 ({theyFitMeCount})

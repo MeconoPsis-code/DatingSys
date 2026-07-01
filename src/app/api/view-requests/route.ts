@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error, paginated } from '@/lib/api-response';
 import { notify } from '@/lib/notifications';
+import { getMaskedIdentity } from '@/lib/pseudonymous-identity';
 
 const REJECTION_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -93,12 +94,10 @@ export async function POST(req: Request) {
       },
     });
 
-    // Get requester nickname for notification
-    const requesterIdentity = await db.authIdentity.findFirst({
-      where: { userId: session.id },
-      select: { nickname: true },
-    });
-    await notify.viewRequestReceived(normalizedTargetUserId, requesterIdentity?.nickname || "匿名用户");
+    await notify.viewRequestReceived(
+      normalizedTargetUserId,
+      getMaskedIdentity(session.id).name
+    );
 
     return success(request, 201);
   } catch (err) {
@@ -173,34 +172,42 @@ export async function GET(req: Request) {
     });
 
     // Map results
-    const mapped = requests.map((r) => ({
-      id: r.id,
-      requesterId: r.requesterId,
-      targetUserId: r.targetUserId,
-      status: r.status,
-      message: r.message,
-      respondedAt: r.respondedAt,
-      expiresAt: r.expiresAt,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-      requesterNickname: r.requester.authIdentities[0]?.nickname ?? null,
-      requesterQQ: r.status === 'APPROVED' ? (r.requester.qqNumber ?? null) : null,
-      targetNickname: r.target.authIdentities[0]?.nickname ?? null,
-      targetQQ: r.status === 'APPROVED' ? (r.target.qqNumber ?? null) : null,
-      // Include requester profile summary for incoming requests (so target can see who's asking)
-      ...(type === 'incoming' && r.requester.profile ? {
-        requesterProfile: {
-          age: Math.floor((Date.now() - new Date(r.requester.profile.birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)),
-          heightCm: r.requester.profile.heightCm,
-          weightKg: r.requester.profile.weightKg,
-          provinceCode: r.requester.profile.provinceCode,
-          cityCode: r.requester.profile.cityCode,
-          attribute: r.requester.profile.attribute,
-          customAttribute: r.requester.profile.customAttribute,
-          mbti: r.requester.profile.mbti,
-        },
-      } : {}),
-    }));
+    const mapped = requests.map((r) => {
+      const identityUnlocked = r.status === 'APPROVED';
+
+      return {
+        id: r.id,
+        requesterId: r.requesterId,
+        targetUserId: r.targetUserId,
+        status: r.status,
+        message: r.message,
+        respondedAt: r.respondedAt,
+        expiresAt: r.expiresAt,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+        requesterNickname: identityUnlocked
+          ? (r.requester.authIdentities[0]?.nickname ?? null)
+          : null,
+        requesterQQ: identityUnlocked ? (r.requester.qqNumber ?? null) : null,
+        targetNickname: identityUnlocked
+          ? (r.target.authIdentities[0]?.nickname ?? null)
+          : null,
+        targetQQ: identityUnlocked ? (r.target.qqNumber ?? null) : null,
+        // Include requester profile summary for incoming requests (so target can see who's asking)
+        ...(type === 'incoming' && r.requester.profile ? {
+          requesterProfile: {
+            age: Math.floor((Date.now() - new Date(r.requester.profile.birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)),
+            heightCm: r.requester.profile.heightCm,
+            weightKg: r.requester.profile.weightKg,
+            provinceCode: r.requester.profile.provinceCode,
+            cityCode: r.requester.profile.cityCode,
+            attribute: r.requester.profile.attribute,
+            customAttribute: r.requester.profile.customAttribute,
+            mbti: r.requester.profile.mbti,
+          },
+        } : {}),
+      };
+    });
 
     return paginated(mapped, total, page, pageSize);
   } catch (err) {

@@ -4,6 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { getProvinceName, getCityName } from "@/data/regions";
 import { ATTRIBUTE_LABELS } from "@/data/attributes";
+import {
+  getAvatarColor,
+  getInitial,
+  getMaskedIdentity,
+} from "@/lib/pseudonymous-identity";
+import { formatBmi } from "@/lib/bmi";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -68,6 +74,30 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: "已取消", color: "border-gray-500/30 bg-gray-500/15 text-gray-400" },
 };
 
+function getVisibleRequestIdentity({
+  userId,
+  nickname,
+  unlocked,
+}: {
+  userId: string;
+  nickname: string | null;
+  unlocked: boolean;
+}) {
+  if (unlocked) {
+    return {
+      name: nickname || "匿名用户",
+      letter: getInitial(nickname),
+      color: getAvatarColor(userId),
+      avatarLabel: "用户头像",
+    };
+  }
+
+  return {
+    ...getMaskedIdentity(userId),
+    avatarLabel: "随机头像",
+  };
+}
+
 /* ─── Incoming Card ──────────────────────────────────── */
 
 function IncomingRequestCard({
@@ -81,18 +111,26 @@ function IncomingRequestCard({
 }) {
   const isPending = request.status === "PENDING";
   const statusInfo = STATUS_MAP[request.status] ?? STATUS_MAP.PENDING;
+  const identity = getVisibleRequestIdentity({
+    userId: request.requesterId,
+    nickname: request.requesterNickname,
+    unlocked: request.status === "APPROVED",
+  });
 
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-all sm:p-5">
       {/* Header */}
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#1677ff] to-[#0958d9] text-sm font-bold text-white">
-            {(request.requesterNickname || "?").charAt(0)}
+          <div
+            aria-label={identity.avatarLabel}
+            className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${identity.color} text-sm font-bold text-white`}
+          >
+            {identity.letter}
           </div>
           <div>
             <div className="text-sm font-medium text-[hsl(var(--foreground))]">
-              {request.requesterNickname || "匿名用户"}
+              {identity.name}
             </div>
             <div className="text-xs text-[hsl(var(--muted-foreground))]">
               {timeAgo(request.createdAt)}
@@ -142,6 +180,9 @@ function IncomingRequestCard({
               <path d="M3 7h18" />
             </svg>
             <span>{request.requesterProfile.weightKg} kg</span>
+          </span>
+          <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+            BMI {formatBmi(request.requesterProfile.heightCm, request.requesterProfile.weightKg)}
           </span>
           <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
@@ -241,17 +282,25 @@ function IncomingRequestCard({
 
 function OutgoingRequestCard({ request }: { request: ViewRequest }) {
   const statusInfo = STATUS_MAP[request.status] ?? STATUS_MAP.PENDING;
+  const identity = getVisibleRequestIdentity({
+    userId: request.targetUserId,
+    nickname: request.targetNickname,
+    unlocked: request.status === "APPROVED",
+  });
 
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-all sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(200,80%,55%)] to-[hsl(220,70%,50%)] text-sm font-bold text-white">
-            {(request.targetNickname || "?").charAt(0)}
+          <div
+            aria-label={identity.avatarLabel}
+            className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${identity.color} text-sm font-bold text-white`}
+          >
+            {identity.letter}
           </div>
           <div>
             <div className="text-sm font-medium text-[hsl(var(--foreground))]">
-              → {request.targetNickname || "匿名用户"}
+              → {identity.name}
             </div>
             <div className="text-xs text-[hsl(var(--muted-foreground))]">
               {timeAgo(request.createdAt)}

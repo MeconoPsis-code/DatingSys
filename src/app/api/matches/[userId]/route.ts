@@ -100,6 +100,8 @@ export async function GET(
       cityCode: p.cityCode,
       locationType: p.locationType,
       attribute: p.attribute,
+      isSide: p.isSide,
+      isOther: p.isOther,
       customAttribute: p.customAttribute,
       mbti: p.mbti,
       selfIntro: p.selfIntro,

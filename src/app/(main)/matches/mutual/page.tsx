@@ -3,6 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getProvinceName, getCityName } from "@/data/regions";
 import { ATTRIBUTE_LABELS } from "@/data/attributes";
+import {
+  getAvatarColor,
+  getInitial,
+  getMaskedIdentity,
+} from "@/lib/pseudonymous-identity";
+import { formatBmi } from "@/lib/bmi";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -20,6 +26,8 @@ interface MutualMatch {
   locationType: string;
 
   attribute: string;
+  isSide: boolean;
+  isOther: boolean;
   customAttribute: string | null;
   mbti: string | null;
   selfIntro: string | null;
@@ -77,81 +85,31 @@ function MatchTabs() {
 
 /* ─── Helpers ────────────────────────────────────────── */
 
-function getAttrLabel(attr: string, custom?: string | null): string {
+function getAttrLabel(
+  attr: string,
+  custom?: string | null,
+  isSide?: boolean,
+  isOther?: boolean,
+): string {
   if (attr === "OTHER" && custom) return `其他: ${custom}`;
-  return (ATTRIBUTE_LABELS as Record<string, string>)[attr] ?? attr;
+  let label = (ATTRIBUTE_LABELS as Record<string, string>)[attr] ?? attr;
+  const tags: string[] = [];
+  if (isSide && attr !== "SIDE") tags.push("side");
+  if (isOther && attr !== "OTHER") tags.push("其他");
+  if (tags.length > 0) label += `、${tags.join("、")}`;
+  return label;
 }
 
-const AVATAR_COLORS = [
-  "from-[#1677ff] to-[#0958d9]",
-  "from-[hsl(200,80%,55%)] to-[hsl(220,70%,50%)]",
-  "from-[hsl(340,80%,55%)] to-[hsl(10,70%,50%)]",
-  "from-[hsl(150,60%,45%)] to-[hsl(170,70%,40%)]",
-  "from-[hsl(30,85%,55%)] to-[hsl(50,75%,50%)]",
-];
-
-const MASKED_AVATAR_COLORS = [
-  "from-[#1677ff] to-[#0958d9]",
-  "from-[#14b8a6] to-[#0f766e]",
-  "from-[#f97316] to-[#ea580c]",
-  "from-[#a855f7] to-[#7e22ce]",
-  "from-[#ef4444] to-[#b91c1c]",
-  "from-[#22c55e] to-[#15803d]",
-  "from-[#06b6d4] to-[#0369a1]",
-  "from-[#64748b] to-[#334155]",
-];
-
-const MASKED_NAMES = [
-  "青岚",
-  "星河",
-  "云舒",
-  "晴川",
-  "安澜",
-  "清和",
-  "望舒",
-  "知远",
-  "明澈",
-  "初晴",
-  "云起",
-  "临川",
-  "听澜",
-  "南星",
-  "北辰",
-  "锦年",
-];
-
-const MASKED_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash * 31 + value.charCodeAt(i)) & 0xffffffff;
-  }
-  return Math.abs(hash);
-}
-
-function getInitial(nickname: string | null): string {
-  if (!nickname) return "?";
-  return nickname.charAt(0).toUpperCase();
-}
-
-function getAvatarColor(userId: string): string {
-  const hash = hashString(userId);
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function getMaskedIdentity(userId: string): {
-  name: string;
-  letter: string;
-  color: string;
-} {
-  const hash = hashString(userId);
-  const shiftedHash = hashString(`${userId}:masked`);
-  return {
-    name: MASKED_NAMES[hash % MASKED_NAMES.length],
-    letter: MASKED_LETTERS[shiftedHash % MASKED_LETTERS.length],
-    color: MASKED_AVATAR_COLORS[shiftedHash % MASKED_AVATAR_COLORS.length],
-  };
+function getAttrLabels(
+  attr: string,
+  custom?: string | null,
+  isSide?: boolean,
+  isOther?: boolean,
+): string[] {
+  const labels = [getAttrLabel(attr, custom)];
+  if (isSide && attr !== "SIDE") labels.push("side");
+  if (isOther && attr !== "OTHER") labels.push("其他");
+  return labels;
 }
 
 function requestStatusPriority(status: string): number {
@@ -290,8 +248,16 @@ function MutualMatchCard({
           {match.weightKg} kg
         </span>
         <span className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
-          {getAttrLabel(match.attribute, match.customAttribute)}
+          BMI {formatBmi(match.heightCm, match.weightKg)}
         </span>
+        {getAttrLabels(match.attribute, match.customAttribute, match.isSide, match.isOther).map((label) => (
+          <span
+            key={label}
+            className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]"
+          >
+            {label}
+          </span>
+        ))}
         {match.mbti && (
           <span className="rounded-lg bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs text-[hsl(var(--foreground))]">
             {match.mbti}
@@ -587,14 +553,14 @@ export default function MutualMatchesPage() {
       {/* Province filter toggle */}
       {!loading && !scoringPending && !preferencePending && matches.length > 0 && (
         <div className="flex items-center gap-2">
-          <div className="flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] p-0.5">
+          <div className="flex rounded-lg border border-brand-line bg-white/90 p-0.5 shadow-sm">
             <button
               type="button"
               onClick={() => setProvinceOnly(false)}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+              className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
                 !provinceOnly
-                  ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                  ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
+                  : "text-brand-muted hover:bg-white hover:text-brand-text"
               }`}
             >
               全部
@@ -602,10 +568,10 @@ export default function MutualMatchesPage() {
             <button
               type="button"
               onClick={() => setProvinceOnly(true)}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-all ${
+              className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
                 provinceOnly
-                  ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                  ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
+                  : "text-brand-muted hover:bg-white hover:text-brand-text"
               }`}
             >
               同省
@@ -685,7 +651,7 @@ export default function MutualMatchesPage() {
 
       {/* Match count */}
       {!loading && matches.length > 0 && (
-        <div className="text-sm text-[hsl(var(--muted-foreground))]">
+        <div className="inline-flex w-fit rounded-lg bg-white/85 px-2.5 py-1 text-sm font-semibold text-brand-muted shadow-sm ring-1 ring-brand-line/70">
           共 {total} 个双向匹配
         </div>
       )}

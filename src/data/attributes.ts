@@ -54,11 +54,11 @@ export function getAttributeLabel(
   let label = ATTRIBUTE_LABELS[attr] ?? attr;
 
   const tags: string[] = [];
-  if (isSide) tags.push("side");
-  if (isOther) tags.push("其他");
+  if (isSide && attr !== "SIDE") tags.push("side");
+  if (isOther && attr !== "OTHER") tags.push("其他");
 
   if (tags.length > 0) {
-    label += ` + ${tags.join(" + ")}`;
+    label += `、${tags.join("、")}`;
   }
 
   return label;

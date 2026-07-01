@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import {
   getMatchType,
   computeRelevanceScore,
+  profileMatchesExpectedAttributes,
   type MatchCandidate,
 } from '@/lib/matching';
 import { commitExpiredActions } from '@/lib/scoring-revocation';
@@ -75,7 +76,7 @@ function buildExpectationChecks(
     {
       key: 'attribute',
       label: '属性',
-      matched: expectedAttributes.includes(subject.profile.attribute),
+      matched: profileMatchesExpectedAttributes(expectedAttributes, subject.profile),
       expected: formatAttributeList(expectedAttributes),
     },
   ];
@@ -160,6 +161,8 @@ export async function GET(req: Request) {
         provinceCode: profile.provinceCode,
         cityCode: profile.cityCode,
         attribute: profile.attribute,
+        isSide: profile.isSide,
+        isOther: profile.isOther,
         status: profile.status,
         photoMatchPref: profile.photoMatchPref,
         highScoreOnly: profile.highScoreOnly,
@@ -220,6 +223,8 @@ export async function GET(req: Request) {
           provinceCode: c.profile.provinceCode,
           cityCode: c.profile.cityCode,
           attribute: c.profile.attribute,
+          isSide: c.profile.isSide,
+          isOther: c.profile.isOther,
           status: c.profile.status,
           photoMatchPref: c.profile.photoMatchPref,
           highScoreOnly: c.profile.highScoreOnly,
@@ -404,6 +409,8 @@ export async function GET(req: Request) {
         locationType: p.locationType,
 
         attribute: p.attribute,
+        isSide: p.isSide,
+        isOther: p.isOther,
         customAttribute: p.customAttribute,
         mbti: p.mbti,
         selfIntro: p.selfIntro,

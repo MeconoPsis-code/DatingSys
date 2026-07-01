@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { NumberStepperInput } from "@/components/NumberStepperInput";
 import { PhotoLightbox } from "@/components/profile/photo-lightbox";
 
 /* ─── Types ──────────────────────────────────────────── */
@@ -21,6 +22,55 @@ interface ScoringTask {
   myScore?: number;
   scoredAt?: string;
   finalScore?: number | null;
+}
+
+const SCORE_MIN = 0;
+const SCORE_MAX = 10;
+const SCORE_STEP = 0.1;
+
+function normalizeScore(value: number) {
+  return Number(Math.min(SCORE_MAX, Math.max(SCORE_MIN, value)).toFixed(1));
+}
+
+function ScoreSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  function commitScore(nextValue: number) {
+    onChange(normalizeScore(nextValue));
+  }
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
+        <span className="text-[hsl(var(--foreground))]">{label}</span>
+        <NumberStepperInput
+          value={value}
+          min={SCORE_MIN}
+          max={SCORE_MAX}
+          step={SCORE_STEP}
+          fallbackValue={5}
+          ariaLabel={`${label}评分`}
+          onCommit={commitScore}
+          className="sm:ml-auto"
+        />
+      </div>
+      <input
+        type="range"
+        min={SCORE_MIN}
+        max={SCORE_MAX}
+        step={SCORE_STEP}
+        value={value}
+        onChange={(e) => commitScore(Number(e.target.value))}
+        className="slider-input w-full"
+      />
+    </div>
+  );
 }
 
 /* ─── Component ──────────────────────────────────────── */
@@ -111,7 +161,11 @@ export default function ScoringPage() {
   }, [tab]);
 
   useEffect(() => {
-    fetchTasks();
+    const timer = window.setTimeout(() => {
+      void fetchTasks();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [fetchTasks]);
 
   const currentTask = tasks[currentIndex] ?? null;
@@ -313,85 +367,45 @@ export default function ScoringPage() {
                 <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4 space-y-4">
                   <div className="text-xs font-semibold text-[hsl(var(--foreground))]">硬件分</div>
 
-                  {/* 轮廓与骨相 */}
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-[hsl(var(--foreground))]">轮廓与骨相</span>
-                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.contour.toFixed(1)}</span>
-                    </div>
-                    <input
-                      type="range" min={0} max={10} step={0.1}
-                      value={scores.contour}
-                      onChange={(e) => setScores(s => ({ ...s, contour: Number(e.target.value) }))}
-                      className="slider-input w-full"
-                    />
-                  </div>
+                  <ScoreSlider
+                    label="轮廓与骨相"
+                    value={scores.contour}
+                    onChange={(value) => setScores((s) => ({ ...s, contour: value }))}
+                  />
 
-                  {/* 皮肤状态 */}
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-[hsl(var(--foreground))]">皮肤状态</span>
-                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.skin.toFixed(1)}</span>
-                    </div>
-                    <input
-                      type="range" min={0} max={10} step={0.1}
-                      value={scores.skin}
-                      onChange={(e) => setScores(s => ({ ...s, skin: Number(e.target.value) }))}
-                      className="slider-input w-full"
-                    />
-                  </div>
+                  <ScoreSlider
+                    label="皮肤状态"
+                    value={scores.skin}
+                    onChange={(value) => setScores((s) => ({ ...s, skin: value }))}
+                  />
 
-                  {/* 五官和谐度 */}
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-[hsl(var(--foreground))]">五官和谐度</span>
-                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.harmony.toFixed(1)}</span>
-                    </div>
-                    <input
-                      type="range" min={0} max={10} step={0.1}
-                      value={scores.harmony}
-                      onChange={(e) => setScores(s => ({ ...s, harmony: Number(e.target.value) }))}
-                      className="slider-input w-full"
-                    />
-                  </div>
+                  <ScoreSlider
+                    label="五官和谐度"
+                    value={scores.harmony}
+                    onChange={(value) => setScores((s) => ({ ...s, harmony: value }))}
+                  />
                 </div>
 
                 {/* ── Software score (20%) ── */}
                 <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4 space-y-4">
                   <div className="text-xs font-semibold text-[hsl(var(--foreground))]">软件分</div>
 
-                  {/* 发型与造型 */}
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-[hsl(var(--foreground))]">发型与造型</span>
-                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.styling.toFixed(1)}</span>
-                    </div>
-                    <input
-                      type="range" min={0} max={10} step={0.1}
-                      value={scores.styling}
-                      onChange={(e) => setScores(s => ({ ...s, styling: Number(e.target.value) }))}
-                      className="slider-input w-full"
-                    />
-                  </div>
+                  <ScoreSlider
+                    label="发型与造型"
+                    value={scores.styling}
+                    onChange={(value) => setScores((s) => ({ ...s, styling: value }))}
+                  />
                 </div>
 
                 {/* ── Subjective score (20%) ── */}
                 <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4 space-y-4">
                   <div className="text-xs font-semibold text-[hsl(var(--foreground))]">主观分</div>
 
-                  {/* 气质与眼缘 */}
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-[hsl(var(--foreground))]">气质与眼缘</span>
-                      <span className="font-semibold tabular-nums text-[hsl(var(--primary))]">{scores.charisma.toFixed(1)}</span>
-                    </div>
-                    <input
-                      type="range" min={0} max={10} step={0.1}
-                      value={scores.charisma}
-                      onChange={(e) => setScores(s => ({ ...s, charisma: Number(e.target.value) }))}
-                      className="slider-input w-full"
-                    />
-                  </div>
+                  <ScoreSlider
+                    label="气质与眼缘"
+                    value={scores.charisma}
+                    onChange={(value) => setScores((s) => ({ ...s, charisma: value }))}
+                  />
                 </div>
 
 

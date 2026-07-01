@@ -7,10 +7,10 @@ import { ClearModal } from "@/components/profile/clear-modal";
 import { ATTRIBUTE_LABELS } from "@/data/attributes";
 import { getProvinceName, getCityName } from "@/data/regions";
 import { LOCATION_TYPE_LABELS } from "@/data/location-types";
+import { formatBmi } from "@/lib/bmi";
 
 /* ─── Types ──────────────────────────────────────────── */
 
-type PoolType = never; // removed — single pool
 type ProfileStatus = "DRAFT" | "ACTIVE" | "CLEARED" | "HIDDEN" | "FROZEN";
 type Attribute = "ONE" | "ZERO" | "HALF" | "LEAN_ONE" | "LEAN_ZERO" | "SIDE" | "OTHER";
 type LocationType = "RESIDENCE" | "HOMETOWN" | "SCHOOL" | "WORK" | "TRAVEL" | "OTHER";
@@ -52,11 +52,6 @@ interface Preference {
 }
 
 /* ─── Constants ──────────────────────────────────────── */
-
-const PHOTO_MATCH_LABELS: Record<string, string> = {
-  PHOTO_ONLY: "仅匹配有照片用户",
-  ALL: "匹配所有用户",
-};
 
 const STATUS_LABELS: Record<ProfileStatus, { label: string; color: string }> = {
   DRAFT: { label: "草稿", color: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -140,7 +135,14 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
-    fetchProfile();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void fetchProfile();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [fetchProfile]);
 
   async function handleClear() {
@@ -304,6 +306,7 @@ export default function ProfilePage() {
           <InfoRow label="出生日期" value={formatDate(profile.birthDate)} />
           <InfoRow label="身高" value={`${profile.heightCm} cm`} />
           <InfoRow label="体重" value={`${profile.weightKg} kg`} />
+          <InfoRow label="BMI" value={formatBmi(profile.heightCm, profile.weightKg)} />
           <InfoRow
             label="所在地"
             value={`${getProvinceName(profile.provinceCode)} · ${getCityName(profile.provinceCode, profile.cityCode)}`}

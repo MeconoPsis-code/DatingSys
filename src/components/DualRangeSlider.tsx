@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback } from "react";
+import { NumberStepperInput } from "@/components/NumberStepperInput";
+import { boundedNumber, clampInteger } from "@/lib/profile-limits";
 
 interface DualRangeSliderProps {
   min: number;
@@ -11,6 +13,10 @@ interface DualRangeSliderProps {
   onChangeMin: (v: number) => void;
   onChangeMax: (v: number) => void;
   formatValue?: (v: number) => string;
+  unit?: string;
+  detail?: (v: number) => string;
+  minAriaLabel?: string;
+  maxAriaLabel?: string;
 }
 
 /**
@@ -25,37 +31,81 @@ export function DualRangeSlider({
   onChangeMin,
   onChangeMax,
   formatValue = String,
+  unit,
+  detail,
+  minAriaLabel = "最小值",
+  maxAriaLabel = "最大值",
 }: DualRangeSliderProps) {
-  const pctMin = ((valueMin - min) / (max - min)) * 100;
-  const pctMax = ((valueMax - min) / (max - min)) * 100;
+  const boundedMin = boundedNumber(valueMin, min, max, min);
+  const boundedMax = boundedNumber(valueMax, min, max, max);
+  const safeValueMin = Math.min(boundedMin, boundedMax);
+  const safeValueMax = Math.max(boundedMin, boundedMax);
+  const pctMin = ((safeValueMin - min) / (max - min)) * 100;
+  const pctMax = ((safeValueMax - min) / (max - min)) * 100;
+
+  const commitMin = useCallback(
+    (nextValue: number) => {
+      const boundedValue = clampInteger(nextValue, min, safeValueMax);
+      onChangeMin(boundedValue);
+    },
+    [min, onChangeMin, safeValueMax],
+  );
+
+  const commitMax = useCallback(
+    (nextValue: number) => {
+      const boundedValue = clampInteger(nextValue, safeValueMin, max);
+      onChangeMax(boundedValue);
+    },
+    [max, onChangeMax, safeValueMin],
+  );
 
   const handleMinChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = Number(e.target.value);
-      onChangeMin(Math.min(val, valueMax));
+      commitMin(val);
     },
-    [valueMax, onChangeMin]
+    [commitMin],
   );
 
   const handleMaxChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = Number(e.target.value);
-      onChangeMax(Math.max(val, valueMin));
+      commitMax(val);
     },
-    [valueMin, onChangeMax]
+    [commitMax],
   );
 
   return (
     <div>
       {/* Value labels */}
-      <div className="mb-2 flex items-center justify-between">
-        <span className="tabular-nums text-sm font-semibold text-[hsl(var(--primary))]">
-          {formatValue(valueMin)}
+      <div className="mb-2 flex flex-col gap-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+        <div className="flex justify-start">
+          <NumberStepperInput
+            value={safeValueMin}
+            min={min}
+            max={safeValueMax}
+            fallbackValue={min}
+            onCommit={commitMin}
+            ariaLabel={minAriaLabel}
+            unit={unit}
+            detail={detail}
+          />
+        </div>
+        <span className="self-center text-center text-xs font-semibold text-[hsl(var(--muted-foreground))]">
+          ~
         </span>
-        <span className="text-xs text-[hsl(var(--muted-foreground))]">~</span>
-        <span className="tabular-nums text-sm font-semibold text-[hsl(var(--primary))]">
-          {formatValue(valueMax)}
-        </span>
+        <div className="flex justify-start sm:justify-end">
+          <NumberStepperInput
+            value={safeValueMax}
+            min={safeValueMin}
+            max={max}
+            fallbackValue={max}
+            onCommit={commitMax}
+            ariaLabel={maxAriaLabel}
+            unit={unit}
+            detail={detail}
+          />
+        </div>
       </div>
 
       {/* Dual range track */}
@@ -73,7 +123,7 @@ export function DualRangeSlider({
           min={min}
           max={max}
           step={step}
-          value={valueMin}
+          value={safeValueMin}
           onChange={handleMinChange}
           className="dual-range-input"
           style={{ zIndex: pctMin > 50 ? 5 : 3 }}
@@ -84,7 +134,7 @@ export function DualRangeSlider({
           min={min}
           max={max}
           step={step}
-          value={valueMax}
+          value={safeValueMax}
           onChange={handleMaxChange}
           className="dual-range-input"
           style={{ zIndex: pctMax < 50 ? 5 : 4 }}

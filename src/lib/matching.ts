@@ -14,6 +14,8 @@ export interface CandidateProfile {
   provinceCode: string;
   cityCode: string;
   attribute: string;
+  isSide: boolean;
+  isOther: boolean;
   status: string;
   photoMatchPref: string | null; // "PHOTO_ONLY" | "ALL" | null
   highScoreOnly: boolean;
@@ -52,6 +54,26 @@ function ageFromDate(birthDate: Date, referenceDate?: Date): number {
   return age;
 }
 
+export function getEffectiveAttributes(
+  profile: Pick<CandidateProfile, "attribute" | "isSide" | "isOther">
+): string[] {
+  const attributes = new Set<string>();
+
+  if (profile.attribute) attributes.add(profile.attribute);
+  if (profile.isSide) attributes.add("SIDE");
+  if (profile.isOther) attributes.add("OTHER");
+
+  return [...attributes];
+}
+
+export function profileMatchesExpectedAttributes(
+  expectedAttributes: string[],
+  profile: Pick<CandidateProfile, "attribute" | "isSide" | "isOther">
+): boolean {
+  const effectiveAttributes = new Set(getEffectiveAttributes(profile));
+  return expectedAttributes.some((attribute) => effectiveAttributes.has(attribute));
+}
+
 // ── Core Functions ──────────────────────────────────────
 
 /**
@@ -82,7 +104,7 @@ export function accepts(a: MatchCandidate, b: MatchCandidate): boolean {
     return false;
 
   // Attribute check
-  if (!a.preference.expectedAttributes.includes(b.profile.attribute))
+  if (!profileMatchesExpectedAttributes(a.preference.expectedAttributes, b.profile))
     return false;
 
 

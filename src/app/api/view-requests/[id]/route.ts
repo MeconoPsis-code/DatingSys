@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { notify } from '@/lib/notifications';
+import { getMaskedIdentity } from '@/lib/pseudonymous-identity';
 
 /**
  * PUT /api/view-requests/[id] — Approve or reject a view request
@@ -75,7 +76,10 @@ export async function PUT(
       where: { userId: session.id },
       select: { nickname: true },
     });
-    const targetName = targetIdentity?.nickname || "对方";
+    const targetName =
+      action === 'approve'
+        ? targetIdentity?.nickname || "对方"
+        : getMaskedIdentity(session.id).name;
     if (action === 'approve') {
       await notify.viewRequestApproved(viewRequest.requesterId, targetName);
     } else {

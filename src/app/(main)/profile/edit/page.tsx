@@ -9,7 +9,16 @@ import { MBTI_OPTIONS } from "@/data/mbti";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { PhotoUploader } from "@/components/profile/photo-uploader";
 import { DualRangeSlider } from "@/components/DualRangeSlider";
+import { MeasurementSlider } from "@/components/MeasurementSlider";
 import { AlertModal } from "@/components/ui/alert-modal";
+import {
+  HEIGHT_DEFAULT_CM,
+  HEIGHT_MAX_CM,
+  HEIGHT_MIN_CM,
+  WEIGHT_DEFAULT_KG,
+  WEIGHT_MAX_KG,
+  WEIGHT_MIN_KG,
+} from "@/lib/profile-limits";
 
 interface PhotoItem {
   id: string;
@@ -121,6 +130,17 @@ function isUnder18(birthYear: number, birthMonth: number, birthDay: number): boo
   if (month < birthMonth) return true;
   if (month > birthMonth) return false;
   return day < birthDay;
+}
+
+function resolveSelectedAttribute(
+  attribute: Attribute | "",
+  isSide: boolean,
+  isOther: boolean,
+): Attribute | "" {
+  if (attribute) return attribute;
+  if (isSide) return "SIDE";
+  if (isOther) return "OTHER";
+  return "";
 }
 
 
@@ -321,13 +341,17 @@ export default function ProfileEditPage() {
     if (!form.birthYear || !form.birthMonth || !form.birthDay) return "请选择出生日期";
     if (!form.heightCm) return "请输入身高";
     const hVal = Number(form.heightCm);
-    if (isNaN(hVal) || hVal < 100 || hVal > 250) return "身高范围: 100-250cm";
+    if (isNaN(hVal) || hVal < HEIGHT_MIN_CM || hVal > HEIGHT_MAX_CM) {
+      return `身高范围: ${HEIGHT_MIN_CM}-${HEIGHT_MAX_CM}cm`;
+    }
     if (!form.weightKg) return "请输入体重";
     const wVal = Number(form.weightKg);
-    if (isNaN(wVal) || wVal < 30 || wVal > 200) return "体重范围: 30-200kg";
+    if (isNaN(wVal) || wVal < WEIGHT_MIN_KG || wVal > WEIGHT_MAX_KG) {
+      return `体重范围: ${WEIGHT_MIN_KG}-${WEIGHT_MAX_KG}kg`;
+    }
     if (!form.provinceCode) return "请选择地区";
     if (!form.cityCode) return isOverseas(form.provinceCode) ? "请选择国家" : "请选择城市";
-    if (!form.attribute) return "请选择属性";
+    if (!resolveSelectedAttribute(form.attribute, form.isSide, form.isOther)) return "请选择属性";
 
     // Age >= 18 (only validated for ACTIVE status)
     const bd = new Date(
@@ -370,6 +394,11 @@ export default function ProfileEditPage() {
     setError(null);
 
     const birthDate = `${form.birthYear}-${String(form.birthMonth).padStart(2, "0")}-${String(form.birthDay).padStart(2, "0")}`;
+    const resolvedAttribute = resolveSelectedAttribute(
+      form.attribute,
+      form.isSide,
+      form.isOther,
+    );
 
     const body = {
       deleteAllPhotos,
@@ -381,7 +410,7 @@ export default function ProfileEditPage() {
         provinceCode: form.provinceCode,
         cityCode: form.cityCode,
         locationType: form.locationType,
-        attribute: form.attribute,
+        attribute: resolvedAttribute,
         isSide: form.isSide,
         isOther: form.isOther,
         customAttribute: null,
@@ -628,47 +657,29 @@ export default function ProfileEditPage() {
           </div>
         </div>
 
-        {/* Height — slider */}
-        <div className="mb-4">
-          <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-[hsl(var(--foreground))]">
-            <span>身高 <span className="text-[hsl(var(--destructive))]">*</span></span>
-            <span className="tabular-nums text-[hsl(var(--primary))] font-semibold">{form.heightCm || "170"} cm</span>
-          </label>
-          <input
-            type="range"
-            min={100}
-            max={250}
-            step={1}
-            value={form.heightCm || "170"}
-            onChange={(e) => updateField("heightCm", e.target.value)}
-            className="slider-input w-full"
-          />
-          <div className="mt-1 flex justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
-            <span>100 cm</span>
-            <span>250 cm</span>
-          </div>
-        </div>
+        <MeasurementSlider
+          className="mb-4"
+          label="身高"
+          required
+          value={form.heightCm}
+          min={HEIGHT_MIN_CM}
+          max={HEIGHT_MAX_CM}
+          defaultValue={HEIGHT_DEFAULT_CM}
+          unit="cm"
+          onChange={(v) => updateField("heightCm", v)}
+        />
 
-        {/* Weight — slider */}
-        <div>
-          <label className="mb-1.5 flex items-center justify-between text-sm font-medium text-[hsl(var(--foreground))]">
-            <span>体重 <span className="text-[hsl(var(--destructive))]">*</span></span>
-            <span className="tabular-nums text-[hsl(var(--primary))] font-semibold">{form.weightKg || "60"} kg = {Number(form.weightKg || "60") * 2} 斤</span>
-          </label>
-          <input
-            type="range"
-            min={30}
-            max={200}
-            step={1}
-            value={form.weightKg || "60"}
-            onChange={(e) => updateField("weightKg", e.target.value)}
-            className="slider-input w-full"
-          />
-          <div className="mt-1 flex justify-between text-[10px] text-[hsl(var(--muted-foreground))]">
-            <span>30 kg</span>
-            <span>200 kg</span>
-          </div>
-        </div>
+        <MeasurementSlider
+          label="体重"
+          required
+          value={form.weightKg}
+          min={WEIGHT_MIN_KG}
+          max={WEIGHT_MAX_KG}
+          defaultValue={WEIGHT_DEFAULT_KG}
+          unit="kg"
+          detail={(v) => `= ${v * 2} 斤`}
+          onChange={(v) => updateField("weightKg", v)}
+        />
       </section>
 
       {/* Section 2: Location */}
@@ -949,13 +960,16 @@ export default function ProfileEditPage() {
             期望身高 (cm)
           </label>
           <DualRangeSlider
-            min={100}
-            max={250}
-            valueMin={Number(form.heightMinCm) || 155}
-            valueMax={Number(form.heightMaxCm) || 185}
+            min={HEIGHT_MIN_CM}
+            max={HEIGHT_MAX_CM}
+            valueMin={Number(form.heightMinCm) || HEIGHT_MIN_CM}
+            valueMax={Number(form.heightMaxCm) || HEIGHT_MAX_CM}
             onChangeMin={(v) => updateField("heightMinCm", String(v))}
             onChangeMax={(v) => updateField("heightMaxCm", String(v))}
             formatValue={(v) => `${v} cm`}
+            unit="cm"
+            minAriaLabel="期望最低身高"
+            maxAriaLabel="期望最高身高"
           />
         </div>
 
@@ -965,13 +979,17 @@ export default function ProfileEditPage() {
             期望体重 (kg)
           </label>
           <DualRangeSlider
-            min={30}
-            max={200}
-            valueMin={Number(form.weightMinKg) || 45}
-            valueMax={Number(form.weightMaxKg) || 80}
+            min={WEIGHT_MIN_KG}
+            max={WEIGHT_MAX_KG}
+            valueMin={Number(form.weightMinKg) || WEIGHT_MIN_KG}
+            valueMax={Number(form.weightMaxKg) || WEIGHT_MAX_KG}
             onChangeMin={(v) => updateField("weightMinKg", String(v))}
             onChangeMax={(v) => updateField("weightMaxKg", String(v))}
             formatValue={(v) => `${v}kg = ${v * 2}斤`}
+            unit="kg"
+            detail={(v) => `= ${v * 2}斤`}
+            minAriaLabel="期望最低体重"
+            maxAriaLabel="期望最高体重"
           />
         </div>
 

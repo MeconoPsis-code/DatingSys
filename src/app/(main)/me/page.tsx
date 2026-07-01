@@ -1022,6 +1022,21 @@ export default function MePage() {
             <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
           </Link>
           <Link
+            href="/match-preferences"
+            className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-500">
+              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </div>
+            匹配偏好
+            <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">→</span>
+          </Link>
+          <Link
             href="/report"
             className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
           >

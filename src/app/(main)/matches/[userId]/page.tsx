@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, use } from "react";
 import { getProvinceName, getCityName } from "@/data/regions";
 import { ATTRIBUTE_LABELS } from "@/data/attributes";
+import { formatBmi } from "@/lib/bmi";
 import Link from "next/link";
 
 /* ─── Types ──────────────────────────────────────────── */
@@ -24,6 +25,8 @@ interface MatchDetail {
   cityCode: string;
   locationType: string;
   attribute: string;
+  isSide: boolean;
+  isOther: boolean;
   customAttribute: string | null;
   mbti: string | null;
   selfIntro: string | null;
@@ -35,9 +38,31 @@ interface MatchDetail {
 
 /* ─── Helpers ────────────────────────────────────────── */
 
-function getAttrLabel(attr: string, custom?: string | null): string {
+function getAttrLabel(
+  attr: string,
+  custom?: string | null,
+  isSide?: boolean,
+  isOther?: boolean,
+): string {
   if (attr === "OTHER" && custom) return `其他: ${custom}`;
-  return (ATTRIBUTE_LABELS as Record<string, string>)[attr] ?? attr;
+  let label = (ATTRIBUTE_LABELS as Record<string, string>)[attr] ?? attr;
+  const tags: string[] = [];
+  if (isSide && attr !== "SIDE") tags.push("side");
+  if (isOther && attr !== "OTHER") tags.push("其他");
+  if (tags.length > 0) label += `、${tags.join("、")}`;
+  return label;
+}
+
+function getAttrLabels(
+  attr: string,
+  custom?: string | null,
+  isSide?: boolean,
+  isOther?: boolean,
+): string[] {
+  const labels = [getAttrLabel(attr, custom)];
+  if (isSide && attr !== "SIDE") labels.push("side");
+  if (isOther && attr !== "OTHER") labels.push("其他");
+  return labels;
 }
 
 const LOCATION_TYPE_LABELS: Record<string, string> = {
@@ -84,7 +109,14 @@ export default function MatchDetailPage({
   }, [userId]);
 
   useEffect(() => {
-    fetchDetail();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void fetchDetail();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [fetchDetail]);
 
   function handleCopyQQ() {
@@ -270,7 +302,16 @@ export default function MatchDetailPage({
             <InfoItem label="年龄" value={`${detail.age} 岁`} />
             <InfoItem label="身高" value={`${detail.heightCm} cm`} />
             <InfoItem label="体重" value={`${detail.weightKg} kg`} />
-            <InfoItem label="属性" value={getAttrLabel(detail.attribute, detail.customAttribute)} />
+            <InfoItem label="BMI" value={formatBmi(detail.heightCm, detail.weightKg)} />
+            <InfoItem
+              label="属性"
+              value={getAttrLabels(
+                detail.attribute,
+                detail.customAttribute,
+                detail.isSide,
+                detail.isOther,
+              )}
+            />
             <InfoItem
               label={LOCATION_TYPE_LABELS[detail.locationType] || "所在地"}
               value={`${getProvinceName(detail.provinceCode)} · ${getCityName(detail.provinceCode, detail.cityCode)}`}
@@ -306,11 +347,24 @@ export default function MatchDetailPage({
 
 /* ─── Info Item ──────────────────────────────────────── */
 
-function InfoItem({ label, value }: { label: string; value: string }) {
+function InfoItem({ label, value }: { label: string; value: string | string[] }) {
   return (
     <div className="rounded-lg bg-[hsl(var(--secondary))] px-3 py-2">
       <div className="text-[10px] text-[hsl(var(--muted-foreground))]">{label}</div>
-      <div className="break-words text-sm font-medium text-[hsl(var(--foreground))]">{value}</div>
+      {Array.isArray(value) ? (
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {value.map((item) => (
+            <span
+              key={item}
+              className="rounded-md bg-[hsl(var(--card))] px-2 py-0.5 text-xs font-medium text-[hsl(var(--foreground))]"
+            >
+              {item}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="break-words text-sm font-medium text-[hsl(var(--foreground))]">{value}</div>
+      )}
     </div>
   );
 }

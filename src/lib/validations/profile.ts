@@ -1,15 +1,28 @@
 import { z } from "zod/v4";
 import { Attribute, LocationType, PhotoMatchPref, ProfileStatus } from "@prisma/client";
 import { MBTI_TYPES } from "@/data/mbti";
+import {
+  HEIGHT_MAX_CM,
+  HEIGHT_MIN_CM,
+  WEIGHT_MAX_KG,
+  WEIGHT_MIN_KG,
+} from "@/lib/profile-limits";
 
 // ── Constants ───────────────────────────────────────────
 
 const MIN_AGE = 18;
-const MIN_HEIGHT = 100;
-const MAX_HEIGHT = 250;
-const MIN_WEIGHT = 30;
-const MAX_WEIGHT = 200;
+const MIN_HEIGHT = HEIGHT_MIN_CM;
+const MAX_HEIGHT = HEIGHT_MAX_CM;
+const MIN_WEIGHT = WEIGHT_MIN_KG;
+const MAX_WEIGHT = WEIGHT_MAX_KG;
 const MAX_SELF_INTRO = 500;
+const ATTRIBUTE_SCHEMA = z.enum(
+  Object.values(Attribute) as [string, ...string[]]
+) as z.ZodType<Attribute>;
+const PROFILE_ATTRIBUTE_SCHEMA = z
+  .union([ATTRIBUTE_SCHEMA, z.literal("")])
+  .optional()
+  .nullable();
 
 // ── Cooldown constants (exported for API + UI) ─────────
 
@@ -59,9 +72,7 @@ export const profileSchema = z
       Object.values(LocationType) as [string, ...string[]]
     ) as z.ZodType<LocationType>,
 
-    attribute: z.enum(
-      Object.values(Attribute) as [string, ...string[]]
-    ) as z.ZodType<Attribute>,
+    attribute: PROFILE_ATTRIBUTE_SCHEMA,
 
     isSide: z.boolean().optional().default(false),
     isOther: z.boolean().optional().default(false),
@@ -98,6 +109,10 @@ export const profileSchema = z
     status: z
       .enum(Object.values(ProfileStatus) as [string, ...string[]])
       .optional() as z.ZodType<ProfileStatus | undefined>,
+  })
+  .refine((d) => Boolean(d.attribute) || d.isSide || d.isOther, {
+    message: "请选择属性",
+    path: ["attribute"],
   })
   .refine(
     (d) => {
@@ -139,7 +154,7 @@ export const preferenceSchema = z
 
 
     expectedAttributes: z.array(
-      z.enum(Object.values(Attribute) as [string, ...string[]]) as z.ZodType<Attribute>
+      ATTRIBUTE_SCHEMA
     ).min(1, "请至少选择一个期望属性"),
 
     expectedCustomAttribute: z
