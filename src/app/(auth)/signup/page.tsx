@@ -906,7 +906,12 @@ function ProfileFormSection({
             <button
               key={opt.value}
               type="button"
-              onClick={() => updateProfile("attribute", opt.value)}
+              onClick={() =>
+                updateProfile(
+                  "attribute",
+                  profile.attribute === opt.value ? "" : opt.value
+                )
+              }
               className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
                 profile.attribute === opt.value
                   ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"

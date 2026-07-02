@@ -42,6 +42,9 @@ export interface MatchCandidate {
 
 export type MatchType = "mutual" | "one_way_ab" | "one_way_ba" | "none";
 
+const TOTAL_ACCEPTANCE_CRITERIA = 4;
+const MIN_PARTIAL_MATCH_CRITERIA_FOR_ONE_WAY = 2;
+
 // ── Helpers ─────────────────────────────────────────────
 
 function ageFromDate(birthDate: Date, referenceDate?: Date): number {
@@ -81,34 +84,44 @@ export function profileMatchesExpectedAttributes(
  * Checks age, height, weight, and attribute.
  */
 export function accepts(a: MatchCandidate, b: MatchCandidate): boolean {
+  return countAcceptedCriteria(a, b) === TOTAL_ACCEPTANCE_CRITERIA;
+}
+
+/**
+ * Count how many of user A's preference criteria are met by user B's profile.
+ */
+export function countAcceptedCriteria(a: MatchCandidate, b: MatchCandidate): number {
   // B must be active
-  if (b.profile.status !== "ACTIVE") return false;
+  if (b.profile.status !== "ACTIVE") return 0;
 
   const bAge = ageFromDate(b.profile.birthDate);
+  let matchedCriteria = 0;
 
   // Age check
-  if (bAge < a.preference.ageMin || bAge > a.preference.ageMax) return false;
+  if (bAge >= a.preference.ageMin && bAge <= a.preference.ageMax) {
+    matchedCriteria++;
+  }
 
   // Height check
   if (
-    b.profile.heightCm < a.preference.heightMinCm ||
-    b.profile.heightCm > a.preference.heightMaxCm
+    b.profile.heightCm >= a.preference.heightMinCm &&
+    b.profile.heightCm <= a.preference.heightMaxCm
   )
-    return false;
+    matchedCriteria++;
 
   // Weight check
   if (
-    b.profile.weightKg < a.preference.weightMinKg ||
-    b.profile.weightKg > a.preference.weightMaxKg
+    b.profile.weightKg >= a.preference.weightMinKg &&
+    b.profile.weightKg <= a.preference.weightMaxKg
   )
-    return false;
+    matchedCriteria++;
 
   // Attribute check
-  if (!profileMatchesExpectedAttributes(a.preference.expectedAttributes, b.profile))
-    return false;
+  if (profileMatchesExpectedAttributes(a.preference.expectedAttributes, b.profile)) {
+    matchedCriteria++;
+  }
 
-
-  return true;
+  return matchedCriteria;
 }
 
 /**
@@ -185,12 +198,24 @@ export function getMatchType(a: MatchCandidate, b: MatchCandidate): MatchType {
   if (!photoVisible(a, b)) return "none";
   if (!passesScoreThreshold(a, b)) return "none";
 
-  const aAcceptsB = accepts(a, b);
-  const bAcceptsA = accepts(b, a);
+  const aMatchesBPreferenceCount = countAcceptedCriteria(b, a);
+  const bMatchesAPreferenceCount = countAcceptedCriteria(a, b);
+  const aAcceptsB = bMatchesAPreferenceCount === TOTAL_ACCEPTANCE_CRITERIA;
+  const bAcceptsA = aMatchesBPreferenceCount === TOTAL_ACCEPTANCE_CRITERIA;
 
   if (aAcceptsB && bAcceptsA) return "mutual";
-  if (aAcceptsB && !bAcceptsA) return "one_way_ab"; // B fits A's preferences; A does not fit B's
-  if (!aAcceptsB && bAcceptsA) return "one_way_ba"; // A fits B's preferences; B does not fit A's
+  if (
+    aAcceptsB &&
+    !bAcceptsA &&
+    aMatchesBPreferenceCount >= MIN_PARTIAL_MATCH_CRITERIA_FOR_ONE_WAY
+  )
+    return "one_way_ab"; // B fits A's preferences; A partially fits B's
+  if (
+    !aAcceptsB &&
+    bAcceptsA &&
+    bMatchesAPreferenceCount >= MIN_PARTIAL_MATCH_CRITERIA_FOR_ONE_WAY
+  )
+    return "one_way_ba"; // A fits B's preferences; B partially fits A's
   return "none";
 }
 

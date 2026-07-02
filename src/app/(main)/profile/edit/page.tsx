@@ -779,7 +779,12 @@ export default function ProfileEditPage() {
             <button
               key={opt.value}
               type="button"
-              onClick={() => updateField("attribute", opt.value)}
+              onClick={() =>
+                updateField(
+                  "attribute",
+                  form.attribute === opt.value ? "" : opt.value
+                )
+              }
               className={`rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
                 form.attribute === opt.value
                   ? "border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]"
