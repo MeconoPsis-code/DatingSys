@@ -1,8 +1,28 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export function ScorerNav() {
+  const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok && res.status === 401 && !cancelled) {
+          router.replace("/login?error=expired");
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   return (
     <header className="sticky top-0 z-40 flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-blue-600/10 bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-4 py-2 text-white shadow-sm sm:px-5">
       <span className="flex items-center gap-2 text-lg font-bold text-white">

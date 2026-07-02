@@ -110,6 +110,7 @@ export async function GET() {
   await commitExpiredActions();
 
   const session = await requireAuth();
+  const isSuperAdmin = session.role === "SUPER_ADMIN";
 
   const user = await db.user.findUnique({
     where: { id: session.id },
@@ -131,19 +132,30 @@ export async function GET() {
   // hasPublishedBefore: true if the profile was ever published (lastSubmittedAt is set on publish)
   const hasPublishedBefore = user?.profile?.lastSubmittedAt != null;
 
-  const cooldowns = {
-    canPublish:
-      clearDays === null || clearDays >= CLEAR_COOLDOWN_DAYS,
-    publishCooldownRemaining:
-      clearDays !== null && clearDays < CLEAR_COOLDOWN_DAYS
-        ? CLEAR_COOLDOWN_DAYS - clearDays
-        : 0,
-    canEdit:
-      !hasPublishedBefore || !editCooldown.isActive,
-    editCooldownRemaining: editCooldown.remainingDays,
-    editCooldownRemainingText: editCooldown.remainingText,
-    isPhotoRevokeCooldown: editCooldown.isPhotoRevokeCooldown,
-  };
+  const cooldowns = isSuperAdmin
+    ? {
+        canPublish: true,
+        publishCooldownRemaining: 0,
+        canEdit: true,
+        editCooldownRemaining: 0,
+        editCooldownRemainingText: "",
+        isPhotoRevokeCooldown: false,
+        cooldownBypassed: true,
+      }
+    : {
+        canPublish:
+          clearDays === null || clearDays >= CLEAR_COOLDOWN_DAYS,
+        publishCooldownRemaining:
+          clearDays !== null && clearDays < CLEAR_COOLDOWN_DAYS
+            ? CLEAR_COOLDOWN_DAYS - clearDays
+            : 0,
+        canEdit:
+          !hasPublishedBefore || !editCooldown.isActive,
+        editCooldownRemaining: editCooldown.remainingDays,
+        editCooldownRemainingText: editCooldown.remainingText,
+        isPhotoRevokeCooldown: editCooldown.isPhotoRevokeCooldown,
+        cooldownBypassed: false,
+      };
 
   const hasPhotos = (user?.profile?.photos?.length ?? 0) > 0;
 
@@ -172,6 +184,7 @@ export async function GET() {
  */
 export async function PUT(req: Request) {
   const session = await requireAuth();
+  const isSuperAdmin = session.role === "SUPER_ADMIN";
 
   // 1. Parse body
   let body;
@@ -256,6 +269,7 @@ export async function PUT(req: Request) {
 
   // 3a. Check 7-day edit cooldown (blocks re-publishing if previously published within cooldown)
   if (
+    !isSuperAdmin &&
     profileStatus === "ACTIVE" &&
     user?.profile?.lastSubmittedAt
   ) {
@@ -273,7 +287,7 @@ export async function PUT(req: Request) {
   }
 
   // 3b. Check 30-day clear cooldown (only blocks ACTIVE publish)
-  if (profileStatus === "ACTIVE" && user?.lastProfileClearedAt) {
+  if (!isSuperAdmin && profileStatus === "ACTIVE" && user?.lastProfileClearedAt) {
     const clearDays = daysSince(user.lastProfileClearedAt);
     if (clearDays !== null && clearDays < CLEAR_COOLDOWN_DAYS) {
       const remaining = CLEAR_COOLDOWN_DAYS - clearDays;
@@ -535,7 +549,9 @@ export async function PUT(req: Request) {
   });
 
   // 9. Refresh session JWT with hasProfile=true so middleware stops redirecting
-  await createSession(session.id, session.role, true);
+  await createSession(session.id, session.role, true, {
+    sessionId: session.sessionId,
+  });
 
   return success({ profile, preference });
 }

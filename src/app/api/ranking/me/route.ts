@@ -18,7 +18,7 @@ function toRankingSettings(ratingProfile: {
   scoreCompletedAt: Date | null;
   rankingOptIn: boolean;
   rankingOptInUpdatedAt: Date | null;
-} | null) {
+} | null, cooldownBypassed = false) {
   const canJoin =
     ratingProfile?.ratingStatus === "COMPLETED" &&
     ratingProfile.finalScore !== null;
@@ -30,15 +30,18 @@ function toRankingSettings(ratingProfile: {
     scoreCompletedAt: ratingProfile?.scoreCompletedAt ?? null,
     rankingOptIn: canJoin ? Boolean(ratingProfile?.rankingOptIn) : false,
     rankingOptInUpdatedAt: ratingProfile?.rankingOptInUpdatedAt ?? null,
-    rankingCooldownEndsAt: getRankingOptInCooldown(
-      ratingProfile?.rankingOptInUpdatedAt
-    ).nextChangeAt,
+    rankingCooldownEndsAt: cooldownBypassed
+      ? null
+      : getRankingOptInCooldown(ratingProfile?.rankingOptInUpdatedAt)
+          .nextChangeAt,
+    cooldownBypassed,
   };
 }
 
 export async function GET() {
   try {
     const session = await requireAuth();
+    const isSuperAdmin = session.role === "SUPER_ADMIN";
     const ratingProfile = await db.ratingProfile.findUnique({
       where: { userId: session.id },
       select: {
@@ -50,7 +53,7 @@ export async function GET() {
       },
     });
 
-    return success(toRankingSettings(ratingProfile));
+    return success(toRankingSettings(ratingProfile, isSuperAdmin));
   } catch (err) {
     console.error("[ranking/me] GET error:", err);
     if (err && typeof err === "object" && "status" in err) {
@@ -64,6 +67,7 @@ export async function GET() {
 export async function PUT(req: Request) {
   try {
     const session = await requireAuth();
+    const isSuperAdmin = session.role === "SUPER_ADMIN";
 
     let body: unknown;
     try {
@@ -101,11 +105,11 @@ export async function PUT(req: Request) {
     }
 
     if (ratingProfile.rankingOptIn === parsed.data.optIn) {
-      return success(toRankingSettings(ratingProfile));
+      return success(toRankingSettings(ratingProfile, isSuperAdmin));
     }
 
     const cooldown = getRankingOptInCooldown(ratingProfile.rankingOptInUpdatedAt);
-    if (cooldown.isActive) {
+    if (!isSuperAdmin && cooldown.isActive) {
       return error(
         "COOLDOWN_ACTIVE",
         `公开排行参与设置每天只能修改一次，还需等待 ${formatRankingCooldownRemaining(cooldown.remainingMs)}。`,
@@ -119,10 +123,14 @@ export async function PUT(req: Request) {
       where: {
         userId: session.id,
         rankingOptIn: { not: parsed.data.optIn },
-        OR: [
-          { rankingOptInUpdatedAt: null },
-          { rankingOptInUpdatedAt: { lte: cooldownCutoff } },
-        ],
+        ...(isSuperAdmin
+          ? {}
+          : {
+              OR: [
+                { rankingOptInUpdatedAt: null },
+                { rankingOptInUpdatedAt: { lte: cooldownCutoff } },
+              ],
+            }),
       },
       data: {
         rankingOptIn: parsed.data.optIn,
@@ -143,7 +151,11 @@ export async function PUT(req: Request) {
 
     if (updateResult.count === 0) {
       if (updated?.rankingOptIn === parsed.data.optIn) {
-        return success(toRankingSettings(updated));
+        return success(toRankingSettings(updated, isSuperAdmin));
+      }
+
+      if (isSuperAdmin) {
+        return success(toRankingSettings(updated, true));
       }
 
       const latestCooldown = getRankingOptInCooldown(
@@ -156,7 +168,7 @@ export async function PUT(req: Request) {
       );
     }
 
-    return success(toRankingSettings(updated));
+    return success(toRankingSettings(updated, isSuperAdmin));
   } catch (err) {
     console.error("[ranking/me] PUT error:", err);
     if (err && typeof err === "object" && "status" in err) {

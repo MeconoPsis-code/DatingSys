@@ -145,7 +145,8 @@ export async function POST(
     await notify.photosRevoked(
       task.ratedUserId,
       reasonSummary,
-      `${PHOTO_REVOKE_REPUBLISH_COOLDOWN_HOURS} 小时`
+      `${PHOTO_REVOKE_REPUBLISH_COOLDOWN_HOURS} 小时`,
+      task.ratedUser.role === 'SUPER_ADMIN'
     );
 
     return success({

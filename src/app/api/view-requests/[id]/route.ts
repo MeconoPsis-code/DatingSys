@@ -25,6 +25,7 @@ export async function PUT(
     // Find the ViewRequest by id
     const viewRequest = await db.viewRequest.findUnique({
       where: { id },
+      include: { requester: { select: { role: true } } },
     });
 
     if (!viewRequest) {
@@ -83,7 +84,11 @@ export async function PUT(
     if (action === 'approve') {
       await notify.viewRequestApproved(viewRequest.requesterId, targetName);
     } else {
-      await notify.viewRequestRejected(viewRequest.requesterId, targetName);
+      await notify.viewRequestRejected(
+        viewRequest.requesterId,
+        targetName,
+        viewRequest.requester.role === 'SUPER_ADMIN'
+      );
     }
 
     return success(updated);

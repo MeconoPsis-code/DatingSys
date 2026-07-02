@@ -6,7 +6,7 @@ export default async function LandingPage() {
   const ctaHref = session ? "/me" : "/login";
 
   return (
-    <div className="relative flex min-h-screen min-h-dvh w-full items-start justify-center bg-[#fafbfe] px-0 pb-0 pt-20 font-sans sm:pt-24 lg:h-screen lg:items-center lg:overflow-hidden lg:p-0">
+    <div className="relative flex min-h-screen min-h-dvh w-full items-start justify-center bg-[#fafbfe] px-0 pb-0 pt-0 font-sans sm:pt-24 lg:h-screen lg:items-center lg:overflow-hidden lg:p-0">
       <PublicTopNav active="home" isLoggedIn={Boolean(session)} />
       {/* ─── DESKTOP PC VIEWPORT (lg:flex) ─────────────────────────────────── */}
       <div className="app-window relative z-10 hidden h-screen w-screen flex-col overflow-hidden bg-[#fafbfe] lg:flex">
@@ -126,7 +126,7 @@ export default async function LandingPage() {
       </div>
 
       {/* ─── MOBILE VIEWPORT & TABLET SIMULATOR (lg:hidden) ───────────────── */}
-      <div className="relative z-10 flex min-h-[calc(100dvh-6.5rem)] w-full max-w-[430px] flex-col overflow-hidden bg-[#fafbfe] shadow-none md:h-[844px] md:min-h-0 md:max-w-[390px] md:rounded-[40px] md:border-[12px] md:border-[#1a1a1a] md:bg-white md:shadow-[0_32px_80px_rgba(29,33,41,0.2),0_4px_16px_rgba(29,33,41,0.08)] lg:hidden">
+      <div className="relative z-10 flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-[#fafbfe] pt-20 shadow-none sm:min-h-[calc(100dvh-6.5rem)] sm:pt-0 md:h-[844px] md:min-h-0 md:max-w-[390px] md:rounded-[40px] md:border-[12px] md:border-[#1a1a1a] md:bg-white md:shadow-[0_32px_80px_rgba(29,33,41,0.2),0_4px_16px_rgba(29,33,41,0.08)] lg:hidden">
         {/* Ambient Background Accents */}
         <div className="pointer-events-none absolute -right-[100px] -top-[100px] z-0 h-[300px] w-[300px] rounded-full bg-[#ebf2ff]" />
         <div className="pointer-events-none absolute -bottom-[80px] -left-[100px] z-0 h-[260px] w-[260px] rounded-full bg-[#ebf2ff]" />
@@ -295,10 +295,6 @@ export default async function LandingPage() {
             </div>
           </section>
 
-          {/* Footer inside mobile view */}
-          <footer className="mt-auto py-4 text-center text-[10px] text-brand-muted">
-            图片仅供参考，实际以上线产品为准
-          </footer>
         </main>
 
         {/* Physical Home Indicator bar for iOS frame simulator */}

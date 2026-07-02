@@ -9,6 +9,7 @@ import type { UserRole, UserStatus, MembershipStatus } from "@prisma/client";
  */
 export interface SessionUser {
   id: string;
+  sessionId: string;
   role: UserRole;
   status: UserStatus;
   qqNumber: string | null;
@@ -39,6 +40,7 @@ export async function getSession(): Promise<SessionUser | null> {
 
   return {
     id: user.id,
+    sessionId: payload.sid,
     role: user.role,
     status: user.status,
     qqNumber: user.qqNumber ?? null,

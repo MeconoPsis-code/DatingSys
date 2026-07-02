@@ -3,20 +3,47 @@ import {
   getRankingProfileRequestStatuses,
   getTopRankingEntries,
 } from "@/lib/ranking";
+import { db } from "@/lib/db";
 import { getSessionPayload } from "@/lib/session";
 import { RankingTable } from "./ranking-table";
 
 export const dynamic = "force-dynamic";
+
+async function getCurrentUserHasPhotos(userId: string | undefined): Promise<boolean> {
+  if (!userId) return false;
+
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: {
+      profile: {
+        select: {
+          status: true,
+          photos: { select: { id: true }, take: 1 },
+        },
+      },
+      ratingProfile: { select: { id: true } },
+    },
+  });
+
+  return Boolean(
+    user?.profile?.status === "ACTIVE" &&
+      user.profile.photos.length > 0 &&
+      user.ratingProfile
+  );
+}
 
 export default async function RankingPage() {
   const [rankings, session] = await Promise.all([
     getTopRankingEntries(10),
     getSessionPayload(),
   ]);
-  const requestStatuses = await getRankingProfileRequestStatuses(
-    session?.sub,
-    rankings.map((entry) => entry.userId)
-  );
+  const [requestStatuses, currentUserHasPhotos] = await Promise.all([
+    getRankingProfileRequestStatuses(
+      session?.sub,
+      rankings.map((entry) => entry.userId)
+    ),
+    getCurrentUserHasPhotos(session?.sub),
+  ]);
   const rankingRows = rankings.map((entry) => ({
     rank: entry.rank,
     userId: entry.userId,
@@ -77,6 +104,7 @@ export default async function RankingPage() {
           <RankingTable
             entries={rankingRows}
             isLoggedIn={Boolean(session)}
+            currentUserHasPhotos={currentUserHasPhotos}
             initialRequestStatuses={requestStatuses}
           />
         )}

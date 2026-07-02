@@ -35,8 +35,10 @@ interface ViewRequest {
   createdAt: string;
   requesterNickname: string | null;
   requesterQQ: string | null;
+  requesterAvatarUrl: string | null;
   targetNickname: string | null;
   targetQQ: string | null;
+  targetAvatarUrl: string | null;
   requesterProfile?: RequesterProfile;
 }
 
@@ -77,10 +79,12 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 function getVisibleRequestIdentity({
   userId,
   nickname,
+  avatarUrl,
   unlocked,
 }: {
   userId: string;
   nickname: string | null;
+  avatarUrl: string | null;
   unlocked: boolean;
 }) {
   if (unlocked) {
@@ -88,12 +92,14 @@ function getVisibleRequestIdentity({
       name: nickname || "匿名用户",
       letter: getInitial(nickname),
       color: getAvatarColor(userId),
+      avatarUrl,
       avatarLabel: "用户头像",
     };
   }
 
   return {
     ...getMaskedIdentity(userId),
+    avatarUrl: null,
     avatarLabel: "随机头像",
   };
 }
@@ -148,6 +154,7 @@ function IncomingRequestCard({
   const identity = getVisibleRequestIdentity({
     userId: request.requesterId,
     nickname: request.requesterNickname,
+    avatarUrl: request.requesterAvatarUrl,
     unlocked: request.status === "APPROVED",
   });
 
@@ -158,9 +165,22 @@ function IncomingRequestCard({
         <div className="flex items-center gap-2">
           <div
             aria-label={identity.avatarLabel}
-            className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${identity.color} text-sm font-bold text-white`}
+            className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-full ${
+              identity.avatarUrl
+                ? "bg-white"
+                : `bg-gradient-to-br ${identity.color} text-sm font-bold text-white`
+            }`}
           >
-            {identity.letter}
+            {identity.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={identity.avatarUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              identity.letter
+            )}
           </div>
           <div>
             <div className="text-sm font-medium text-[hsl(var(--foreground))]">
@@ -307,6 +327,7 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
   const identity = getVisibleRequestIdentity({
     userId: request.targetUserId,
     nickname: request.targetNickname,
+    avatarUrl: request.targetAvatarUrl,
     unlocked: request.status === "APPROVED",
   });
 
@@ -316,9 +337,22 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
         <div className="flex items-center gap-2">
           <div
             aria-label={identity.avatarLabel}
-            className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${identity.color} text-sm font-bold text-white`}
+            className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-full ${
+              identity.avatarUrl
+                ? "bg-white"
+                : `bg-gradient-to-br ${identity.color} text-sm font-bold text-white`
+            }`}
           >
-            {identity.letter}
+            {identity.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={identity.avatarUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              identity.letter
+            )}
           </div>
           <div>
             <div className="text-sm font-medium text-[hsl(var(--foreground))]">

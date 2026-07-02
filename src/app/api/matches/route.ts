@@ -21,6 +21,15 @@ function ageFromDate(bd: Date): number {
   return age;
 }
 
+function resolveQQAvatarUrl(
+  avatarUrl: string | null | undefined,
+  qqNumber: string | null | undefined
+): string | null {
+  if (avatarUrl) return avatarUrl;
+  if (!qqNumber) return null;
+  return `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qqNumber)}&s=640`;
+}
+
 type ExpectationCheckKey = 'age' | 'height' | 'weight' | 'attribute';
 
 interface ExpectationCheck {
@@ -88,6 +97,7 @@ export async function GET(req: Request) {
   try {
     await commitExpiredActions();
     const session = await requireAuth();
+    const canBypassCooldowns = session.role === 'SUPER_ADMIN';
 
     // 1. Load current user's profile + preference
     const profile = await db.profile.findUnique({
@@ -147,7 +157,7 @@ export async function GET(req: Request) {
         profile: { include: { photos: { select: { id: true } } } },
         preference: true,
         ratingProfile: true,
-        authIdentities: { select: { nickname: true }, take: 1 },
+        authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
       },
     });
 
@@ -354,6 +364,7 @@ export async function GET(req: Request) {
         data,
         currentUserProvinceCode: profile.provinceCode,
         currentUserHasPhotos: profile.photos.length > 0 && ratingProfile !== null,
+        canBypassCooldowns,
         pagination: {
           total,
           page,
@@ -400,6 +411,9 @@ export async function GET(req: Request) {
       return {
         userId: m.userId,
         nickname: identityUnlocked ? (c.authIdentities[0]?.nickname ?? null) : null,
+        avatarUrl: identityUnlocked
+          ? resolveQQAvatarUrl(c.authIdentities[0]?.avatarUrl, c.qqNumber)
+          : null,
         identityUnlocked,
         age,
         heightCm: p.heightCm,
@@ -426,6 +440,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       data,
       currentUserProvinceCode: profile.provinceCode,
+      canBypassCooldowns,
       pagination: {
         total,
         page,

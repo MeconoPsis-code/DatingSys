@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { redis } from "@/lib/redis";
-import { sendVerificationCode } from "@/lib/email";
+import { isResendRateLimitError, sendVerificationCode } from "@/lib/email";
+import {
+  buildResendDailyQuotaMessage,
+  getResendDailyQuotaRetryAfterHours,
+  markResendDailyQuotaExceeded,
+} from "@/lib/email-quota";
 import { generateAndStoreCode, isRateLimited } from "@/lib/verification";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { normalizeNicknameInput } from "@/lib/group-card";
@@ -46,6 +51,20 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const quotaRetryAfterHours = await getResendDailyQuotaRetryAfterHours();
+  if (quotaRetryAfterHours !== null) {
+    return NextResponse.json(
+      {
+        error: {
+          code: "EMAIL_DAILY_QUOTA_EXCEEDED",
+          message: buildResendDailyQuotaMessage(quotaRetryAfterHours),
+          retryAfterHours: quotaRetryAfterHours,
+        },
+      },
+      { status: 429 }
+    );
+  }
+
   // 4. Rate limit check
   if (await isRateLimited(qqStr)) {
     return NextResponse.json(
@@ -71,6 +90,20 @@ export async function POST(req: NextRequest) {
   try {
     await sendVerificationCode(qqStr, code);
   } catch (error) {
+    if (isResendRateLimitError(error)) {
+      const retryAfterHours = await markResendDailyQuotaExceeded();
+      return NextResponse.json(
+        {
+          error: {
+            code: "EMAIL_DAILY_QUOTA_EXCEEDED",
+            message: buildResendDailyQuotaMessage(retryAfterHours),
+            retryAfterHours,
+          },
+        },
+        { status: 429 }
+      );
+    }
+
     console.error("[Bot Signup] Email send failed:", error);
     return NextResponse.json(
       { error: { code: "EMAIL_ERROR", message: "验证码发送失败，请稍后重试" } },

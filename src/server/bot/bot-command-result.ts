@@ -7,6 +7,7 @@
  */
 
 import type { BotCommandResult, BotCommandResultCode } from './bot.types';
+import { buildResendDailyQuotaMessage } from '@/lib/email-quota';
 
 /**
  * 结果码与回复消息的映射表
@@ -14,8 +15,8 @@ import type { BotCommandResult, BotCommandResultCode } from './bot.types';
  * 每个条目是一个函数，接收可选的 `email` 参数用于模板填充，
  * 返回发送给用户的中文消息文本。
  */
-const REPLY_MESSAGES: Record<BotCommandResultCode, (email?: string) => string> = {
-  REGISTER_CODE_SENT: (email) =>
+const REPLY_MESSAGES: Record<BotCommandResultCode, (result: BotCommandResult) => string> = {
+  REGISTER_CODE_SENT: ({ email }) =>
     `注册申请已受理，验证码已发送至你的 QQ 邮箱：${email}。\n请在 10 分钟内前往邮箱查看，并登陆https://10match.date/完成注册流程。\n若未收到验证邮件请检查是否被“垃圾桶，广告，spam等”拦截或归类`,
 
   ALREADY_REGISTERED: () =>
@@ -24,7 +25,10 @@ const REPLY_MESSAGES: Record<BotCommandResultCode, (email?: string) => string> =
   EMAIL_CODE_STILL_VALID: () =>
     `你的验证码仍在有效期内，请前往 QQ 邮箱查看。\n如长时间未收到，请稍后重试或联系管理员。`,
 
-  RESET_PASSWORD_EMAIL_SENT: (email) =>
+  REGISTER_EMAIL_DAILY_QUOTA_EXCEEDED: ({ retryAfterHours }) =>
+    buildResendDailyQuotaMessage(retryAfterHours ?? 24),
+
+  RESET_PASSWORD_EMAIL_SENT: ({ email }) =>
     `密码重置验证码已发送至你的 QQ 邮箱：${email}。\n请在10分钟内前往邮箱查看，并登陆https://10match.date/完成密码重置。若未收到验证邮件请检查是否被“垃圾桶，广告，spam等”拦截或归类`,
 
   RESET_PASSWORD_EMAIL_STILL_VALID: () =>
@@ -74,5 +78,5 @@ const REPLY_MESSAGES: Record<BotCommandResultCode, (email?: string) => string> =
  */
 export function getReplyMessage(result: BotCommandResult): string {
   const formatter = REPLY_MESSAGES[result.code];
-  return formatter(result.email);
+  return formatter(result);
 }

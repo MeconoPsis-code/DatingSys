@@ -15,13 +15,15 @@ function toMatchPrefSettings(profile: {
   photoMatchPref: PhotoMatchPrefValue | null;
   highScoreOnly: boolean;
   matchPrefUpdatedAt: Date | null;
-}) {
+}, cooldownBypassed = false) {
   return {
     photoMatchPref: profile.photoMatchPref,
     highScoreOnly: profile.photoMatchPref === "PHOTO_ONLY" && profile.highScoreOnly,
     matchPrefUpdatedAt: profile.matchPrefUpdatedAt,
-    matchPrefCooldownEndsAt: getMatchPrefCooldown(profile.matchPrefUpdatedAt)
-      .nextChangeAt,
+    matchPrefCooldownEndsAt: cooldownBypassed
+      ? null
+      : getMatchPrefCooldown(profile.matchPrefUpdatedAt).nextChangeAt,
+    cooldownBypassed,
   };
 }
 
@@ -51,6 +53,7 @@ function hasSamePreference(
 export async function PUT(req: Request) {
   try {
     const session = await requireAuth();
+    const isSuperAdmin = session.role === "SUPER_ADMIN";
 
     let body: { photoMatchPref?: string; highScoreOnly?: boolean };
     try {
@@ -118,11 +121,11 @@ export async function PUT(req: Request) {
     if (
       hasSamePreference(user.profile, nextPhotoMatchPref, nextHighScoreOnly)
     ) {
-      return success(toMatchPrefSettings(user.profile));
+      return success(toMatchPrefSettings(user.profile, isSuperAdmin));
     }
 
     const cooldown = getMatchPrefCooldown(user.profile.matchPrefUpdatedAt);
-    if (cooldown.isActive) {
+    if (!isSuperAdmin && cooldown.isActive) {
       return error(
         "COOLDOWN_ACTIVE",
         `匹配偏好设置每天只能修改一次，还需等待 ${formatMatchPrefCooldownRemaining(cooldown.remainingMs)}。`,
@@ -136,11 +139,15 @@ export async function PUT(req: Request) {
     const updateResult = await db.profile.updateMany({
       where: {
         userId: session.id,
-        OR: [
-          { photoMatchPref: null },
-          { matchPrefUpdatedAt: null },
-          { matchPrefUpdatedAt: { lte: cooldownCutoff } },
-        ],
+        ...(isSuperAdmin
+          ? {}
+          : {
+              OR: [
+                { photoMatchPref: null },
+                { matchPrefUpdatedAt: null },
+                { matchPrefUpdatedAt: { lte: cooldownCutoff } },
+              ],
+            }),
       },
       data: {
         photoMatchPref: nextPhotoMatchPref,
@@ -170,7 +177,11 @@ export async function PUT(req: Request) {
           nextHighScoreOnly
         )
       ) {
-        return success(toMatchPrefSettings(updatedProfile));
+        return success(toMatchPrefSettings(updatedProfile, isSuperAdmin));
+      }
+
+      if (isSuperAdmin) {
+        return success(toMatchPrefSettings(updatedProfile, true));
       }
 
       const latestCooldown = getMatchPrefCooldown(
@@ -183,7 +194,7 @@ export async function PUT(req: Request) {
       );
     }
 
-    return success(toMatchPrefSettings(updatedProfile));
+    return success(toMatchPrefSettings(updatedProfile, isSuperAdmin));
   } catch (err) {
     console.error("[profile/match-pref] PUT error:", err);
     if (err && typeof err === "object" && "status" in err) {

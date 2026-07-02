@@ -17,6 +17,7 @@ import { usePathname } from "next/navigation";
 interface MutualMatch {
   userId: string;
   nickname: string | null;
+  avatarUrl: string | null;
   identityUnlocked?: boolean;
   age: number;
   heightCm: number;
@@ -166,16 +167,21 @@ function MutualMatchCard({
   viewRequestStatus,
   onRequestView,
   viewDetail,
+  canBypassCooldowns,
 }: {
   match: MutualMatch;
   viewRequestStatus: string | null;
   onRequestView: (userId: string) => void;
-  viewDetail: { qqNumber: string | null } | null;
+  viewDetail: { qqNumber: string | null; avatarUrl: string | null } | null;
+  canBypassCooldowns: boolean;
 }) {
   const [qqCopied, setQqCopied] = useState(false);
   const identityUnlocked =
     match.identityUnlocked === true || viewRequestStatus === "APPROVED";
   const maskedIdentity = getMaskedIdentity(match.userId);
+  const unlockedAvatarUrl = identityUnlocked
+    ? (match.avatarUrl ?? viewDetail?.avatarUrl ?? null)
+    : null;
 
   function handleCopyQQ(qq: string) {
     if (navigator.clipboard?.writeText) {
@@ -210,13 +216,28 @@ function MutualMatchCard({
         <div className="flex min-w-0 items-start gap-3">
           <div
             aria-label={identityUnlocked ? "用户头像" : "随机头像"}
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${
-              identityUnlocked
-                ? getAvatarColor(match.userId)
-                : maskedIdentity.color
-            } text-lg font-bold text-white`}
+            className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full ${
+              unlockedAvatarUrl
+                ? "bg-white"
+                : `bg-gradient-to-br ${
+                    identityUnlocked
+                      ? getAvatarColor(match.userId)
+                      : maskedIdentity.color
+                  } text-lg font-bold text-white`
+            }`}
           >
-            {identityUnlocked ? getInitial(match.nickname) : maskedIdentity.letter}
+            {unlockedAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={unlockedAvatarUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : identityUnlocked ? (
+              getInitial(match.nickname)
+            ) : (
+              maskedIdentity.letter
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -359,7 +380,7 @@ function MutualMatchCard({
             </svg>
             资料查看申请待审核
           </span>
-        ) : viewRequestStatus === "REJECTED" ? (
+        ) : viewRequestStatus === "REJECTED" && !canBypassCooldowns ? (
           <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-4 py-2 text-center text-sm font-semibold text-[hsl(0,60%,65%)]">
             <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
               <circle cx="12" cy="12" r="10" />
@@ -401,10 +422,11 @@ export default function MutualMatchesPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
   const [viewRequestMap, setViewRequestMap] = useState<Record<string, string>>({});
-  const [approvedDetails, setApprovedDetails] = useState<Record<string, { qqNumber: string | null }>>({});
+  const [approvedDetails, setApprovedDetails] = useState<Record<string, { qqNumber: string | null; avatarUrl: string | null }>>({});
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const [provinceOnly, setProvinceOnly] = useState(false);
   const [currentUserProvinceCode, setCurrentUserProvinceCode] = useState<string | null>(null);
+  const [canBypassCooldowns, setCanBypassCooldowns] = useState(false);
   const pageSize = 20;
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -442,6 +464,7 @@ export default function MutualMatchesPage() {
       if (data.currentUserProvinceCode) {
         setCurrentUserProvinceCode(data.currentUserProvinceCode);
       }
+      setCanBypassCooldowns(Boolean(data.canBypassCooldowns));
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
         setTotal(data.pagination.total);
@@ -501,7 +524,10 @@ export default function MutualMatchesPage() {
           if (data?.data?.qqNumber !== undefined) {
             setApprovedDetails((prev) => ({
               ...prev,
-              [userId]: { qqNumber: data.data.qqNumber },
+              [userId]: {
+                qqNumber: data.data.qqNumber,
+                avatarUrl: data.data.avatarUrl ?? null,
+              },
             }));
           }
         })
@@ -687,6 +713,7 @@ export default function MutualMatchesPage() {
               viewRequestStatus={viewRequestMap[match.userId] ?? null}
               onRequestView={(userId) => setConfirmTarget(userId)}
               viewDetail={approvedDetails[match.userId] ?? null}
+              canBypassCooldowns={canBypassCooldowns}
             />
           ))}
         </div>

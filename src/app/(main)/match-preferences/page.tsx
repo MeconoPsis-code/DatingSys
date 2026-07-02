@@ -12,6 +12,7 @@ interface ProfileData {
   highScoreOnly: boolean;
   matchPrefUpdatedAt: string | null;
   matchPrefCooldownEndsAt?: string | null;
+  cooldownBypassed?: boolean;
   ratingProfile: {
     ratingStatus: string;
     finalScore: number | null;
@@ -80,6 +81,7 @@ export default function MatchPreferencesPage() {
           photoMatchPref: currentPref,
           highScoreOnly: currentHighScoreOnly,
           matchPrefUpdatedAt: data.profile?.matchPrefUpdatedAt ?? null,
+          cooldownBypassed: Boolean(data.cooldowns?.cooldownBypassed),
           ratingProfile: data.ratingProfile,
         });
         setSelected(currentPref);
@@ -125,8 +127,9 @@ export default function MatchPreferencesPage() {
     () => getMatchPrefCooldown(profileData?.matchPrefUpdatedAt, cooldownNow),
     [profileData?.matchPrefUpdatedAt, cooldownNow]
   );
+  const cooldownBypassed = Boolean(profileData?.cooldownBypassed);
   const matchPrefCooldownActive =
-    Boolean(profileData?.photoMatchPref) && cooldown.isActive;
+    Boolean(profileData?.photoMatchPref) && !cooldownBypassed && cooldown.isActive;
   const currentHighScoreOnly =
     profileData?.photoMatchPref === "PHOTO_ONLY" &&
     Boolean(profileData.highScoreOnly);
@@ -136,9 +139,11 @@ export default function MatchPreferencesPage() {
     selectedHighScoreOnly === currentHighScoreOnly;
   const submitDisabled =
     !selected || submitting || matchPrefCooldownActive || preferenceUnchanged;
-  const cooldownHint = matchPrefCooldownActive
-    ? buildCooldownMessage(cooldown.nextChangeAt)
-    : "匹配偏好每天最多修改一次，避免频繁切换造成服务压力。";
+  const cooldownHint = cooldownBypassed
+    ? "超级管理员账号不受修改冷却限制。"
+    : matchPrefCooldownActive
+      ? buildCooldownMessage(cooldown.nextChangeAt)
+      : "匹配偏好每天最多修改一次，避免频繁切换造成服务压力。";
 
   async function handleSubmit() {
     if (!selected || submitDisabled) return;
@@ -174,6 +179,7 @@ export default function MatchPreferencesPage() {
               matchPrefUpdatedAt: settings.matchPrefUpdatedAt ?? null,
               matchPrefCooldownEndsAt:
                 settings.matchPrefCooldownEndsAt ?? null,
+              cooldownBypassed: Boolean(settings.cooldownBypassed),
             }
           : prev
       );

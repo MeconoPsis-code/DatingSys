@@ -14,6 +14,7 @@ import { ACTIVE_SCORING_TASK_STATUSES } from "@/lib/scoring";
  */
 export async function POST(req: Request) {
   const session = await requireAuth();
+  const isSuperAdmin = session.role === "SUPER_ADMIN";
 
   // 1. Find existing profile
   const profile = await db.profile.findUnique({
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
     db.profile.delete({ where: { userId: session.id } }),
     db.user.update({
       where: { id: session.id },
-      data: { lastProfileClearedAt: new Date() },
+      data: { lastProfileClearedAt: isSuperAdmin ? null : new Date() },
     }),
   ]);
 
@@ -54,6 +55,8 @@ export async function POST(req: Request) {
   });
 
   return success({
-    message: `资料已清空。${CLEAR_COOLDOWN_DAYS} 天内无法重新发布。`,
+    message: isSuperAdmin
+      ? "资料已清空。超级管理员账号不受重新发布冷却限制。"
+      : `资料已清空。${CLEAR_COOLDOWN_DAYS} 天内无法重新发布。`,
   });
 }

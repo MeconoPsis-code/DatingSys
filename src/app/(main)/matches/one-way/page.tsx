@@ -244,11 +244,13 @@ function OneWayMatchCard({
   onRequestView,
   viewRequestStatus,
   currentUserHasPhotos,
+  canBypassCooldowns,
 }: {
   match: OneWayMatch;
   onRequestView: (userId: string) => void;
   viewRequestStatus: string | null;
   currentUserHasPhotos: boolean;
+  canBypassCooldowns: boolean;
 }) {
   const isMeFitsThem = match.direction === "me_fits_them";
   const directionLabel = isMeFitsThem ? "我符合他" : "他符合我";
@@ -257,6 +259,8 @@ function OneWayMatchCard({
       ? match.targetAgainstMyExpectations
       : match.meAgainstTargetExpectations
   ).filter((check) => !check.matched);
+  const canRequestAfterRejected =
+    viewRequestStatus === "REJECTED" && canBypassCooldowns;
 
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-all hover:border-[hsl(var(--primary)/0.3)] sm:p-5">
@@ -404,7 +408,7 @@ function OneWayMatchCard({
             </Link>
           </div>
         )}
-        {viewRequestStatus === "REJECTED" && (
+        {viewRequestStatus === "REJECTED" && !canRequestAfterRejected && (
           <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-3 py-2 text-center text-xs text-[hsl(0,60%,65%)] sm:inline-flex sm:w-auto sm:py-1.5">
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
               <circle cx="12" cy="12" r="10" />
@@ -414,7 +418,7 @@ function OneWayMatchCard({
             申请已被拒绝
           </span>
         )}
-        {viewRequestStatus === null && (
+        {(viewRequestStatus === null || canRequestAfterRejected) && (
           <button
             type="button"
             onClick={() => onRequestView(match.userId)}
@@ -452,6 +456,7 @@ export default function OneWayMatchesPage() {
   const [provinceOnly, setProvinceOnly] = useState(false);
   const [currentUserProvinceCode, setCurrentUserProvinceCode] = useState<string | null>(null);
   const [currentUserHasPhotos, setCurrentUserHasPhotos] = useState(false);
+  const [canBypassCooldowns, setCanBypassCooldowns] = useState(false);
   const pageSize = 20;
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -482,6 +487,7 @@ export default function OneWayMatchesPage() {
       if (data.currentUserHasPhotos !== undefined) {
         setCurrentUserHasPhotos(data.currentUserHasPhotos);
       }
+      setCanBypassCooldowns(Boolean(data.canBypassCooldowns));
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
         setTotal(data.pagination.total);
@@ -724,6 +730,7 @@ export default function OneWayMatchesPage() {
               onRequestView={(userId) => setConfirmTarget(userId)}
               viewRequestStatus={viewRequestMap[match.userId] ?? null}
               currentUserHasPhotos={currentUserHasPhotos}
+              canBypassCooldowns={canBypassCooldowns}
             />
           ))}
         </div>

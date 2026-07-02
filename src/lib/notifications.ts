@@ -60,12 +60,21 @@ export const notify = {
   },
 
   /** Published profile photos were revoked after an abnormal-photo report */
-  async photosRevoked(userId: string, reason: string, cooldownLabel: string) {
+  async photosRevoked(
+    userId: string,
+    reason: string,
+    cooldownLabel: string,
+    cooldownBypassed = false
+  ) {
+    const republishText = cooldownBypassed
+      ? "超级管理员账号不受重新发布冷却限制，你可以立即重新上传并发布照片。"
+      : `你可以在 ${cooldownLabel} 后重新上传并发布照片。`;
+
     await create(
       userId,
       "PHOTO_REVOKED",
       "照片已被撤销",
-      `你的照片因违反「${reason}」已被撤销。在重新发布照片前，系统会将你视为未上传照片用户。你可以在 ${cooldownLabel} 后重新上传并发布照片。`
+      `你的照片因违反「${reason}」已被撤销。在重新发布照片前，系统会将你视为未上传照片用户。${republishText}`
     );
   },
 
@@ -90,12 +99,20 @@ export const notify = {
   },
 
   /** Your view request was rejected */
-  async viewRequestRejected(userId: string, targetName: string) {
+  async viewRequestRejected(
+    userId: string,
+    targetName: string,
+    cooldownBypassed = false
+  ) {
+    const retryText = cooldownBypassed
+      ? "超级管理员账号可立即重新申请。"
+      : "7天后可重新申请。";
+
     await create(
       userId,
       "VIEW_REQUEST_REJECTED",
       "资料查看申请被拒绝",
-      `${targetName || "对方"} 拒绝了你的资料查看申请。7天后可重新申请。`
+      `${targetName || "对方"} 拒绝了你的资料查看申请。${retryText}`
     );
   },
 

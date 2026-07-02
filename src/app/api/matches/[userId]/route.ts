@@ -14,6 +14,15 @@ function ageFromDate(bd: Date): number {
   return age;
 }
 
+function resolveQQAvatarUrl(
+  avatarUrl: string | null | undefined,
+  qqNumber: string | null | undefined
+): string | null {
+  if (avatarUrl) return avatarUrl;
+  if (!qqNumber) return null;
+  return `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qqNumber)}&s=640`;
+}
+
 // ── GET /api/matches/:userId ────────────────────────────
 
 export async function GET(
@@ -58,7 +67,7 @@ export async function GET(
         profile: { include: { photos: true } },
         preference: true,
         ratingProfile: true,
-        authIdentities: { select: { nickname: true }, take: 1 },
+        authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
       },
     });
 
@@ -98,6 +107,12 @@ export async function GET(
       userId: targetUser.id,
       qqNumber: approvedRequest ? targetUser.qqNumber : null,
       nickname: targetUser.authIdentities[0]?.nickname ?? null,
+      avatarUrl: approvedRequest
+        ? resolveQQAvatarUrl(
+            targetUser.authIdentities[0]?.avatarUrl,
+            targetUser.qqNumber
+          )
+        : null,
       age,
       heightCm: p.heightCm,
       weightKg: p.weightKg,

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 
 type NavAccent = "blue" | "gold";
@@ -177,6 +177,7 @@ const ACCENT_STYLES: Record<
 
 export function MainNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const [role, setRole] = useState<UserRole>("USER");
   const [requestBadge, setRequestBadge] = useState(0);
   const [notificationBadge, setNotificationBadge] = useState(0);
@@ -200,15 +201,30 @@ export function MainNav() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
+    let cancelled = false;
+
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) {
+          if (r.status === 401 && !cancelled) {
+            router.replace("/login?error=expired");
+          }
+          return null;
+        }
+
+        return r.json();
+      })
       .then((data) => {
-        if (data?.data?.role) {
+        if (!cancelled && data?.data?.role) {
           setRole(data.data.role);
         }
       })
       .catch(() => {});
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -465,15 +481,14 @@ export function MainNav() {
       )}
 
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7 overflow-y-auto">
-        <div className="side-brand mb-6 flex h-[92px] items-center gap-3 bg-brand-blue rounded-b-[20px] px-[28px] text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]">
-          <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.06)]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/app_icon_dark.png" className="h-[22px] w-auto object-contain" alt="TenMatch Icon" />
-          </div>
-          <span className="font-outfit text-[22px] font-extrabold tracking-[-0.5px] text-white">
-            TenMatch
-          </span>
+      <aside className="hidden md:flex w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-white pb-7 overflow-y-auto">
+        <div className="side-brand mb-6 aspect-[1792/877] w-full overflow-hidden bg-white">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/information-page-logo.png"
+            className="block h-full w-full object-cover object-center"
+            alt="TenMatch"
+          />
         </div>
         <nav className="menu flex flex-col gap-6 px-[18px]">
           {renderDesktopSection("个人", "blue", userSection)}

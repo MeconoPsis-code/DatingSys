@@ -592,7 +592,7 @@ export default function MePage() {
       rankingCooldownNow
     );
 
-    if (localCooldown.isActive) {
+    if (me?.role !== "SUPER_ADMIN" && localCooldown.isActive) {
       setRankingMsg({
         text: buildRankingCooldownMessage(localCooldown.nextChangeAt),
         ok: false,
@@ -653,6 +653,7 @@ export default function MePage() {
 
   if (!me) return null;
 
+  const isSuperAdmin = me.role === "SUPER_ADMIN";
   const statusInfo = STATUS_INFO[me.status];
   const memberInfo = me.membershipStatus ? MEMBERSHIP_INFO[me.membershipStatus] : null;
   const canJoinRanking =
@@ -663,10 +664,13 @@ export default function MePage() {
     me.ratingProfile?.rankingOptInUpdatedAt,
     rankingCooldownNow
   );
-  const rankingCooldownActive = canJoinRanking && rankingCooldown.isActive;
-  const rankingCooldownHint = rankingCooldownActive
-    ? buildRankingCooldownMessage(rankingCooldown.nextChangeAt)
-    : "每天最多修改一次，避免频繁切换造成服务压力。";
+  const rankingCooldownActive =
+    canJoinRanking && !isSuperAdmin && rankingCooldown.isActive;
+  const rankingCooldownHint = isSuperAdmin
+    ? "超级管理员账号不受修改冷却限制。"
+    : rankingCooldownActive
+      ? buildRankingCooldownMessage(rankingCooldown.nextChangeAt)
+      : "每天最多修改一次，避免频繁切换造成服务压力。";
   const rankingButtonLabel = rankingSaving
     ? "保存中..."
     : rankingCooldownActive
@@ -675,7 +679,7 @@ export default function MePage() {
         ? "关闭"
         : "开启";
 
-  const isAdmin = me.role === "ADMIN" || me.role === "SUPER_ADMIN";
+  const isAdmin = me.role === "ADMIN" || isSuperAdmin;
   const isScorer = me.role === "SCORER" || me.role === "ADMIN";
 
   return (

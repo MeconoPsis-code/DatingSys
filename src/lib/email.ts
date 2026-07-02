@@ -1,8 +1,24 @@
-import { Resend } from "resend";
+import { Resend, type ErrorResponse } from "resend";
 import { createTransport, type Transporter } from "nodemailer";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("email");
+
+export class ResendEmailError extends Error {
+  readonly resendCode: string;
+  readonly statusCode: number | null;
+
+  constructor(error: ErrorResponse) {
+    super(`Resend error: ${error.message}`);
+    this.name = "ResendEmailError";
+    this.resendCode = error.name;
+    this.statusCode = error.statusCode;
+  }
+}
+
+export function isResendRateLimitError(error: unknown): error is ResendEmailError {
+  return error instanceof ResendEmailError && error.statusCode === 429;
+}
 
 // ─── Provider selection ──────────────────────────────────
 // EMAIL_PROVIDER = "smtp" → use QQ SMTP (testing / no domain)
@@ -90,7 +106,7 @@ async function sendViaResend(
   const { error } = await resend.emails.send({ from, to, subject, text, html });
 
   if (error) {
-    throw new Error(`Resend error: ${error.message}`);
+    throw new ResendEmailError(error);
   }
 
   log.info({ to }, "Resend email sent successfully");

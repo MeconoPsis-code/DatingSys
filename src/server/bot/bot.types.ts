@@ -136,6 +136,7 @@ export type BotCommandResultCode =
   | 'REGISTER_CODE_SENT'
   | 'ALREADY_REGISTERED'
   | 'EMAIL_CODE_STILL_VALID'
+  | 'REGISTER_EMAIL_DAILY_QUOTA_EXCEEDED'
   | 'RESET_PASSWORD_EMAIL_SENT'
   | 'RESET_PASSWORD_EMAIL_STILL_VALID'
   | 'ACCOUNT_NOT_FOUND'
@@ -158,6 +159,8 @@ export interface BotCommandResult {
   qqNumber: string;
   /** 相关邮箱地址（用于消息模板填充） */
   email?: string;
+  /** 需要用户等待的小时数（用于额度耗尽等提示） */
+  retryAfterHours?: number;
   /** 是否需要在回复中 @该用户 */
   shouldMentionUser: boolean;
 }

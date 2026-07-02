@@ -28,7 +28,9 @@ export async function POST() {
   });
 
   // Re-create session with updated hasProfile flag
-  await createSession(session.id, session.role, !!profile);
+  await createSession(session.id, session.role, !!profile, {
+    sessionId: session.sessionId,
+  });
 
   return NextResponse.json(
     {

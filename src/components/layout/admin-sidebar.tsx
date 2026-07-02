@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const links = [
@@ -126,6 +126,7 @@ const returnToUserIcon = (
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
@@ -144,6 +145,22 @@ export function AdminSidebar() {
 
     return keys.every((key) => searchParams.get(key) === url.searchParams.get(key));
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok && res.status === 401 && !cancelled) {
+          router.replace("/login?error=expired");
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   useEffect(() => {
     if (!isMoreOpen) return;
@@ -242,16 +259,15 @@ export function AdminSidebar() {
       </div>
     )}
 
-    <aside className="hidden w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-[#fbfcfe] pb-7 overflow-y-auto md:flex">
+    <aside className="hidden w-[246px] shrink-0 h-screen sticky top-0 flex-col border-r border-[#e9edf5] bg-white pb-7 overflow-y-auto md:flex">
       {/* Brand area */}
-      <div className="side-brand mb-6 flex h-[92px] items-center gap-3 bg-brand-blue rounded-b-[20px] px-[28px] text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]">
-        <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full bg-white shadow-[0_2px_6px_rgba(0,0,0,0.06)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/app_icon_dark.png" className="h-[22px] w-auto object-contain" alt="TenMatch Icon" />
-        </div>
-        <span className="font-outfit text-[22px] font-extrabold tracking-[-0.5px] text-white">
-          TenMatch
-        </span>
+      <div className="side-brand mb-6 aspect-[1792/877] w-full overflow-hidden bg-white">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/information-page-logo.png"
+          className="block h-full w-full object-cover object-center"
+          alt="TenMatch"
+        />
       </div>
 
       {/* Navigation menu */}

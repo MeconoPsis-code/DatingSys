@@ -8,7 +8,11 @@ import { logBotAction, logBotAudit, BOT_AUDIT_ACTIONS } from './bot-audit.servic
 import { db } from '@/lib/db';
 import { redis } from '@/lib/redis';
 import { generateAndStoreCode, isRateLimited } from '@/lib/verification';
-import { sendVerificationCode } from '@/lib/email';
+import { isResendRateLimitError, sendVerificationCode } from '@/lib/email';
+import {
+  getResendDailyQuotaRetryAfterHours,
+  markResendDailyQuotaExceeded,
+} from '@/lib/email-quota';
 import { createLogger } from '@/lib/logger';
 import { normalizeNicknameInput } from '@/lib/group-card';
 
@@ -95,6 +99,22 @@ export async function handleRegisterCommand(
       return;
     }
 
+    // 6. Stop new registration emails while the Resend daily free quota is exhausted.
+    const quotaRetryAfterHours = await getResendDailyQuotaRetryAfterHours();
+    if (quotaRetryAfterHours !== null) {
+      result = {
+        success: false,
+        code: 'REGISTER_EMAIL_DAILY_QUOTA_EXCEEDED',
+        message: 'Resend daily email quota exceeded',
+        qqNumber,
+        email,
+        retryAfterHours: quotaRetryAfterHours,
+        shouldMentionUser: true,
+      };
+      await sendReply(botClient, groupId, qqNumber, result);
+      return;
+    }
+
     // 6. Check existing verification rate limit (60s from verification module)
     if (await isRateLimited(qqNumber)) {
       result = {
@@ -119,7 +139,26 @@ export async function handleRegisterCommand(
 
     // 7. Generate code and send email
     const code = await generateAndStoreCode(qqNumber);
-    await sendVerificationCode(qqNumber, code);
+    try {
+      await sendVerificationCode(qqNumber, code);
+    } catch (err) {
+      if (isResendRateLimitError(err)) {
+        const retryAfterHours = await markResendDailyQuotaExceeded();
+        result = {
+          success: false,
+          code: 'REGISTER_EMAIL_DAILY_QUOTA_EXCEEDED',
+          message: 'Resend daily email quota exceeded',
+          qqNumber,
+          email,
+          retryAfterHours,
+          shouldMentionUser: true,
+        };
+        await sendReply(botClient, groupId, qqNumber, result);
+        return;
+      }
+
+      throw err;
+    }
 
     // 8. Record rate limit usage
     await recordBotCommandUsage(qqNumber, 'register');

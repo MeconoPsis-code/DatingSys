@@ -6,6 +6,15 @@ import { getMaskedIdentity } from '@/lib/pseudonymous-identity';
 
 const REJECTION_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+function resolveQQAvatarUrl(
+  avatarUrl: string | null | undefined,
+  qqNumber: string | null | undefined
+): string | null {
+  if (avatarUrl) return avatarUrl;
+  if (!qqNumber) return null;
+  return `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qqNumber)}&s=640`;
+}
+
 /**
  * POST /api/view-requests — Send a view request
  */
@@ -53,20 +62,25 @@ export async function POST(req: Request) {
     }
 
     // 7-day cooldown after rejection
-    const lastRejected = await db.viewRequest.findFirst({
-      where: {
-        requesterId: session.id,
-        targetUserId: normalizedTargetUserId,
-        status: 'REJECTED',
-      },
-      orderBy: { respondedAt: 'desc' },
-    });
+    if (session.role !== 'SUPER_ADMIN') {
+      const lastRejected = await db.viewRequest.findFirst({
+        where: {
+          requesterId: session.id,
+          targetUserId: normalizedTargetUserId,
+          status: 'REJECTED',
+        },
+        orderBy: { respondedAt: 'desc' },
+      });
 
-    if (lastRejected?.respondedAt) {
-      const cooldownEnd = lastRejected.respondedAt.getTime() + REJECTION_COOLDOWN_MS;
-      if (Date.now() < cooldownEnd) {
-        const daysLeft = Math.ceil((cooldownEnd - Date.now()) / (1000 * 60 * 60 * 24));
-        return error('COOLDOWN', `被拒绝后需等待 ${daysLeft} 天才能再次申请`, 400);
+      if (lastRejected?.respondedAt) {
+        const cooldownEnd =
+          lastRejected.respondedAt.getTime() + REJECTION_COOLDOWN_MS;
+        if (Date.now() < cooldownEnd) {
+          const daysLeft = Math.ceil(
+            (cooldownEnd - Date.now()) / (1000 * 60 * 60 * 24)
+          );
+          return error('COOLDOWN', `被拒绝后需等待 ${daysLeft} 天才能再次申请`, 400);
+        }
       }
     }
 
@@ -144,7 +158,7 @@ export async function GET(req: Request) {
       include: {
         requester: {
           include: {
-            authIdentities: { select: { nickname: true }, take: 1 },
+            authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
             profile: {
               select: {
                 birthDate: true,
@@ -162,7 +176,7 @@ export async function GET(req: Request) {
         },
         target: {
           include: {
-            authIdentities: { select: { nickname: true }, take: 1 },
+            authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
           },
         },
       },
@@ -189,10 +203,22 @@ export async function GET(req: Request) {
           ? (r.requester.authIdentities[0]?.nickname ?? null)
           : null,
         requesterQQ: identityUnlocked ? (r.requester.qqNumber ?? null) : null,
+        requesterAvatarUrl: identityUnlocked
+          ? resolveQQAvatarUrl(
+              r.requester.authIdentities[0]?.avatarUrl,
+              r.requester.qqNumber
+            )
+          : null,
         targetNickname: identityUnlocked
           ? (r.target.authIdentities[0]?.nickname ?? null)
           : null,
         targetQQ: identityUnlocked ? (r.target.qqNumber ?? null) : null,
+        targetAvatarUrl: identityUnlocked
+          ? resolveQQAvatarUrl(
+              r.target.authIdentities[0]?.avatarUrl,
+              r.target.qqNumber
+            )
+          : null,
         // Include requester profile summary for incoming requests (so target can see who's asking)
         ...(type === 'incoming' && r.requester.profile ? {
           requesterProfile: {
