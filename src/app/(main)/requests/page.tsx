@@ -98,6 +98,40 @@ function getVisibleRequestIdentity({
   };
 }
 
+function ViewFullProfileButton({ href }: { href: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow transition-all hover:scale-[1.02] active:scale-[0.98]"
+    >
+      <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+      查看完整资料
+    </Link>
+  );
+}
+
+function ReportProfileIconLink({ targetQQ }: { targetQQ: string }) {
+  return (
+    <Link
+      href={`/report?targetQQ=${encodeURIComponent(targetQQ)}`}
+      aria-label="举报"
+      title="举报"
+      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all hover:bg-red-500/10 active:scale-95"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/report-icon.png"
+        alt=""
+        aria-hidden="true"
+        className="h-5 w-5 object-contain mix-blend-multiply"
+      />
+    </Link>
+  );
+}
+
 /* ─── Incoming Card ──────────────────────────────────── */
 
 function IncomingRequestCard({
@@ -137,9 +171,14 @@ function IncomingRequestCard({
             </div>
           </div>
         </div>
-        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusInfo.color}`}>
-          {statusInfo.label}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {request.status === "APPROVED" && request.requesterQQ && (
+            <ReportProfileIconLink targetQQ={request.requesterQQ} />
+          )}
+          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusInfo.color}`}>
+            {statusInfo.label}
+          </span>
+        </div>
       </div>
 
       {/* Requester profile summary */}
@@ -253,25 +292,8 @@ function IncomingRequestCard({
 
       {/* View requester profile link for APPROVED requests */}
       {request.status === "APPROVED" && (
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Link
-            href={`/matches/${request.requesterId}`}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
-          >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            查看完整资料
-          </Link>
-          {request.requesterQQ && (
-            <Link
-              href={`/report?targetQQ=${encodeURIComponent(request.requesterQQ)}`}
-              className="inline-flex self-end px-1 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-600 hover:underline sm:ml-auto sm:self-auto"
-            >
-              举报
-            </Link>
-          )}
+        <div className="mt-3 flex flex-col gap-3">
+          <ViewFullProfileButton href={`/matches/${request.requesterId}`} />
         </div>
       )}
     </div>
@@ -307,9 +329,14 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
             </div>
           </div>
         </div>
-        <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusInfo.color}`}>
-          {statusInfo.label}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {request.status === "APPROVED" && request.targetQQ && (
+            <ReportProfileIconLink targetQQ={request.targetQQ} />
+          )}
+          <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusInfo.color}`}>
+            {statusInfo.label}
+          </span>
+        </div>
       </div>
       {request.message && (
         <div className="mt-3 rounded-lg bg-[hsl(var(--secondary)/0.5)] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">
@@ -317,31 +344,14 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
         </div>
       )}
       {request.status === "APPROVED" && (
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="mt-3 flex flex-col gap-3">
           <div className="flex items-center gap-1.5 text-xs text-emerald-400">
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
               <polyline points="20 6 9 17 4 12" />
             </svg>
             <span>对方已通过，你们已可互相查看完整资料</span>
           </div>
-          <Link
-            href={`/matches/${request.targetUserId}`}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-all hover:scale-[1.02]"
-          >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            查看完整资料
-          </Link>
-          {request.targetQQ && (
-            <Link
-              href={`/report?targetQQ=${encodeURIComponent(request.targetQQ)}`}
-              className="inline-flex self-end px-1 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-600 hover:underline sm:ml-auto sm:self-auto"
-            >
-              举报
-            </Link>
-          )}
+          <ViewFullProfileButton href={`/matches/${request.targetUserId}`} />
         </div>
       )}
       {request.status === "REJECTED" && (

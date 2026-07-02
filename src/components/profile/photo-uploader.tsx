@@ -219,9 +219,10 @@ export function PhotoUploader({
             {!readOnly && (
             <button
               type="button"
+              aria-label="删除照片"
               onClick={() => handleDelete(photo.id)}
               disabled={deletingId === photo.id}
-              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur-sm transition-all hover:bg-[hsl(var(--destructive))] group-hover:opacity-100 disabled:opacity-50"
+              className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white opacity-100 backdrop-blur-sm transition-all hover:bg-[hsl(var(--destructive))] disabled:opacity-50 sm:h-7 sm:w-7 sm:opacity-0 sm:group-hover:opacity-100"
             >
               {deletingId === photo.id ? (
                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -309,10 +310,10 @@ export function PhotoUploader({
 
       {/* ─── Photo Consent Modal ─── */}
       {showConsentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-xl max-h-[85vh] flex flex-col">
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-3 pb-[calc(6rem+env(safe-area-inset-bottom))] sm:items-center sm:p-4">
+          <div className="flex max-h-[min(72dvh,640px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-xl sm:max-h-[85vh]">
             {/* Header */}
-            <div className="flex items-center gap-2 px-6 pt-6 pb-4">
+            <div className="shrink-0 flex items-center gap-2 px-4 pb-3 pt-4 sm:px-6 sm:pb-4 sm:pt-6">
               <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
                 <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
                 <circle cx="12" cy="13" r="3" />
@@ -323,7 +324,7 @@ export function PhotoUploader({
             </div>
 
             {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto px-6 pb-2">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3 sm:px-6 sm:pb-2">
               <p className="mb-4 text-sm text-[hsl(var(--muted-foreground))]">
                 上传照片前，请先了解以下几点：
               </p>
@@ -376,7 +377,7 @@ export function PhotoUploader({
             </div>
 
             {/* Buttons */}
-            <div className="flex gap-3 px-6 pb-6 pt-3 border-t border-[hsl(var(--border))]">
+            <div className="shrink-0 flex gap-3 border-t border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 pb-4 pt-3 sm:px-6 sm:pb-6">
               <button
                 type="button"
                 onClick={() => setShowConsentModal(false)}

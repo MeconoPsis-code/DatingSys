@@ -140,6 +140,25 @@ function setBestRequestStatus(
   }
 }
 
+function ReportProfileIconLink({ targetQQ }: { targetQQ: string }) {
+  return (
+    <Link
+      href={`/report?targetQQ=${encodeURIComponent(targetQQ)}`}
+      aria-label="举报"
+      title="举报"
+      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all hover:bg-red-500/10 active:scale-95"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/report-icon.png"
+        alt=""
+        aria-hidden="true"
+        className="h-5 w-5 object-contain mix-blend-multiply"
+      />
+    </Link>
+  );
+}
+
 /* ─── Match Card ─────────────────────────────────────── */
 
 function MutualMatchCard({
@@ -187,41 +206,46 @@ function MutualMatchCard({
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-all hover:border-[hsl(var(--primary)/0.3)] sm:p-5">
       {/* Header: avatar + name + badges */}
-      <div className="mb-4 flex items-start gap-3">
-        <div
-          aria-label={identityUnlocked ? "用户头像" : "随机头像"}
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${
-            identityUnlocked
-              ? getAvatarColor(match.userId)
-              : maskedIdentity.color
-          } text-lg font-bold text-white`}
-        >
-          {identityUnlocked ? getInitial(match.nickname) : maskedIdentity.letter}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-base font-semibold text-[hsl(var(--foreground))]">
-              {identityUnlocked ? (
-                match.nickname || "匿名用户"
-              ) : (
-                maskedIdentity.name
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div
+            aria-label={identityUnlocked ? "用户头像" : "随机头像"}
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${
+              identityUnlocked
+                ? getAvatarColor(match.userId)
+                : maskedIdentity.color
+            } text-lg font-bold text-white`}
+          >
+            {identityUnlocked ? getInitial(match.nickname) : maskedIdentity.letter}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-base font-semibold text-[hsl(var(--foreground))]">
+                {identityUnlocked ? (
+                  match.nickname || "匿名用户"
+                ) : (
+                  maskedIdentity.name
+                )}
+              </h3>
+              {match.hasPhotos && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-brand-blue/30 bg-blue-1 px-2 py-0.5 text-[10px] font-medium text-brand-blue">
+                  <svg viewBox="0 0 24 24" className="h-3 w-3 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                    <circle cx="12" cy="13" r="3" />
+                  </svg>
+                  有照片
+                </span>
               )}
-            </h3>
-            {match.hasPhotos && (
-              <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-brand-blue/30 bg-blue-1 px-2 py-0.5 text-[10px] font-medium text-brand-blue">
-                <svg viewBox="0 0 24 24" className="h-3 w-3 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-                  <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-                  <circle cx="12" cy="13" r="3" />
-                </svg>
-                有照片
-              </span>
-            )}
-          </div>
-          <div className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
-            {match.age} 岁 · {getProvinceName(match.provinceCode)} ·{" "}
-            {getCityName(match.provinceCode, match.cityCode)}
+            </div>
+            <div className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
+              {match.age} 岁 · {getProvinceName(match.provinceCode)} ·{" "}
+              {getCityName(match.provinceCode, match.cityCode)}
+            </div>
           </div>
         </div>
+        {viewRequestStatus === "APPROVED" && viewDetail?.qqNumber && (
+          <ReportProfileIconLink targetQQ={viewDetail.qqNumber} />
+        )}
       </div>
 
       {/* Stats row */}
@@ -282,41 +306,35 @@ function MutualMatchCard({
       )}
 
       {/* View request / QQ reveal section */}
-      <div className="mb-4">
+      <div className="mt-3">
         {viewRequestStatus === "APPROVED" ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             {/* QQ number revealed */}
             {viewDetail?.qqNumber && (
-              <div className="flex w-full flex-col items-start gap-2 sm:flex-row sm:items-center">
+              <div className="flex w-full flex-col items-start gap-2">
                 <button
                   type="button"
                   onClick={() => handleCopyQQ(viewDetail.qqNumber!)}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-3 py-2 text-xs font-medium text-white transition-all hover:scale-[1.02] active:scale-[0.98] sm:w-auto sm:py-1.5"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-4 py-2 text-sm font-semibold text-white shadow transition-all hover:scale-[1.02] active:scale-[0.98]"
                 >
                   QQ: {viewDetail.qqNumber}
-                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                 </button>
                 {qqCopied && (
                   <span className="text-[10px] text-emerald-400">已复制</span>
                 )}
-                <Link
-                  href={`/report?targetQQ=${encodeURIComponent(viewDetail.qqNumber)}`}
-                  className="inline-flex self-end px-1 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-600 hover:underline sm:ml-auto sm:self-auto"
-                >
-                  举报
-                </Link>
               </div>
             )}
             {match.hasPhotos && match.currentUserHasPhotos && (
               <Link
                 href={`/matches/${match.userId}`}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-2 text-center text-xs font-medium text-white transition-all hover:scale-[1.02] sm:inline-flex sm:w-auto sm:py-1.5"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-2 text-center text-sm font-semibold text-white shadow transition-all hover:scale-[1.02] active:scale-[0.98]"
               >
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-                  <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
-                  <circle cx="12" cy="13" r="3" />
+                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
                 </svg>
                 查看照片与完整资料
               </Link>
@@ -325,25 +343,25 @@ function MutualMatchCard({
         ) : viewRequestStatus === "PENDING_INCOMING" ? (
           <Link
             href="/requests"
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-xs font-medium text-amber-500 transition-all hover:bg-amber-500/15 sm:inline-flex sm:w-auto sm:py-1.5"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-sm font-semibold text-amber-500 transition-all hover:bg-amber-500/15"
           >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
               <rect width="20" height="16" x="2" y="4" rx="2" />
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
             对方已申请查看你 · 去处理
           </Link>
         ) : viewRequestStatus === "PENDING" ? (
-          <span className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-3 py-2 text-center text-xs text-[hsl(var(--muted-foreground))] sm:inline-flex sm:w-auto sm:py-1.5">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <span className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-4 py-2 text-center text-sm font-semibold text-[hsl(var(--muted-foreground))]">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
             资料查看申请待审核
           </span>
         ) : viewRequestStatus === "REJECTED" ? (
-          <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-3 py-2 text-center text-xs text-[hsl(0,60%,65%)] sm:inline-flex sm:w-auto sm:py-1.5">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-4 py-2 text-center text-sm font-semibold text-[hsl(0,60%,65%)]">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
               <circle cx="12" cy="12" r="10" />
               <line x1="15" y1="9" x2="9" y2="15" />
               <line x1="9" y1="9" x2="15" y2="15" />
@@ -354,9 +372,9 @@ function MutualMatchCard({
           <button
             type="button"
             onClick={() => onRequestView(match.userId)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-brand-blue/30 bg-blue-1 px-3 py-2 text-center text-xs font-medium text-brand-blue transition-all hover:bg-brand-blue/20 sm:inline-flex sm:w-auto sm:py-1.5"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-brand-blue/30 bg-blue-1 px-4 py-2 text-center text-sm font-semibold text-brand-blue transition-all hover:bg-brand-blue/20"
           >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 9.9-1" />
             </svg>

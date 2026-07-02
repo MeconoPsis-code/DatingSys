@@ -99,18 +99,18 @@ export function NumberStepperInput({
 
   return (
     <div
-      className={`inline-flex max-w-full flex-wrap items-center gap-1 bg-transparent ${className}`}
+      className={`inline-flex max-w-full flex-nowrap items-center gap-1 bg-transparent sm:gap-1 ${className}`}
     >
       <button
         type="button"
         aria-label={`减少${ariaLabel}`}
         disabled={currentValue <= min}
         onClick={() => stepBy(-step)}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-brand-blue transition-all hover:bg-blue-1 disabled:pointer-events-none disabled:text-brand-muted/50"
+        className="flex h-8 w-6 shrink-0 items-center justify-center rounded-md text-brand-blue transition-all hover:bg-blue-1 disabled:pointer-events-none disabled:text-brand-muted/50 sm:w-8"
       >
-        <Minus className="h-4 w-4" />
+        <Minus className="h-4 w-4 stroke-[3] sm:stroke-2" />
       </button>
-      <div className="flex h-8 items-center rounded-md bg-slate-50/70 px-2 ring-1 ring-brand-line/70">
+      <div className="flex h-8 shrink-0 items-center rounded-md bg-slate-50/70 px-1.5 ring-1 ring-brand-line/70 sm:px-2">
         <input
           type="number"
           inputMode={stepPrecision(step) > 0 ? "decimal" : "numeric"}
@@ -122,14 +122,14 @@ export function NumberStepperInput({
           onChange={(e) => updateDraft(e.target.value)}
           onBlur={() => commitDraft()}
           onKeyDown={handleKeyDown}
-          className="h-full w-14 bg-transparent text-center text-sm font-bold tabular-nums text-brand-blue outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          className="h-full w-[3.25ch] bg-transparent text-center text-[13px] font-bold tabular-nums text-brand-blue outline-none [appearance:textfield] sm:w-14 sm:text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
         {unit && (
-          <span className="ml-1 text-xs font-bold text-brand-blue">{unit}</span>
+          <span className="ml-1 shrink-0 text-[9px] font-bold leading-none text-brand-blue sm:text-xs">{unit}</span>
         )}
       </div>
       {detail && (
-        <span className="px-1 text-xs font-semibold tabular-nums text-brand-muted">
+        <span className="whitespace-nowrap px-0.5 text-[10px] font-semibold tabular-nums text-brand-muted sm:px-1 sm:text-xs">
           {detail(currentValue)}
         </span>
       )}
@@ -138,9 +138,9 @@ export function NumberStepperInput({
         aria-label={`增加${ariaLabel}`}
         disabled={currentValue >= max}
         onClick={() => stepBy(step)}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-brand-blue transition-all hover:bg-blue-1 disabled:pointer-events-none disabled:text-brand-muted/50"
+        className="flex h-8 w-6 shrink-0 items-center justify-center rounded-md text-brand-blue transition-all hover:bg-blue-1 disabled:pointer-events-none disabled:text-brand-muted/50 sm:w-8"
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="h-4 w-4 stroke-[3] sm:stroke-2" />
       </button>
     </div>
   );

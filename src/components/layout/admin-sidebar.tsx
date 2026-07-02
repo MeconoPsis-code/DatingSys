@@ -281,9 +281,12 @@ export function AdminSidebar() {
       <div className="mt-auto flex flex-col gap-4 px-[18px]">
         <Link
           href="/profile"
-          className="flex items-center gap-2 rounded-lg px-2 py-1 text-xs font-medium text-brand-blue transition-colors hover:text-blue-700"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-brand-blue/15 bg-blue-1 px-3 text-sm font-semibold text-brand-blue shadow-[0_8px_18px_rgba(22,119,255,0.08)] transition-all hover:border-brand-blue/25 hover:bg-blue-2 hover:shadow-[0_10px_22px_rgba(22,119,255,0.12)] active:scale-[0.98]"
         >
-          ← 返回用户端
+          <span className="shrink-0 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
+            {returnToUserIcon}
+          </span>
+          返回用户端
         </Link>
       </div>
     </aside>

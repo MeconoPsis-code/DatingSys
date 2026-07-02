@@ -244,13 +244,11 @@ function OneWayMatchCard({
   onRequestView,
   viewRequestStatus,
   currentUserHasPhotos,
-  viewDetail,
 }: {
   match: OneWayMatch;
   onRequestView: (userId: string) => void;
   viewRequestStatus: string | null;
   currentUserHasPhotos: boolean;
-  viewDetail: { qqNumber: string | null } | null;
 }) {
   const isMeFitsThem = match.direction === "me_fits_them";
   const directionLabel = isMeFitsThem ? "我符合他" : "他符合我";
@@ -404,14 +402,6 @@ function OneWayMatchCard({
               </svg>
               已通过 · 查看完整资料
             </Link>
-            {viewDetail?.qqNumber && (
-              <Link
-                href={`/report?targetQQ=${encodeURIComponent(viewDetail.qqNumber)}`}
-                className="inline-flex self-end px-1 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-600 hover:underline sm:ml-auto sm:self-auto"
-              >
-                举报
-              </Link>
-            )}
           </div>
         )}
         {viewRequestStatus === "REJECTED" && (
@@ -456,7 +446,6 @@ export default function OneWayMatchesPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
   const [viewRequestMap, setViewRequestMap] = useState<Record<string, string>>({});
-  const [approvedDetails, setApprovedDetails] = useState<Record<string, { qqNumber: string | null }>>({});
   const [requesting, setRequesting] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | MatchDirection>("all");
@@ -549,27 +538,6 @@ export default function OneWayMatchesPage() {
       cancelled = true;
     };
   }, [fetchMatches, fetchViewRequests]);
-
-  useEffect(() => {
-    const approvedUserIds = Object.entries(viewRequestMap)
-      .filter(([, status]) => status === "APPROVED")
-      .map(([userId]) => userId);
-
-    for (const userId of approvedUserIds) {
-      if (approvedDetails[userId]) continue;
-      fetch(`/api/matches/${userId}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data?.data?.qqNumber !== undefined) {
-            setApprovedDetails((prev) => ({
-              ...prev,
-              [userId]: { qqNumber: data.data.qqNumber },
-            }));
-          }
-        })
-        .catch(() => {});
-    }
-  }, [viewRequestMap, approvedDetails]);
 
   async function sendViewRequest(targetUserId: string) {
     setRequesting(true);
@@ -756,7 +724,6 @@ export default function OneWayMatchesPage() {
               onRequestView={(userId) => setConfirmTarget(userId)}
               viewRequestStatus={viewRequestMap[match.userId] ?? null}
               currentUserHasPhotos={currentUserHasPhotos}
-              viewDetail={approvedDetails[match.userId] ?? null}
             />
           ))}
         </div>

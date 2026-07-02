@@ -78,9 +78,13 @@ export function DualRangeSlider({
   return (
     <div>
       {/* Value labels */}
-      <div className="mb-2 flex flex-col gap-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
-        <div className="flex justify-start">
+      <div
+        className="mb-2 grid items-center gap-0 sm:gap-2"
+        style={{ gridTemplateColumns: "minmax(0, 1fr) 1.5rem minmax(0, 1fr)" }}
+      >
+        <div className="flex min-w-0 justify-start">
           <NumberStepperInput
+            className="justify-start"
             value={safeValueMin}
             min={min}
             max={safeValueMax}
@@ -91,11 +95,13 @@ export function DualRangeSlider({
             detail={detail}
           />
         </div>
-        <span className="self-center text-center text-xs font-semibold text-[hsl(var(--muted-foreground))]">
-          ~
+        <span className="flex h-10 items-center justify-center text-sm font-semibold leading-none text-[hsl(var(--muted-foreground))] sm:text-xl">
+          <span className="sm:hidden">至</span>
+          <span className="hidden sm:inline">—</span>
         </span>
-        <div className="flex justify-start sm:justify-end">
+        <div className="flex min-w-0 justify-end">
           <NumberStepperInput
+            className="justify-end"
             value={safeValueMax}
             min={safeValueMin}
             max={max}

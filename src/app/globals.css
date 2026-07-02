@@ -448,12 +448,19 @@ textarea {
 .slider-input {
   -webkit-appearance: none;
   appearance: none;
+  display: block;
   height: 8px;
   border-radius: 999px;
   background: hsl(var(--border));
   outline: none;
   cursor: pointer;
   transition: background 0.2s;
+}
+
+.slider-input::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(var(--border));
 }
 
 .slider-input::-webkit-slider-thumb {
@@ -466,7 +473,7 @@ textarea {
   border: 3px solid hsl(var(--card));
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
   cursor: pointer;
-  margin-top: -7px;
+  margin-top: -6px;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 

@@ -66,11 +66,16 @@ export async function GET(
       return error('NOT_FOUND', '用户不存在或未完善资料', 404);
     }
 
-    // 3. Check if current user has photos
+    // 3. Check if current user has completed the photo-participation requirements.
+    const currentUserProfile = await db.profile.findUnique({
+      where: { userId: session.id },
+      include: { photos: { select: { id: true } } },
+    });
     const currentUserRatingProfile = await db.ratingProfile.findUnique({
       where: { userId: session.id },
     });
-    const currentUserHasPhotos = currentUserRatingProfile !== null;
+    const currentUserHasPhotos =
+      (currentUserProfile?.photos.length ?? 0) > 0 && currentUserRatingProfile !== null;
 
     // 4. Photos require an approved ViewRequest AND the requesting user must also have photos
     const photoApproved = !!approvedRequest;

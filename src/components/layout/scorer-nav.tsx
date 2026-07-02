@@ -19,9 +19,13 @@ export function ScorerNav() {
         </span>
         <Link
           href="/profile"
-          className="text-xs font-semibold text-white/80 transition-colors hover:text-white"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/25 bg-white/15 px-3 text-xs font-semibold text-white shadow-[0_8px_18px_rgba(15,23,42,0.12)] backdrop-blur transition-all hover:border-white/35 hover:bg-white/20 active:scale-[0.98]"
         >
-          ← 返回用户端
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <path d="M19 12H5" />
+            <path d="m12 19-7-7 7-7" />
+          </svg>
+          <span>返回用户端</span>
         </Link>
       </div>
     </header>

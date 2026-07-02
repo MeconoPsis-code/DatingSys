@@ -19,6 +19,7 @@ import {
   WEIGHT_MAX_KG,
   WEIGHT_MIN_KG,
 } from "@/lib/profile-limits";
+import { formatBmi } from "@/lib/bmi";
 
 interface PhotoItem {
   id: string;
@@ -182,6 +183,10 @@ export default function ProfileEditPage() {
   const cities = useMemo(
     () => (form.provinceCode ? getCities(form.provinceCode) : []),
     [form.provinceCode]
+  );
+  const bmiValue = useMemo(
+    () => formatBmi(Number(form.heightCm), Number(form.weightKg)),
+    [form.heightCm, form.weightKg]
   );
 
   /* ── Fetch existing profile ── */
@@ -616,7 +621,10 @@ export default function ProfileEditPage() {
 
       {/* Section 1: Basic Info */}
       <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6">
-        <h2 className="mb-5 text-base font-semibold text-[hsl(var(--foreground))]">基本信息</h2>
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">基本信息</h2>
+          <BmiBadge value={bmiValue} />
+        </div>
 
         {/* Birth date */}
         <div className="mb-4">
@@ -1048,9 +1056,20 @@ export default function ProfileEditPage() {
             type="button"
             onClick={() => handleSubmit("DRAFT")}
             disabled={submitting}
-            className="flex min-h-12 flex-1 items-center justify-center rounded-xl border border-[hsl(var(--border))] bg-white px-3 py-2.5 text-center text-xs font-semibold leading-tight text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] active:scale-[0.98] disabled:opacity-50 sm:text-sm"
+            className="flex min-h-12 flex-1 flex-col items-center justify-center rounded-xl border border-[hsl(var(--border))] bg-white px-3 py-2.5 text-center text-xs font-semibold leading-tight text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] active:scale-[0.98] disabled:opacity-50 sm:flex-row sm:gap-1 sm:text-sm"
           >
-            {submitting ? "保存中..." : originalProfileStatus === "ACTIVE" ? "保存草稿（不影响已发布资料）" : "保存草稿"}
+            {submitting ? (
+              "保存中..."
+            ) : originalProfileStatus === "ACTIVE" ? (
+              <>
+                <span>保存草稿</span>
+                <span className="mt-0.5 text-[11px] font-medium text-[hsl(var(--muted-foreground))] sm:mt-0 sm:text-sm sm:text-[hsl(var(--foreground))]">
+                  不影响已发布资料
+                </span>
+              </>
+            ) : (
+              "保存草稿"
+            )}
           </button>
           <button
             type="button"
@@ -1091,5 +1110,13 @@ export default function ProfileEditPage() {
         }}
       />
     </div>
+  );
+}
+
+function BmiBadge({ value }: { value: string }) {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-2.5 py-1 text-xs font-medium text-[hsl(var(--muted-foreground))]">
+      BMI&nbsp;<span className="text-[hsl(var(--foreground))]">{value}</span>
+    </span>
   );
 }

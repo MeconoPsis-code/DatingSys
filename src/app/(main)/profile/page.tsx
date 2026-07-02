@@ -8,6 +8,7 @@ import { ATTRIBUTE_LABELS } from "@/data/attributes";
 import { getProvinceName, getCityName } from "@/data/regions";
 import { LOCATION_TYPE_LABELS } from "@/data/location-types";
 import { formatBmi } from "@/lib/bmi";
+import { buildGroupCardForProfile } from "@/lib/group-card";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -51,6 +52,12 @@ interface Preference {
   expectedCustomAttribute: string | null;
 }
 
+interface AccountInfo {
+  qqNumber: string | null;
+  nickname: string | null;
+  avatarUrl: string | null;
+}
+
 /* ─── Constants ──────────────────────────────────────── */
 
 const STATUS_LABELS: Record<ProfileStatus, { label: string; color: string }> = {
@@ -91,6 +98,7 @@ export default function ProfilePage() {
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [ratingInfo, setRatingInfo] = useState<RatingInfo | null>(null);
+  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
@@ -112,6 +120,20 @@ export default function ProfilePage() {
       setProfile(data.data?.profile ?? null);
       setPreference(data.data?.preference ?? null);
       setRatingInfo(data.data?.ratingProfile ?? null);
+
+      try {
+        const accountRes = await fetch("/api/auth/me");
+        if (accountRes.ok) {
+          const accountData = await accountRes.json();
+          setAccountInfo({
+            qqNumber: accountData.data?.qqNumber ?? null,
+            nickname: accountData.data?.nickname ?? null,
+            avatarUrl: accountData.data?.avatarUrl ?? null,
+          });
+        }
+      } catch {
+        setAccountInfo(null);
+      }
 
       // Load photos
       if (data.data?.profile) {
@@ -248,6 +270,8 @@ export default function ProfilePage() {
         我的资料
       </h1>
 
+      <AccountIdentityCard account={accountInfo} profile={profile} />
+
       {/* Profile card */}
       <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 sm:p-6">
         {/* Badges */}
@@ -302,6 +326,7 @@ export default function ProfilePage() {
         )}
 
         {/* Fields */}
+        <h2 className="mb-4 text-sm font-semibold text-[hsl(var(--foreground))]">个人资料</h2>
         <div className="space-y-4">
           <InfoRow label="出生日期" value={formatDate(profile.birthDate)} />
           <InfoRow label="身高" value={`${profile.heightCm} cm`} />
@@ -425,7 +450,13 @@ export default function ProfilePage() {
 
 /* ─── Helpers ────────────────────────────────────────── */
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
     <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
       <span className="text-xs font-medium text-[hsl(var(--muted-foreground))] sm:shrink-0">
@@ -435,5 +466,52 @@ function InfoRow({ label, value }: { label: string; value: string }) {
         {value}
       </span>
     </div>
+  );
+}
+
+function AccountIdentityCard({
+  account,
+  profile,
+}: {
+  account: AccountInfo | null;
+  profile: Profile | null;
+}) {
+  const displayName =
+    buildGroupCardForProfile(account?.nickname || "", profile) || "未设置群名片";
+  const initial = (account?.nickname || account?.qqNumber || "?").charAt(0).toUpperCase();
+
+  return (
+    <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 shadow-[0_12px_30px_rgba(15,23,42,0.04)] sm:p-5">
+      <div className="flex items-center gap-4">
+        <div className="relative h-14 w-14 shrink-0 sm:h-16 sm:w-16">
+          {account?.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={account.avatarUrl}
+              alt={displayName}
+              className="h-full w-full rounded-full object-cover shadow-md shadow-brand-blue/15"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                const target = e.currentTarget;
+                target.style.display = "none";
+                target.nextElementSibling?.classList.remove("hidden");
+              }}
+            />
+          ) : null}
+          <div
+            className={`flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-[#1677ff] to-[#0958d9] text-xl font-bold text-white shadow-md shadow-brand-blue/15 sm:text-2xl ${
+              account?.avatarUrl ? "hidden" : ""
+            }`}
+          >
+            {initial}
+          </div>
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold text-[hsl(var(--foreground))] sm:text-lg">
+            {displayName}
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

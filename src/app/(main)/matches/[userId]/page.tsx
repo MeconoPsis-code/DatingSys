@@ -65,6 +65,25 @@ function getAttrLabels(
   return labels;
 }
 
+function ReportProfileIconLink({ targetQQ }: { targetQQ: string }) {
+  return (
+    <Link
+      href={`/report?targetQQ=${encodeURIComponent(targetQQ)}`}
+      aria-label="举报"
+      title="举报"
+      className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all hover:bg-red-500/10 active:scale-95"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/report-icon.png"
+        alt=""
+        aria-hidden="true"
+        className="h-5 w-5 object-contain mix-blend-multiply"
+      />
+    </Link>
+  );
+}
+
 const LOCATION_TYPE_LABELS: Record<string, string> = {
   RESIDENCE: "常住地",
   HOMETOWN: "家乡",
@@ -87,8 +106,6 @@ export default function MatchDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [photoRequesting, setPhotoRequesting] = useState(false);
-  const [photoRequestError, setPhotoRequestError] = useState<string | null>(null);
 
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -145,28 +162,6 @@ export default function MatchDetailPage({
       setTimeout(() => setCopied(false), 1500);
     } catch { /* ignore */ }
     document.body.removeChild(ta);
-  }
-
-  async function handleRequestPhoto() {
-    setPhotoRequesting(true);
-    setPhotoRequestError(null);
-    try {
-      const res = await fetch("/api/view-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUserId: userId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error?.message || "申请失败");
-      }
-      // Refresh detail to reflect new state
-      await fetchDetail();
-    } catch (err) {
-      setPhotoRequestError(err instanceof Error ? err.message : "申请失败");
-    } finally {
-      setPhotoRequesting(false);
-    }
   }
 
   if (loading) {
@@ -263,18 +258,13 @@ export default function MatchDetailPage({
           <div className="flex flex-col items-center justify-center bg-[hsl(var(--secondary)/0.5)] py-12">
             <div className="mb-3 text-4xl">🔒</div>
             <p className="mb-1 text-sm font-medium text-[hsl(var(--foreground))]">该用户有照片</p>
-            <p className="mb-4 text-xs text-[hsl(var(--muted-foreground))]">需经对方授权后才能查看</p>
             <button
               type="button"
-              onClick={handleRequestPhoto}
-              disabled={photoRequesting}
-              className="rounded-lg bg-brand-blue px-4 py-2 text-xs font-semibold text-white shadow-md shadow-brand-blue/20 transition-all hover:scale-[1.02] hover:bg-brand-blue/90 active:scale-[0.98] disabled:opacity-50"
+              disabled
+              className="mt-4 cursor-not-allowed rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-4 py-2 text-xs font-semibold text-[hsl(var(--muted-foreground))] opacity-80"
             >
-              {photoRequesting ? "申请中..." : "📷 申请查看照片"}
+              📷 基础用户无权申请查看照片
             </button>
-            {photoRequestError && (
-              <p className="mt-2 text-xs text-[hsl(0,60%,65%)]">{photoRequestError}</p>
-            )}
           </div>
         )}
 
@@ -295,6 +285,7 @@ export default function MatchDetailPage({
                 ⭐ {detail.finalScore.toFixed(1)}
               </span>
             )}
+            {detail.qqNumber && <ReportProfileIconLink targetQQ={detail.qqNumber} />}
           </div>
 
           {/* Stats grid */}
