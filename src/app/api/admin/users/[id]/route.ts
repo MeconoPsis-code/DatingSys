@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { success, error } from "@/lib/api-response";
+import { deleteUsersPermanently } from "@/lib/admin-user-delete";
 
 // ── GET /api/admin/users/:id ────────────────────────────
 
@@ -110,40 +111,24 @@ export async function DELETE(
       return error("FORBIDDEN", "不能删除自己的账号", 403);
     }
 
-    const target = await db.user.findUnique({ where: { id } });
-    if (!target) {
+    const targetExists = await db.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!targetExists) {
       return error("NOT_FOUND", "用户不存在", 404);
     }
 
-    // Delete user and all related data in a transaction
-    await db.$transaction([
-      // Records without cascade that reference this user
-      db.ratingScore.deleteMany({ where: { scorerUserId: id } }),
-      db.ratingTask.deleteMany({ where: { ratedUserId: id } }),
-      db.matchSnapshot.deleteMany({ where: { OR: [{ userId: id }, { targetUserId: id }] } }),
-      db.viewRequest.deleteMany({ where: { OR: [{ requesterId: id }, { targetUserId: id }] } }),
-      db.report.deleteMany({ where: { OR: [{ reporterId: id }, { targetUserId: id }] } }),
-      db.penalty.deleteMany({ where: { OR: [{ userId: id }, { createdBy: id }] } }),
-      db.auditLog.deleteMany({ where: { actorUserId: id } }),
-      // Records with cascade will be handled automatically
-      db.user.delete({ where: { id } }),
-    ]);
-
-    // Audit log
-    await db.auditLog.create({
-      data: {
-        actorUserId: session.id,
-        action: "ADMIN_DELETE_USER",
-        targetType: "User",
-        targetId: id,
-        metadata: {
-          qqNumber: target.qqNumber,
-          role: target.role,
-        },
-      },
+    const result = await deleteUsersPermanently({
+      actorId: session.id,
+      userIds: [id],
     });
 
-    return success({ message: "用户已删除" });
+    return success({
+      message: "用户已删除",
+      deletedFiles: result.deletedFileKeys.length - result.failedFileDeletes.length,
+      failedFileDeletes: result.failedFileDeletes.length,
+    });
   } catch (err) {
     console.error("[admin/users/:id] DELETE error:", err);
     if (err && typeof err === "object" && "status" in err) {

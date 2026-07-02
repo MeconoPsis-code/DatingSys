@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { hasRole } from '@/lib/rbac';
 import { notify } from '@/lib/notifications';
+import { deleteUsersPermanently } from '@/lib/admin-user-delete';
 
 // ── POST /api/admin/users/:id/action ────────────────────
 
@@ -163,26 +164,18 @@ export async function POST(
         if (!hasRole(session.role, 'SUPER_ADMIN')) {
           return error('FORBIDDEN', '只有超级管理员可以审批删除', 403);
         }
+        if (id === session.id) {
+          return error('FORBIDDEN', '不能删除自己的账号', 403);
+        }
         if (target.status !== 'PENDING_DELETE') {
           return error('INVALID_STATE', '该用户未申请删除', 400);
         }
-        // Hard delete: remove all related data
-        // ProfilePhoto is cascade-deleted via Profile
-        await db.$transaction([
-          db.ratingScore.deleteMany({ where: { scorerUserId: id } }),
-          db.ratingTask.deleteMany({ where: { ratedUserId: id } }),
-          db.ratingProfile.deleteMany({ where: { userId: id } }),
-          db.viewRequest.deleteMany({ where: { OR: [{ requesterId: id }, { targetUserId: id }] } }),
-          db.matchSnapshot.deleteMany({ where: { OR: [{ userId: id }, { targetUserId: id }] } }),
-          db.report.deleteMany({ where: { OR: [{ reporterId: id }, { targetUserId: id }] } }),
-          db.preference.deleteMany({ where: { userId: id } }),
-          db.profile.deleteMany({ where: { userId: id } }),
-          db.groupMembership.deleteMany({ where: { userId: id } }),
-          db.authIdentity.deleteMany({ where: { userId: id } }),
-          db.penalty.deleteMany({ where: { userId: id } }),
-          db.auditLog.deleteMany({ where: { actorUserId: id } }),
-          db.user.delete({ where: { id } }),
-        ]);
+        await deleteUsersPermanently({
+          actorId: session.id,
+          userIds: [id],
+          auditAction: 'ADMIN_APPROVE_DELETE',
+          auditMetadata: { reason: reason.trim() },
+        });
         break;
       }
 

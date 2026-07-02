@@ -405,6 +405,116 @@ function DeleteConfirmModal({
 
 /* ─── Main Page ──────────────────────────────────────── */
 
+function BatchDeleteConfirmModal({
+  users,
+  onClose,
+  onSuccess,
+}: {
+  users: AdminUser[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [confirmation, setConfirmation] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const confirmText = "确认批量删除";
+  const previewUsers = users.slice(0, 6);
+
+  async function handleDelete() {
+    if (confirmation !== confirmText) {
+      return setErr(`请输入「${confirmText}」以确认批量删除`);
+    }
+    setSubmitting(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/admin/users/batch-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: users.map((user) => user.id) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "批量删除失败");
+      onSuccess();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "批量删除失败");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-red-500/30 bg-[hsl(var(--card))] p-6 shadow-2xl">
+        <h3 className="mb-1 text-base font-bold text-red-400">
+          批量删除用户
+        </h3>
+        <p className="mb-4 text-xs leading-5 text-[hsl(var(--muted-foreground))]">
+          即将永久删除 {users.length} 个用户，相关资料、匹配、举报、处罚记录和照片文件都会被清理。此操作不可逆。
+        </p>
+
+        <div className="mb-4 max-h-32 overflow-y-auto rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.55)] p-3">
+          <div className="space-y-1">
+            {previewUsers.map((user) => (
+              <div
+                key={user.id}
+                className="flex items-center justify-between gap-3 text-xs"
+              >
+                <span className="truncate text-[hsl(var(--foreground))]">
+                  {user.nickname || user.qqNumber || user.id}
+                </span>
+                <span className="font-mono text-[10px] text-[hsl(var(--muted-foreground))]">
+                  {user.qqNumber || user.id.slice(0, 8)}
+                </span>
+              </div>
+            ))}
+            {users.length > previewUsers.length && (
+              <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                另有 {users.length - previewUsers.length} 个用户
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="mb-1.5 block text-xs text-[hsl(var(--muted-foreground))]">
+            请输入 <span className="font-mono font-bold text-[hsl(var(--foreground))]">{confirmText}</span> 以确认
+          </label>
+          <input
+            type="text"
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+            placeholder={confirmText}
+            className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-3 py-2.5 text-sm text-[hsl(var(--foreground))] outline-none transition-colors focus:border-red-500/50"
+          />
+        </div>
+
+        {err && (
+          <p className="mb-3 text-xs text-red-400">{err}</p>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2.5 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))]"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={submitting || confirmation !== confirmText}
+            className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-semibold text-white transition-all hover:bg-red-500 disabled:opacity-40"
+          >
+            {submitting ? "删除中..." : "确认批量删除"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -417,6 +527,8 @@ export default function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [actionTarget, setActionTarget] = useState<AdminUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const pageSize = 20;
@@ -450,7 +562,11 @@ export default function AdminUsersPage() {
         throw new Error(data.error?.message || "加载失败");
       }
       const data = await res.json();
-      setUsers(data.data || []);
+      const nextUsers: AdminUser[] = data.data || [];
+      setUsers(nextUsers);
+      setSelectedIds((prev) =>
+        prev.filter((id) => nextUsers.some((user) => user.id === id)),
+      );
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
         setTotal(data.pagination.total);
@@ -463,6 +579,7 @@ export default function AdminUsersPage() {
   }, [page, search, roleFilter, statusFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetch table data when filters or pagination change.
     fetchUsers();
   }, [fetchUsers]);
 
@@ -470,6 +587,32 @@ export default function AdminUsersPage() {
     e.preventDefault();
     setPage(1);
     fetchUsers();
+  }
+
+  const selectedIdSet = new Set(selectedIds);
+  const selectedUsers = users.filter((user) => selectedIdSet.has(user.id));
+  const selectableUserIds = users
+    .filter((user) => currentUserId !== null && user.id !== currentUserId)
+    .map((user) => user.id);
+  const allCurrentPageSelected =
+    selectableUserIds.length > 0 &&
+    selectableUserIds.every((id) => selectedIdSet.has(id));
+
+  function toggleUserSelection(userId: string) {
+    setSelectedIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId],
+    );
+  }
+
+  function toggleCurrentPageSelection() {
+    setSelectedIds((prev) => {
+      if (allCurrentPageSelected) {
+        return prev.filter((id) => !selectableUserIds.includes(id));
+      }
+      return [...new Set([...prev, ...selectableUserIds])];
+    });
   }
 
   const SELECT_CLS =
@@ -522,9 +665,20 @@ export default function AdminUsersPage() {
           <option value="PENDING_DELETE">待删除</option>
         </select>
 
-        <span className="ml-auto text-xs text-[hsl(var(--muted-foreground))]">
-          共 {total} 个用户
-        </span>
+        <div className="ml-auto flex items-center gap-3">
+          {isSuperAdmin && selectedIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setBatchDeleteOpen(true)}
+              className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-400 transition-all hover:bg-red-500/20"
+            >
+              批量删除 ({selectedIds.length})
+            </button>
+          )}
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">
+            共 {total} 个用户
+          </span>
+        </div>
       </div>
 
       {/* Error */}
@@ -544,9 +698,21 @@ export default function AdminUsersPage() {
       {/* Table */}
       {!loading && (
         <div className="overflow-x-auto rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] [-webkit-overflow-scrolling:touch]">
-          <table className="min-w-[1120px] table-fixed border-collapse text-left text-sm">
+          <table className="min-w-[1180px] table-fixed border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
+                {isSuperAdmin && (
+                  <th className="w-[54px] px-4 py-3 font-medium whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      aria-label="选择当前页用户"
+                      checked={allCurrentPageSelected}
+                      disabled={selectableUserIds.length === 0}
+                      onChange={toggleCurrentPageSelection}
+                      className="h-4 w-4 rounded border-[hsl(var(--border))] accent-red-500 disabled:opacity-40"
+                    />
+                  </th>
+                )}
                 <th className="w-[130px] px-4 py-3 font-medium whitespace-nowrap">QQ号</th>
                 <th className="w-[150px] px-4 py-3 font-medium whitespace-nowrap">昵称</th>
                 <th className="w-[150px] px-4 py-3 font-medium whitespace-nowrap">角色</th>
@@ -564,12 +730,26 @@ export default function AdminUsersPage() {
                 const memberInfo = user.membershipStatus
                   ? MEMBERSHIP_LABELS[user.membershipStatus] || { label: user.membershipStatus, cls: "" }
                   : null;
+                const canSelectUser = currentUserId !== null && user.id !== currentUserId;
+                const isSelected = selectedIdSet.has(user.id);
 
                 return (
                   <tr
                     key={user.id}
                     className="border-b border-[hsl(var(--border)/0.5)] transition-colors hover:bg-[hsl(var(--secondary)/0.5)]"
                   >
+                    {isSuperAdmin && (
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          aria-label={`选择 ${user.nickname || user.qqNumber || user.id}`}
+                          checked={isSelected}
+                          disabled={!canSelectUser}
+                          onChange={() => toggleUserSelection(user.id)}
+                          className="h-4 w-4 rounded border-[hsl(var(--border))] accent-red-500 disabled:opacity-40"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">{user.qqNumber || "—"}</td>
                     <td className="px-4 py-3">
                       <span className="block truncate">{user.nickname || "—"}</span>
@@ -704,6 +884,19 @@ export default function AdminUsersPage() {
           onClose={() => setDeleteTarget(null)}
           onSuccess={() => {
             setDeleteTarget(null);
+            fetchUsers();
+          }}
+        />
+      )}
+
+      {/* Batch Delete Confirm Modal */}
+      {batchDeleteOpen && selectedUsers.length > 0 && (
+        <BatchDeleteConfirmModal
+          users={selectedUsers}
+          onClose={() => setBatchDeleteOpen(false)}
+          onSuccess={() => {
+            setBatchDeleteOpen(false);
+            setSelectedIds([]);
             fetchUsers();
           }}
         />
