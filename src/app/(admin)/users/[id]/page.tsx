@@ -1,9 +1,13 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useCallback } from "react";
 import Link from "next/link";
 import { getAttributeLabel } from "@/data/attributes";
-import type { Attribute } from "@prisma/client";
+import { getCityName, getProvinceName } from "@/data/regions";
+import { LOCATION_TYPE_LABELS } from "@/data/location-types";
+import { PhotoLightbox } from "@/components/profile/photo-lightbox";
+import { formatBmi } from "@/lib/bmi";
+import type { Attribute, LocationType } from "@prisma/client";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -25,6 +29,13 @@ interface AuditItem {
   createdAt: string;
 }
 
+interface ProfilePhotoItem {
+  id: string;
+  order: number;
+  originalName: string | null;
+  url: string;
+}
+
 interface UserDetail {
   id: string;
   qqNumber: string | null;
@@ -34,16 +45,33 @@ interface UserDetail {
   createdAt: string;
   lastLoginAt: string | null;
   profile: {
+    id: string;
+    status: string;
     birthDate: string;
     heightCm: number;
     weightKg: number;
     provinceCode: string;
     cityCode: string;
     attribute: string;
+    isSide: boolean;
+    isOther: boolean;
     customAttribute: string | null;
     mbti: string | null;
     selfIntro: string | null;
     locationType: string;
+    photoMatchPref: string | null;
+    highScoreOnly: boolean;
+    photos: ProfilePhotoItem[];
+  } | null;
+  preference: {
+    ageMin: number;
+    ageMax: number;
+    heightMinCm: number;
+    heightMaxCm: number;
+    weightMinKg: number;
+    weightMaxKg: number;
+    expectedAttributes: string[];
+    expectedCustomAttribute: string | null;
   } | null;
   membership: {
     status: string;
@@ -72,7 +100,21 @@ const ROLE_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE: "bg-[#f6ffed] text-[#389e0d] border-[#b7eb8f]",
   BANNED: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]",
+  PENDING_DELETE: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]",
   DELETED: "bg-[#f5f5f5] text-[#595959] border-[#d9d9d9]",
+};
+
+const PROFILE_STATUS_LABELS: Record<string, string> = {
+  DRAFT: "草稿",
+  ACTIVE: "已发布",
+  CLEARED: "已清空",
+  HIDDEN: "已隐藏",
+  FROZEN: "已冻结",
+};
+
+const PHOTO_MATCH_PREF_LABELS: Record<string, string> = {
+  ALL: "与所有用户匹配",
+  PHOTO_ONLY: "仅与有照片用户匹配",
 };
 
 const WARNING_ICON = (
@@ -111,6 +153,45 @@ function formatDateTime(d: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatDate(d: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function formatLocation(
+  provinceCode: string | null | undefined,
+  cityCode: string | null | undefined,
+) {
+  if (!provinceCode || !cityCode) return "—";
+  return `${getProvinceName(provinceCode)} · ${getCityName(provinceCode, cityCode)}`;
+}
+
+function formatExpectedAttributes(
+  attributes: string[],
+  expectedCustomAttribute: string | null,
+) {
+  if (!attributes.length) return "—";
+  return attributes
+    .map((attr) =>
+      attr === "OTHER" && expectedCustomAttribute
+        ? `其他: ${expectedCustomAttribute}`
+        : getAttributeLabel(attr as Attribute),
+    )
+    .join("、");
+}
+
+function formatPhotoMatchPref(photoMatchPref: string | null, highScoreOnly: boolean) {
+  if (!photoMatchPref) return "未设置";
+  if (photoMatchPref === "PHOTO_ONLY" && highScoreOnly) {
+    return "仅与高分有照片用户匹配";
+  }
+  return PHOTO_MATCH_PREF_LABELS[photoMatchPref] ?? photoMatchPref;
 }
 
 /* ─── Info Row ───────────────────────────────────────── */
@@ -233,10 +314,11 @@ export default function AdminUserDetailPage({
 }) {
   const { id } = use(params);
   const [user, setUser] = useState<UserDetail | null>(null);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function fetchUser() {
+  const fetchUser = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -252,12 +334,18 @@ export default function AdminUserDetailPage({
     } finally {
       setLoading(false);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
-    fetchUser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void fetchUser();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchUser]);
 
   if (loading) {
     return (
@@ -316,15 +404,105 @@ export default function AdminUserDetailPage({
           <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">个人资料</h3>
           {user.profile ? (
             <div className="divide-y divide-[hsl(var(--border)/0.5)]">
-              <InfoRow label="出生日期" value={formatDateTime(user.profile.birthDate)?.split(" ")[0]} />
+              <InfoRow label="资料状态" value={PROFILE_STATUS_LABELS[user.profile.status] || user.profile.status} />
+              <InfoRow label="出生日期" value={formatDate(user.profile.birthDate)} />
               <InfoRow label="身高" value={`${user.profile.heightCm} cm`} />
               <InfoRow label="体重" value={`${user.profile.weightKg} kg`} />
-              <InfoRow label="属性" value={getAttributeLabel(user.profile.attribute as Attribute, user.profile.customAttribute)} />
+              <InfoRow label="BMI" value={formatBmi(user.profile.heightCm, user.profile.weightKg)} />
+              <InfoRow
+                label="所在地"
+                value={formatLocation(user.profile.provinceCode, user.profile.cityCode)}
+              />
+              <InfoRow
+                label="地址类型"
+                value={
+                  LOCATION_TYPE_LABELS[user.profile.locationType as LocationType] ||
+                  user.profile.locationType
+                }
+              />
+              <InfoRow
+                label="属性"
+                value={getAttributeLabel(
+                  user.profile.attribute as Attribute,
+                  user.profile.customAttribute,
+                  user.profile.isSide,
+                  user.profile.isOther,
+                )}
+              />
               <InfoRow label="MBTI" value={user.profile.mbti || "—"} />
-              <InfoRow label="自我介绍" value={user.profile.selfIntro || "—"} />
+              <InfoRow
+                label="照片匹配"
+                value={formatPhotoMatchPref(
+                  user.profile.photoMatchPref,
+                  user.profile.highScoreOnly,
+                )}
+              />
+              <InfoRow
+                label="自我介绍"
+                value={
+                  user.profile.selfIntro ? (
+                    <span className="whitespace-pre-wrap">{user.profile.selfIntro}</span>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
             </div>
           ) : (
             <p className="text-sm text-[hsl(var(--muted-foreground))]">未填写资料</p>
+          )}
+        </div>
+
+        {/* Preference */}
+        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
+          <h3 className="mb-3 text-sm font-semibold text-[hsl(var(--foreground))]">用户期待</h3>
+          {user.preference ? (
+            <div className="divide-y divide-[hsl(var(--border)/0.5)]">
+              <InfoRow label="期望年龄" value={`${user.preference.ageMin} ~ ${user.preference.ageMax} 岁`} />
+              <InfoRow label="期望身高" value={`${user.preference.heightMinCm} ~ ${user.preference.heightMaxCm} cm`} />
+              <InfoRow label="期望体重" value={`${user.preference.weightMinKg} ~ ${user.preference.weightMaxKg} kg`} />
+              <InfoRow
+                label="期望属性"
+                value={formatExpectedAttributes(
+                  user.preference.expectedAttributes,
+                  user.preference.expectedCustomAttribute,
+                )}
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">未填写期待条件</p>
+          )}
+        </div>
+
+        {/* Photos */}
+        <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 lg:col-span-2">
+          <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-[hsl(var(--foreground))]">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
+            照片 ({user.profile?.photos.length ?? 0})
+          </h3>
+          {user.profile && user.profile.photos.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              {user.profile.photos.map((photo, index) => (
+                <button
+                  key={photo.id}
+                  type="button"
+                  onClick={() => setLightboxIdx(index)}
+                  className="group aspect-[4/3] overflow-hidden rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] text-left"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.url}
+                    alt={photo.originalName || `照片 ${photo.order + 1}`}
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">未上传照片</p>
           )}
         </div>
 
@@ -469,6 +647,14 @@ export default function AdminUserDetailPage({
           </div>
         )}
       </div>
+
+      {lightboxIdx !== null && user.profile && (
+        <PhotoLightbox
+          photos={user.profile.photos}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { success, error } from "@/lib/api-response";
 import { deleteUsersPermanently } from "@/lib/admin-user-delete";
+import { getSignedUrl } from "@/lib/storage";
 
 // ── GET /api/admin/users/:id ────────────────────────────
 
@@ -17,7 +18,11 @@ export async function GET(
       where: { id },
       include: {
         authIdentities: { select: { nickname: true }, take: 1 },
-        profile: true,
+        profile: {
+          include: {
+            photos: { orderBy: { order: "asc" } },
+          },
+        },
         preference: true,
         groupMembership: true,
         ratingProfile: {
@@ -60,6 +65,39 @@ export async function GET(
       take: 20,
     });
 
+    const photos = user.profile
+      ? await Promise.all(
+          user.profile.photos.map(async (photo) => ({
+            id: photo.id,
+            order: photo.order,
+            originalName: photo.originalName,
+            url: await getSignedUrl(photo.storageKey, 3600),
+          })),
+        )
+      : [];
+
+    const profile = user.profile
+      ? {
+          id: user.profile.id,
+          birthDate: user.profile.birthDate,
+          heightCm: user.profile.heightCm,
+          weightKg: user.profile.weightKg,
+          provinceCode: user.profile.provinceCode,
+          cityCode: user.profile.cityCode,
+          locationType: user.profile.locationType,
+          attribute: user.profile.attribute,
+          isSide: user.profile.isSide,
+          isOther: user.profile.isOther,
+          customAttribute: user.profile.customAttribute,
+          mbti: user.profile.mbti,
+          selfIntro: user.profile.selfIntro,
+          status: user.profile.status,
+          photoMatchPref: user.profile.photoMatchPref,
+          highScoreOnly: user.profile.highScoreOnly,
+          photos,
+        }
+      : null;
+
     return success({
       id: user.id,
       qqNumber: user.qqNumber,
@@ -68,7 +106,7 @@ export async function GET(
       createdAt: user.createdAt,
       lastLoginAt: user.lastLoginAt,
       nickname: user.authIdentities[0]?.nickname ?? null,
-      profile: user.profile,
+      profile,
       preference: user.preference,
       membership: user.groupMembership,
       ratingProfile: user.ratingProfile,

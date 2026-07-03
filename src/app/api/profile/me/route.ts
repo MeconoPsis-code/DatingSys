@@ -26,6 +26,7 @@ import {
   readProfileDraftData,
   toDraftJson,
 } from "@/lib/profile-draft";
+import { getDataDeleteCooldown } from "@/lib/user-cooldowns";
 
 const log = createLogger("api:profile-me");
 
@@ -230,6 +231,17 @@ export async function PUT(req: Request) {
       },
     },
   });
+
+  if (!isSuperAdmin) {
+    const dataDeleteCooldown = getDataDeleteCooldown(user?.lastProfileClearedAt);
+    if (dataDeleteCooldown) {
+      return error(
+        "COOLDOWN",
+        `删除数据冷却期间不能修改资料。还需等待 ${dataDeleteCooldown.remainingText}。`,
+        429
+      );
+    }
+  }
 
   // ─── DRAFT SAVE FOR ACTIVE PROFILES → store in draftData, don't touch published ───
   if (profileStatus === "DRAFT" && user?.profile?.status === "ACTIVE") {

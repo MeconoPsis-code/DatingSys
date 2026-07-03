@@ -6,6 +6,7 @@ import {
   formatMatchPrefCooldownRemaining,
   getMatchPrefCooldown,
 } from "@/lib/match-pref-cooldown";
+import { getDataDeleteCooldown } from "@/lib/user-cooldowns";
 
 type PhotoMatchPrefValue = "ALL" | "PHOTO_ONLY";
 
@@ -91,6 +92,17 @@ export async function PUT(req: Request) {
         ratingProfile: true,
       },
     });
+
+    if (!isSuperAdmin) {
+      const dataDeleteCooldown = getDataDeleteCooldown(user?.lastProfileClearedAt);
+      if (dataDeleteCooldown) {
+        return error(
+          "COOLDOWN_ACTIVE",
+          `删除数据冷却期间不能修改匹配池。还需等待 ${dataDeleteCooldown.remainingText}。`,
+          429
+        );
+      }
+    }
 
     if (!user?.profile) {
       return error("NOT_FOUND", "请先完成个人资料", 404);
