@@ -5,6 +5,7 @@ import { NextRequest } from 'next/server';
 import { can } from '@/lib/rbac';
 import { getOnDutyScorerIds } from '@/lib/scorer-duty';
 import { getAssignedScorerIdsForTask, SCOREABLE_TASK_STATUSES } from '@/lib/scoring';
+import { isPhotoReportReason } from '@/lib/photo-report-reasons';
 
 /**
  * POST /api/scoring/tasks/[taskId]/report
@@ -24,11 +25,8 @@ export async function POST(
     const body = await req.json();
     const reason = (body.reason as string)?.trim();
 
-    if (!reason || reason.length < 2) {
-      return error('INVALID_REASON', '请填写举报原因（至少2个字）', 400);
-    }
-    if (reason.length > 200) {
-      return error('REASON_TOO_LONG', '举报原因不能超过200字', 400);
+    if (!reason || !isPhotoReportReason(reason)) {
+      return error('INVALID_REASON', '请选择有效的举报原因', 400);
     }
 
     const task = await db.ratingTask.findUnique({ where: { id: taskId } });

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { NumberStepperInput } from "@/components/NumberStepperInput";
 import { PhotoLightbox } from "@/components/profile/photo-lightbox";
+import { PHOTO_REPORT_REASONS } from "@/lib/photo-report-reasons";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -426,7 +427,10 @@ export default function ScoringPage() {
                 {/* Report button */}
                 <button
                   type="button"
-                  onClick={() => setShowReportModal(true)}
+                  onClick={() => {
+                    setReportReason("");
+                    setShowReportModal(true);
+                  }}
                   className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(0,60%,65%)]"
                 >
                   <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
@@ -441,24 +445,61 @@ export default function ScoringPage() {
 
           {/* Report modal */}
           {showReportModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowReportModal(false)}>
-              <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-                <h3 className="mb-1 text-base font-semibold text-[hsl(var(--foreground))]">举报异常照片</h3>
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+              onClick={() => setShowReportModal(false)}
+            >
+              <div
+                className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-6 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="mb-1 text-base font-semibold text-[hsl(var(--foreground))]">
+                  举报异常照片
+                </h3>
                 <p className="mb-4 text-xs text-[hsl(var(--muted-foreground))]">
-                  请描述照片存在的问题（如非本人照片、不雅内容、截图等）
+                  请选择照片存在的违规行为，系统将按所选原因上报管理员。
                 </p>
-                <textarea
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                  maxLength={200}
-                  rows={3}
-                  placeholder="请输入举报原因..."
-                  className="mb-3 w-full resize-none rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
-                />
+                <div
+                  className="mb-4 grid grid-cols-2 gap-2"
+                  role="radiogroup"
+                  aria-label="异常照片违规行为"
+                >
+                  {PHOTO_REPORT_REASONS.map((reason) => {
+                    const selected = reportReason === reason;
+
+                    return (
+                      <button
+                        key={reason}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setReportReason(reason)}
+                        className={`flex min-h-10 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm font-medium transition-all ${
+                          selected
+                            ? "border-[hsl(0,60%,55%)] bg-[hsl(0,60%,55%/0.1)] text-[hsl(0,60%,55%)]"
+                            : "border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.35)] text-[hsl(var(--foreground))] hover:border-[hsl(0,60%,55%/0.45)] hover:bg-[hsl(0,60%,55%/0.06)]"
+                        }`}
+                      >
+                        <span>{reason}</span>
+                        {selected && (
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => { setShowReportModal(false); setReportReason(""); }}
+                    onClick={() => {
+                      setShowReportModal(false);
+                      setReportReason("");
+                    }}
                     className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
                   >
                     取消

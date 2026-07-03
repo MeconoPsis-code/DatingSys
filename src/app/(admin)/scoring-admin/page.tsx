@@ -599,6 +599,7 @@ export default function ScoringAdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState("1");
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
@@ -614,6 +615,29 @@ export default function ScoringAdminPage() {
       })
       .catch(() => {});
   }, []);
+
+  function clampPage(value: number) {
+    const maxPage = Math.max(1, totalPages);
+    return Math.min(Math.max(1, value), maxPage);
+  }
+
+  function goToPage(nextPage: number) {
+    const clampedPage = clampPage(nextPage);
+    setPage(clampedPage);
+    setPageInput(String(clampedPage));
+  }
+
+  function handlePageJump(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const nextPage = Number.parseInt(pageInput, 10);
+    if (Number.isNaN(nextPage)) {
+      setPageInput(String(page));
+      return;
+    }
+
+    goToPage(nextPage);
+  }
 
   const fetchTasks = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!silent) setLoading(true);
@@ -632,6 +656,10 @@ export default function ScoringAdminPage() {
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
         setTotal(data.pagination.total);
+        if (data.pagination.totalPages > 0 && page > data.pagination.totalPages) {
+          setPage(data.pagination.totalPages);
+          setPageInput(String(data.pagination.totalPages));
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
@@ -766,7 +794,7 @@ export default function ScoringAdminPage() {
           <button
             key={tab.value}
             type="button"
-            onClick={() => { setStatusFilter(tab.value); setPage(1); }}
+            onClick={() => { setStatusFilter(tab.value); setPage(1); setPageInput("1"); }}
             className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:justify-start sm:px-4 ${
               statusFilter === tab.value
                 ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
@@ -836,11 +864,11 @@ export default function ScoringAdminPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 py-2">
+        <div className="flex flex-wrap items-center justify-center gap-2 py-2">
           <button
             type="button"
             disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
+            onClick={() => goToPage(page - 1)}
             className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] disabled:opacity-40"
           >
             上一页
@@ -851,11 +879,32 @@ export default function ScoringAdminPage() {
           <button
             type="button"
             disabled={page >= totalPages}
-            onClick={() => setPage(page + 1)}
+            onClick={() => goToPage(page + 1)}
             className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] disabled:opacity-40"
           >
             下一页
           </button>
+          <form onSubmit={handlePageJump} className="flex items-center gap-1.5">
+            <label htmlFor="scoring-page-jump" className="text-sm text-[hsl(var(--muted-foreground))]">
+              跳至
+            </label>
+            <input
+              id="scoring-page-jump"
+              type="number"
+              min={1}
+              max={totalPages}
+              value={pageInput}
+              onChange={(event) => setPageInput(event.target.value)}
+              className="h-8 w-16 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 text-center text-sm font-medium text-[hsl(var(--foreground))] outline-none transition-all focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/15"
+            />
+            <span className="text-sm text-[hsl(var(--muted-foreground))]">页</span>
+            <button
+              type="submit"
+              className="rounded-lg border border-brand-blue/30 bg-blue-1 px-3 py-1.5 text-sm font-medium text-brand-blue transition-all hover:bg-brand-blue/15"
+            >
+              跳转
+            </button>
+          </form>
         </div>
       )}
     </div>

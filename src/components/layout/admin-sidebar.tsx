@@ -73,6 +73,18 @@ const links = [
     ),
   },
   {
+    label: "评分看板",
+    href: "/scoring-dashboard",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5">
+        <path d="M3 3v18h18" />
+        <path d="M8 17V9" />
+        <path d="M13 17V5" />
+        <path d="M18 17v-6" />
+      </svg>
+    ),
+  },
+  {
     label: "评分排班",
     href: "/scorer-schedule",
     icon: (

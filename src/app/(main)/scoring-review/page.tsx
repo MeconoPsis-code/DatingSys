@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -96,15 +96,15 @@ export default function ScoringReviewPage() {
   const [overrideMode, setOverrideMode] = useState(false);
   const [overrideScore, setOverrideScore] = useState(5.0);
   const [submitting, setSubmitting] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchEndRef = useRef<{ x: number; y: number } | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const status = tab === "review" ? "REVIEW" : "COMPLETED";
-      const res = await fetch(
-        `/api/admin/scoring?status=${status}&pageSize=50`
-      );
+      const res = await fetch(`/api/admin/scoring?status=${status}&pageSize=50`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error?.message || "加载失败");
@@ -127,9 +127,65 @@ export default function ScoringReviewPage() {
 
   function computeAverage(scores: ScoreEntry[]): number {
     if (scores.length === 0) return 0;
-    const avg =
-      scores.reduce((sum, s) => sum + s.score, 0) / scores.length;
+    const avg = scores.reduce((sum, s) => sum + s.score, 0) / scores.length;
     return Math.round(avg * 10) / 10;
+  }
+
+  function getPublishScore(task: ReviewTask, avg: number): number {
+    if (task.pendingActionType === "OVERRIDE" && task.pendingActionValue !== null) {
+      return task.pendingActionValue;
+    }
+
+    if (task.finalScore !== null) {
+      return task.finalScore;
+    }
+
+    return avg;
+  }
+
+  function getPublishScoreLabel(task: ReviewTask) {
+    if (task.pendingActionType === "OVERRIDE") return "待发布最终分";
+    if (task.finalScore !== null) return "最终分";
+    return "将发布均分";
+  }
+
+  function goToPhoto(direction: -1 | 1) {
+    const photoCount = activeTask?.photos.length ?? 0;
+    if (photoCount <= 1) return;
+
+    setPhotoIndex((prev) => (prev + direction + photoCount) % photoCount);
+  }
+
+  function handlePhotoTouchStart(event: React.TouchEvent<HTMLDivElement>) {
+    const touch = event.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    touchEndRef.current = null;
+  }
+
+  function handlePhotoTouchMove(event: React.TouchEvent<HTMLDivElement>) {
+    const touch = event.touches[0];
+    touchEndRef.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handlePhotoTouchEnd() {
+    if (!touchStartRef.current || !touchEndRef.current) return;
+
+    const deltaX = touchEndRef.current.x - touchStartRef.current.x;
+    const deltaY = touchEndRef.current.y - touchStartRef.current.y;
+    const isHorizontalSwipe =
+      Math.abs(deltaX) > 48 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4;
+
+    if (isHorizontalSwipe) {
+      goToPhoto(deltaX < 0 ? 1 : -1);
+    }
+
+    touchStartRef.current = null;
+    touchEndRef.current = null;
+  }
+
+  function handlePhotoTouchCancel() {
+    touchStartRef.current = null;
+    touchEndRef.current = null;
   }
 
   async function handleApprove(taskId: string) {
@@ -206,7 +262,10 @@ export default function ScoringReviewPage() {
   return (
     <div className="flex flex-col gap-5">
       <h1 className="flex items-center gap-2 text-2xl font-bold">
-        <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue"
+        >
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
           <path d="m9 11 2 2 4-4" />
         </svg>
@@ -220,14 +279,20 @@ export default function ScoringReviewPage() {
       <div className="flex gap-1 rounded-xl bg-[hsl(var(--secondary))] p-1">
         <button
           type="button"
-          onClick={() => { setTab("review"); setActiveTaskId(null); }}
+          onClick={() => {
+            setTab("review");
+            setActiveTaskId(null);
+          }}
           className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
             tab === "review"
               ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
               : "text-brand-muted hover:bg-slate-100/50 hover:text-brand-text"
           }`}
         >
-          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+          >
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
@@ -235,14 +300,20 @@ export default function ScoringReviewPage() {
         </button>
         <button
           type="button"
-          onClick={() => { setTab("completed"); setActiveTaskId(null); }}
+          onClick={() => {
+            setTab("completed");
+            setActiveTaskId(null);
+          }}
           className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all ${
             tab === "completed"
               ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
               : "text-brand-muted hover:bg-slate-100/50 hover:text-brand-text"
           }`}
         >
-          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+          >
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
@@ -269,11 +340,17 @@ export default function ScoringReviewPage() {
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
           <div className="mb-3 text-[hsl(var(--muted-foreground))]">
             {tab === "review" ? (
-              <svg viewBox="0 0 24 24" className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+              >
                 <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
               </svg>
             ) : (
-              <svg viewBox="0 0 24 24" className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+              >
                 <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
                 <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
               </svg>
@@ -290,6 +367,8 @@ export default function ScoringReviewPage() {
         <div className="space-y-3">
           {tasks.map((task) => {
             const avg = computeAverage(task.scores);
+            const publishScore = getPublishScore(task, avg);
+            const publishScoreLabel = getPublishScoreLabel(task);
             const isActive = activeTaskId === task.id;
 
             return (
@@ -315,13 +394,16 @@ export default function ScoringReviewPage() {
                   {/* Thumbnail */}
                   {task.photos[0] ? (
                     <img
-                       src={task.photos[0].url}
+                      src={task.photos[0].url}
                       alt=""
                       className="h-14 w-14 shrink-0 rounded-lg object-cover"
                     />
                   ) : (
                     <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]">
-                      <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                      >
                         <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
                         <circle cx="12" cy="13" r="3" />
                       </svg>
@@ -341,7 +423,9 @@ export default function ScoringReviewPage() {
                       {task.pendingActionType && (
                         <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-400">
                           <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                          {task.pendingActionType === "APPROVE" ? "待审核通过" : `待设定 ${task.pendingActionValue} 分`}
+                          {task.pendingActionType === "APPROVE"
+                            ? "待审核通过"
+                            : `待设定 ${task.pendingActionValue} 分`}
                         </span>
                       )}
                     </div>
@@ -349,12 +433,11 @@ export default function ScoringReviewPage() {
                       <span>{task.scoredCount} 人评分</span>
                       <span>·</span>
                       <span>均分 {avg}</span>
-                      {task.finalScore !== null && tab === "completed" && (
+                      {(task.pendingActionType === "OVERRIDE" ||
+                        task.finalScore !== null) && (
                         <>
                           <span>·</span>
-                          <span className="text-amber-400">
-                            最终 {task.finalScore}
-                          </span>
+                          <span className="text-amber-400">最终 {publishScore}</span>
                         </>
                       )}
                     </div>
@@ -363,14 +446,15 @@ export default function ScoringReviewPage() {
                   {/* Score badge */}
                   <div
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                      avg >= 7
+                      publishScore >= 7
                         ? "bg-emerald-500/15 text-emerald-400"
-                        : avg >= 5
-                        ? "bg-amber-500/15 text-amber-400"
-                        : "bg-[hsl(0,60%,50%/0.15)] text-[hsl(0,60%,65%)]"
+                        : publishScore >= 5
+                          ? "bg-amber-500/15 text-amber-400"
+                          : "bg-[hsl(0,60%,50%/0.15)] text-[hsl(0,60%,65%)]"
                     }`}
+                    title={publishScoreLabel}
                   >
-                    {avg}
+                    {publishScore}
                   </div>
                 </button>
 
@@ -380,27 +464,66 @@ export default function ScoringReviewPage() {
                     {/* Photo viewer */}
                     {activeTask.photos.length > 0 && (
                       <div className="mb-4">
-                        <div className="relative overflow-hidden rounded-xl bg-black">
+                        <div
+                          className="relative touch-pan-y overflow-hidden rounded-xl bg-black"
+                          onTouchStart={handlePhotoTouchStart}
+                          onTouchMove={handlePhotoTouchMove}
+                          onTouchEnd={handlePhotoTouchEnd}
+                          onTouchCancel={handlePhotoTouchCancel}
+                        >
                           <img
                             src={activeTask.photos[photoIndex]?.url}
                             alt={`Photo ${photoIndex + 1}`}
-                            className="mx-auto max-h-80 object-contain"
+                            className="mx-auto max-h-80 select-none object-contain"
+                            draggable={false}
                           />
                           {activeTask.photos.length > 1 && (
-                            <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
-                              {activeTask.photos.map((_, i) => (
-                                <button
-                                  key={i}
-                                  type="button"
-                                  onClick={() => setPhotoIndex(i)}
-                                  className={`h-2 w-2 rounded-full transition-all ${
-                                    i === photoIndex
-                                      ? "bg-white"
-                                      : "bg-white/40"
-                                  }`}
-                                />
-                              ))}
-                            </div>
+                            <>
+                              <button
+                                type="button"
+                                aria-label="上一张照片"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  goToPhoto(-1);
+                                }}
+                                className="absolute left-2 top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-all hover:bg-black/65 focus:outline-none focus:ring-2 focus:ring-white/70 sm:flex"
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  className="h-5 w-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                                >
+                                  <path d="m15 18-6-6 6-6" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                aria-label="下一张照片"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  goToPhoto(1);
+                                }}
+                                className="absolute right-2 top-1/2 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 text-white backdrop-blur-sm transition-all hover:bg-black/65 focus:outline-none focus:ring-2 focus:ring-white/70 sm:flex"
+                              >
+                                <svg
+                                  viewBox="0 0 24 24"
+                                  className="h-5 w-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                                >
+                                  <path d="m9 18 6-6-6-6" />
+                                </svg>
+                              </button>
+                              <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+                                {activeTask.photos.map((_, i) => (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => setPhotoIndex(i)}
+                                    className={`h-2 w-2 rounded-full transition-all ${
+                                      i === photoIndex ? "bg-white" : "bg-white/40"
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            </>
                           )}
                         </div>
                         <div className="mt-1 text-center text-xs text-[hsl(var(--muted-foreground))]">
@@ -428,8 +551,8 @@ export default function ScoringReviewPage() {
                                 s.score >= 7
                                   ? "text-emerald-400"
                                   : s.score >= 5
-                                  ? "text-amber-400"
-                                  : "text-[hsl(0,60%,65%)]"
+                                    ? "text-amber-400"
+                                    : "text-[hsl(0,60%,65%)]"
                               }`}
                             >
                               {s.score}
@@ -491,7 +614,10 @@ export default function ScoringReviewPage() {
                                 "处理中..."
                               ) : (
                                 <>
-                                  <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                                  >
                                     <polyline points="20 6 9 17 4 12" />
                                   </svg>
                                   <span>通过 ({avg} 分)</span>
@@ -506,7 +632,10 @@ export default function ScoringReviewPage() {
                               }}
                               className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 py-2.5 text-sm font-semibold text-amber-400 transition-all hover:bg-amber-500/20"
                             >
-                              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                              >
                                 <path d="M12 20h9" />
                                 <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                               </svg>
@@ -545,9 +674,7 @@ export default function ScoringReviewPage() {
                               <button
                                 type="button"
                                 disabled={submitting}
-                                onClick={() =>
-                                  handleOverride(activeTask.id)
-                                }
+                                onClick={() => handleOverride(activeTask.id)}
                                 className="flex-1 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 py-2 text-sm font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                               >
                                 {submitting
