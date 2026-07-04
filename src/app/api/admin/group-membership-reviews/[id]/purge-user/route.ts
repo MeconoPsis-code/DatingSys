@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
-import { logAudit } from '@/lib/audit';
 import { error } from '@/lib/api-response';
-import { MembershipStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
+import { deleteUsersPermanently } from '@/lib/admin-user-delete';
 
 const log = createLogger('admin:group-review-purge');
 
@@ -21,17 +20,8 @@ const REQUIRED_CONFIRM_TEXT = '确认清除该用户在系统数据库中的全�
  * - ADMIN+ role
  * - Body must contain `confirmText` matching exactly: '确认清除该用户在系统数据库中的全部记录'
  *
- * Deletes (in a single transaction):
- * - Profile (with cascade-deleted ProfilePhotos)
- * - Preference
- * - RatingProfile
- * - MatchSnapshots (both directions)
- * - ViewRequests (both directions)
- * - User record
- *
- * Updates:
- * - AdminReview status to 'resolved' with resolution 'purged'
- * - GroupMembership status to REMOVED
+ * Deletes user data through the shared permanent-delete path and preserves a
+ * REMOVED group membership record for audit/history.
  */
 export async function POST(
   req: NextRequest,
@@ -86,73 +76,17 @@ export async function POST(
       );
     }
 
-    // Purge all user data in a single transaction
-    await db.$transaction(async (tx) => {
-      // Delete profile (cascade deletes ProfilePhotos via Prisma relation)
-      await tx.profile.deleteMany({ where: { userId } });
-
-      // Delete preference
-      await tx.preference.deleteMany({ where: { userId } });
-
-      // Delete rating profile
-      await tx.ratingProfile.deleteMany({ where: { userId } });
-
-      // Delete match snapshots (both as user and target)
-      await tx.matchSnapshot.deleteMany({
-        where: { OR: [{ userId }, { targetUserId: userId }] },
-      });
-
-      // Delete view requests (both as requester and target)
-      await tx.viewRequest.deleteMany({
-        where: { OR: [{ requesterId: userId }, { targetUserId: userId }] },
-      });
-
-      // Update group membership to REMOVED
-      await tx.groupMembership.updateMany({
-        where: { userId },
-        data: {
-          status: MembershipStatus.REMOVED,
-          removedAt: new Date(),
-          reviewedBy: session.id,
-          reviewRemark: 'Admin purged user data',
-        },
-      });
-
-      // Delete the user record itself
-      await tx.user.delete({ where: { id: userId } });
-
-      // Update review to resolved
-      await tx.adminReview.update({
-        where: { id },
-        data: {
-          status: 'resolved',
-          resolution: 'purged',
-          handledBy: session.id,
-          handledAt: new Date(),
-        },
-      });
-    });
-
-    // Audit log (outside transaction — best-effort)
-    await logAudit({
+    const result = await deleteUsersPermanently({
       actorId: session.id,
-      action: 'PROFILE_CLEAR',
-      targetType: 'User',
-      targetId: userId,
-      metadata: {
+      userIds: [userId],
+      auditAction: 'ADMIN_GROUP_REVIEW_PURGE_USER',
+      auditMetadata: {
         reviewId: id,
         qqNumber: user.qqNumber,
         resolution: 'purged',
-        purgedModels: [
-          'Profile',
-          'Preference',
-          'RatingProfile',
-          'MatchSnapshot',
-          'ViewRequest',
-          'GroupMembership',
-          'User',
-        ],
       },
+      groupMembershipRemovalRemark: 'Admin purged user data from membership review',
+      groupMembershipReviewResolution: 'purged',
     });
 
     log.info(
@@ -160,7 +94,13 @@ export async function POST(
       'User data purged successfully',
     );
 
-    return NextResponse.json({ data: { success: true } });
+    return NextResponse.json({
+      data: {
+        success: true,
+        deletedFiles: result.deletedFileKeys.length - result.failedFileDeletes.length,
+        failedFileDeletes: result.failedFileDeletes.length,
+      },
+    });
   } catch (err) {
     log.error({ err }, 'Failed to purge user data');
     if (err && typeof err === 'object' && 'status' in err) {

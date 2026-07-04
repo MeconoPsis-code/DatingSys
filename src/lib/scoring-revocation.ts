@@ -2,8 +2,10 @@ import { db } from "@/lib/db";
 import { notify } from "@/lib/notifications";
 import { calculateAverageScore } from "@/lib/scoring";
 
+export const SCORE_ACTION_REVOCATION_WINDOW_MS = 5 * 60 * 1000;
+
 /**
- * Commits any rating task superadmin decisions whose 10-minute revocation window has expired.
+ * Commits any rating task superadmin decisions whose 5-minute revocation window has expired.
  * Processes APPROVE and OVERRIDE actions.
  */
 export async function commitExpiredActions() {
@@ -13,6 +15,7 @@ export async function commitExpiredActions() {
   const expiredTasks = await db.ratingTask.findMany({
     where: {
       status: "REVIEW",
+      pendingActionType: { in: ["APPROVE", "OVERRIDE"] },
       pendingActionExpiresAt: {
         lte: now,
       },

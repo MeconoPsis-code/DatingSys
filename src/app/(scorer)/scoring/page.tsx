@@ -29,6 +29,16 @@ const SCORE_MIN = 0;
 const SCORE_MAX = 10;
 const SCORE_STEP = 0.1;
 
+function createInitialScores() {
+  return {
+    contour: SCORE_MIN,
+    skin: SCORE_MIN,
+    harmony: SCORE_MIN,
+    styling: SCORE_MIN,
+    charisma: SCORE_MIN,
+  };
+}
+
 function normalizeScore(value: number) {
   return Number(Math.min(SCORE_MAX, Math.max(SCORE_MIN, value)).toFixed(1));
 }
@@ -55,7 +65,7 @@ function ScoreSlider({
           min={SCORE_MIN}
           max={SCORE_MAX}
           step={SCORE_STEP}
-          fallbackValue={5}
+          fallbackValue={SCORE_MIN}
           ariaLabel={`${label}评分`}
           onCommit={commitScore}
           className="sm:ml-auto"
@@ -90,13 +100,7 @@ export default function ScoringPage() {
   const [photoIndex, setPhotoIndex] = useState(0);
 
   // Scoring state — 5 sub-items
-  const [scores, setScores] = useState({
-    contour: 5,      // 轮廓与骨相
-    skin: 5,         // 皮肤状态
-    harmony: 5,      // 五官和谐度
-    styling: 5,      // 发型与造型
-    charisma: 5,     // 气质与眼缘
-  });
+  const [scores, setScores] = useState(createInitialScores);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -152,7 +156,7 @@ export default function ScoringPage() {
       setTasks(fetched);
       setCurrentIndex(0);
       setPhotoIndex(0);
-      setScores({ contour: 5, skin: 5, harmony: 5, styling: 5, charisma: 5 });
+      setScores(createInitialScores());
       setSubmitError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
@@ -178,7 +182,7 @@ export default function ScoringPage() {
       setTasks(remaining);
       setCurrentIndex(Math.min(currentIndex, remaining.length - 1));
       setPhotoIndex(0);
-      setScores({ contour: 5, skin: 5, harmony: 5, styling: 5, charisma: 5 });
+      setScores(createInitialScores());
       setSubmitError(null);
       return;
     }

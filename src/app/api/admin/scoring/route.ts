@@ -19,9 +19,30 @@ export async function GET(req: Request) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
     const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
     const status = url.searchParams.get('status') || undefined;
+    const search = url.searchParams.get('search')?.trim() || '';
 
     const where: Record<string, unknown> = {};
-    if (status) where.status = status;
+    if (status) {
+      const statuses = status
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+
+      where.status =
+        statuses.length > 1
+          ? { in: statuses }
+          : statuses[0] ?? status;
+    }
+    if (search) {
+      where.ratedUser = {
+        is: {
+          OR: [
+            { qqNumber: { contains: search } },
+            { authIdentities: { some: { nickname: { contains: search } } } },
+          ],
+        },
+      };
+    }
 
     const [total, tasks] = await Promise.all([
       db.ratingTask.count({ where }),

@@ -209,7 +209,7 @@ model AuthIdentity {
 /// Group membership verification status
 model GroupMembership {
   id              String           @id @default(cuid())
-  userId          String           @unique
+  userId          String?          @unique
   qqNumber        String
   groupId         String           @default("default")
   status          MembershipStatus @default(PENDING)
@@ -232,7 +232,7 @@ model GroupMembership {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  user     User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User? @relation(fields: [userId], references: [id], onDelete: SetNull)
   verifier User? @relation("MembershipVerifier", fields: [verifiedBy], references: [id])
   revoker  User? @relation("MembershipRevoker", fields: [revokedBy], references: [id])
 

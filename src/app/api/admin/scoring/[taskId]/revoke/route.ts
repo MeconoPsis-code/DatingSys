@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
+import { commitExpiredActions } from '@/lib/scoring-revocation';
 
 /**
  * POST /api/admin/scoring/[taskId]/revoke
@@ -13,6 +14,8 @@ export async function POST(
   try {
     const session = await requireRole('SUPER_ADMIN');
     const { taskId } = await params;
+
+    await commitExpiredActions();
 
     const task = await db.ratingTask.findUnique({
       where: { id: taskId },
@@ -31,10 +34,17 @@ export async function POST(
     }
 
     const previousActionType = task.pendingActionType;
+    const previousActionValue = task.pendingActionValue;
+    const previousExpiresAt = task.pendingActionExpiresAt;
 
     // Reset pending action fields
-    await db.ratingTask.update({
-      where: { id: taskId },
+    const updated = await db.ratingTask.updateMany({
+      where: {
+        id: taskId,
+        status: 'REVIEW',
+        pendingActionType: previousActionType,
+        pendingActionExpiresAt: previousExpiresAt,
+      },
       data: {
         pendingActionType: null,
         pendingActionValue: null,
@@ -42,6 +52,10 @@ export async function POST(
         pendingActionActorId: null,
       },
     });
+
+    if (updated.count === 0) {
+      return error('PENDING_ACTION_CHANGED', '待处理的审核决定已发生变化，请刷新后重试', 409);
+    }
 
     // Optional audit log for revocation
     await db.auditLog.create({
@@ -53,6 +67,8 @@ export async function POST(
         metadata: {
           ratedUserId: task.ratedUserId,
           revokedActionType: previousActionType,
+          revokedActionValue: previousActionValue,
+          pendingActionExpiresAt: previousExpiresAt?.toISOString() ?? null,
         },
       },
     });

@@ -19,6 +19,12 @@ interface ScoreEntry {
   createdAt: string;
 }
 
+interface PhotoReport {
+  reporterId: string;
+  reason?: string;
+  createdAt?: string;
+}
+
 interface ReviewTask {
   id: string;
   ratedUserId: string;
@@ -36,6 +42,8 @@ interface ReviewTask {
   pendingActionValue: number | null;
   pendingActionExpiresAt: string | null;
   pendingActionActorId: string | null;
+  photoReports: PhotoReport[];
+  scorerNames: Record<string, { nickname: string | null; qq: string | null }>;
 }
 
 /* ─── Countdown Component ────────────────────────────────── */
@@ -47,7 +55,7 @@ function PendingActionCountdown({
   expiresAt: string;
   onExpired?: () => void;
 }) {
-  const [timeLeft, setTimeLeft] = useState("10:00");
+  const [timeLeft, setTimeLeft] = useState("05:00");
 
   useEffect(() => {
     const targetTime = new Date(expiresAt).getTime();
@@ -103,14 +111,19 @@ export default function ScoringReviewPage() {
     setLoading(true);
     setError(null);
     try {
-      const status = tab === "review" ? "REVIEW" : "COMPLETED";
+      const status = tab === "review" ? "REVIEW,REPORTED" : "COMPLETED";
       const res = await fetch(`/api/admin/scoring?status=${status}&pageSize=50`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error?.message || "加载失败");
       }
       const data = await res.json();
-      setTasks(data.data || []);
+      const nextTasks: ReviewTask[] = (data.data || []).map((task: ReviewTask) => ({
+        ...task,
+        photoReports: task.photoReports ?? [],
+        scorerNames: task.scorerNames ?? {},
+      }));
+      setTasks(nextTasks);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
     } finally {
@@ -228,6 +241,52 @@ export default function ScoringReviewPage() {
     }
   }
 
+  async function handleRescore(
+    taskId: string,
+    mode?: "reporters_and_unscored"
+  ) {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/scoring/${taskId}/rescore`, {
+        method: "POST",
+        headers: mode ? { "Content-Type": "application/json" } : undefined,
+        body: mode ? JSON.stringify({ mode }) : undefined,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "重新评分失败");
+      }
+      await fetchTasks();
+      setOverrideMode(false);
+      setActiveTaskId(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "重新评分失败");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRevokePhotos(taskId: string) {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/scoring/${taskId}/revoke-photos`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "撤销照片失败");
+      }
+      alert(data.data?.message || "照片已撤销，用户已收到通知");
+      await fetchTasks();
+      setOverrideMode(false);
+      setActiveTaskId(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "撤销照片失败");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleRevoke(taskId: string) {
     setSubmitting(true);
     try {
@@ -272,7 +331,7 @@ export default function ScoringReviewPage() {
         评分审核
       </h1>
       <p className="text-sm text-[hsl(var(--muted-foreground))]">
-        审核评分组提交的颜值评分，通过或修改后发布给用户。
+        审核评分组提交的颜值评分和异常照片举报，通过或处理后同步给用户。
       </p>
 
       {/* Tabs */}
@@ -357,7 +416,7 @@ export default function ScoringReviewPage() {
             )}
           </div>
           <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">
-            {tab === "review" ? "暂无待审核评分" : "暂无已审核记录"}
+            {tab === "review" ? "暂无待审核评分或照片举报" : "暂无已审核记录"}
           </h2>
         </div>
       )}
@@ -426,6 +485,12 @@ export default function ScoringReviewPage() {
                           {task.pendingActionType === "APPROVE"
                             ? "待审核通过"
                             : `待设定 ${task.pendingActionValue} 分`}
+                        </span>
+                      )}
+                      {task.photoReports.length > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+                          照片举报 {task.photoReports.length}
                         </span>
                       )}
                     </div>
@@ -532,6 +597,89 @@ export default function ScoringReviewPage() {
                       </div>
                     )}
 
+                    {activeTask.photoReports.length > 0 && (
+                      <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+                        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-400">
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="h-4 w-4 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                          >
+                            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                            <line x1="4" y1="22" x2="4" y2="15" />
+                          </svg>
+                          照片被举报 ({activeTask.photoReports.length} 条)
+                        </div>
+                        <div className="mb-3 space-y-1.5">
+                          {activeTask.photoReports.map((report, index) => {
+                            const reporter = activeTask.scorerNames?.[report.reporterId];
+                            const reporterName =
+                              reporter?.nickname ||
+                              reporter?.qq ||
+                              report.reporterId.slice(0, 8);
+
+                            return (
+                              <div
+                                key={`${report.reporterId}-${index}`}
+                                className="rounded-lg bg-red-500/5 px-3 py-2 text-xs leading-5"
+                              >
+                                <span className="font-semibold text-[hsl(var(--foreground))]">
+                                  {reporterName}
+                                </span>
+                                <span className="mx-1.5 text-red-300">举报</span>
+                                <span className="text-[hsl(var(--muted-foreground))]">
+                                  {report.reason || "照片内容异常"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {tab === "review" && (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              onClick={() => {
+                                if (confirm("确认照片违规并撤销该用户的照片吗？照片将被删除，用户会收到包含举报原因的通知。")) {
+                                  void handleRevokePhotos(activeTask.id);
+                                }
+                              }}
+                              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-400 transition-all hover:bg-red-500/25 disabled:opacity-50"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                              >
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
+                              违规，撤销照片
+                            </button>
+                            <button
+                              type="button"
+                              disabled={submitting}
+                              onClick={() => {
+                                if (confirm("确认照片不违规并继续评分吗？举报记录将被清除，仅举报评分员和未评分评分员会收到重新评分任务。")) {
+                                  void handleRescore(activeTask.id, "reporters_and_unscored");
+                                }
+                              }}
+                              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-400 transition-all hover:bg-emerald-500/20 disabled:opacity-50"
+                            >
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                              >
+                                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                <path d="M3 3v5h5" />
+                                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                                <path d="M16 16h5v5" />
+                              </svg>
+                              不违规，重新评分
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Individual scores */}
                     <div className="mb-4">
                       <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
@@ -571,7 +719,7 @@ export default function ScoringReviewPage() {
                     </div>
 
                     {/* Actions (review tab only) & Pending countdown */}
-                    {tab === "review" && (
+                    {tab === "review" && activeTask.photoReports.length === 0 && (
                       <div className="space-y-3">
                         {activeTask.pendingActionType ? (
                           <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { success, error, paginated } from '@/lib/api-response';
 import { notify } from '@/lib/notifications';
 import { getMaskedIdentity } from '@/lib/pseudonymous-identity';
+import { Prisma, ViewRequestStatus } from '@prisma/client';
 
 const REJECTION_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -13,6 +14,19 @@ function resolveQQAvatarUrl(
   if (avatarUrl) return avatarUrl;
   if (!qqNumber) return null;
   return `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qqNumber)}&s=640`;
+}
+
+function ageFromDate(birthDate: Date): number {
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < birthDate.getDate())
+  ) {
+    age--;
+  }
+  return age;
 }
 
 /**
@@ -122,7 +136,7 @@ export async function POST(req: Request) {
 
 /**
  * GET /api/view-requests — List view requests
- * Query: ?type=incoming|outgoing&status=pending|all&page=1&pageSize=20
+ * Query: ?type=incoming|outgoing&status=pending|handled|all&page=1&pageSize=20
  */
 export async function GET(req: Request) {
   try {
@@ -145,45 +159,116 @@ export async function GET(req: Request) {
       where.targetUserId = session.id;
     }
 
-    if (status === 'pending') {
-      where.status = 'PENDING';
-    }
-
-    // Count total
-    const total = await db.viewRequest.count({ where });
-
-    // Query with pagination
-    const requests = await db.viewRequest.findMany({
-      where,
-      include: {
-        requester: {
-          include: {
-            authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
-            profile: {
-              select: {
-                birthDate: true,
-                heightCm: true,
-                weightKg: true,
-                provinceCode: true,
-                cityCode: true,
-                attribute: true,
-                customAttribute: true,
-                mbti: true,
-                selfIntro: true,
-              },
+    const requestInclude = {
+      requester: {
+        include: {
+          authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
+          profile: {
+            select: {
+              birthDate: true,
+              heightCm: true,
+              weightKg: true,
+              provinceCode: true,
+              cityCode: true,
+              attribute: true,
+              isSide: true,
+              isOther: true,
+              customAttribute: true,
+              mbti: true,
+              selfIntro: true,
             },
           },
         },
-        target: {
-          include: {
-            authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
+      },
+      target: {
+        include: {
+          authIdentities: { select: { nickname: true, avatarUrl: true }, take: 1 },
+          profile: {
+            select: {
+              birthDate: true,
+              heightCm: true,
+              weightKg: true,
+              provinceCode: true,
+              cityCode: true,
+              attribute: true,
+              isSide: true,
+              isOther: true,
+              customAttribute: true,
+              mbti: true,
+              selfIntro: true,
+            },
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    });
+    } as const;
+    type ViewRequestWithUsers = Prisma.ViewRequestGetPayload<{
+      include: typeof requestInclude;
+    }>;
+
+    const orderBy = { createdAt: 'desc' as const };
+    const skip = (page - 1) * pageSize;
+    let total = 0;
+    let requests: ViewRequestWithUsers[];
+
+    if (status === 'pending') {
+      where.status = ViewRequestStatus.PENDING;
+      total = await db.viewRequest.count({ where });
+      requests = await db.viewRequest.findMany({
+        where,
+        include: requestInclude,
+        orderBy,
+        skip,
+        take: pageSize,
+      });
+    } else {
+      const nonApprovedWhere = {
+        ...where,
+        status:
+          status === 'handled'
+            ? { notIn: [ViewRequestStatus.PENDING, ViewRequestStatus.APPROVED] }
+            : { not: ViewRequestStatus.APPROVED },
+      };
+      const approvedWhere = { ...where, status: ViewRequestStatus.APPROVED };
+
+      const [nonApprovedTotal, approvedTotal] = await Promise.all([
+        db.viewRequest.count({ where: nonApprovedWhere }),
+        db.viewRequest.count({ where: approvedWhere }),
+      ]);
+
+      total = nonApprovedTotal + approvedTotal;
+
+      if (skip < nonApprovedTotal) {
+        const nonApprovedTake = Math.min(pageSize, nonApprovedTotal - skip);
+        const nonApprovedRequests = await db.viewRequest.findMany({
+          where: nonApprovedWhere,
+          include: requestInclude,
+          orderBy,
+          skip,
+          take: nonApprovedTake,
+        });
+        const approvedTake = pageSize - nonApprovedRequests.length;
+        const approvedRequests =
+          approvedTake > 0
+            ? await db.viewRequest.findMany({
+                where: approvedWhere,
+                include: requestInclude,
+                orderBy,
+                skip: 0,
+                take: approvedTake,
+              })
+            : [];
+
+        requests = [...nonApprovedRequests, ...approvedRequests];
+      } else {
+        requests = await db.viewRequest.findMany({
+          where: approvedWhere,
+          include: requestInclude,
+          orderBy,
+          skip: skip - nonApprovedTotal,
+          take: pageSize,
+        });
+      }
+    }
 
     // Map results
     const mapped = requests.map((r) => {
@@ -222,14 +307,32 @@ export async function GET(req: Request) {
         // Include requester profile summary for incoming requests (so target can see who's asking)
         ...(type === 'incoming' && r.requester.profile ? {
           requesterProfile: {
-            age: Math.floor((Date.now() - new Date(r.requester.profile.birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000)),
+            age: ageFromDate(r.requester.profile.birthDate),
             heightCm: r.requester.profile.heightCm,
             weightKg: r.requester.profile.weightKg,
             provinceCode: r.requester.profile.provinceCode,
             cityCode: r.requester.profile.cityCode,
             attribute: r.requester.profile.attribute,
+            isSide: r.requester.profile.isSide,
+            isOther: r.requester.profile.isOther,
             customAttribute: r.requester.profile.customAttribute,
             mbti: r.requester.profile.mbti,
+            selfIntro: r.requester.profile.selfIntro,
+          },
+        } : {}),
+        ...(type === 'outgoing' && r.target.profile ? {
+          targetProfile: {
+            age: ageFromDate(r.target.profile.birthDate),
+            heightCm: r.target.profile.heightCm,
+            weightKg: r.target.profile.weightKg,
+            provinceCode: r.target.profile.provinceCode,
+            cityCode: r.target.profile.cityCode,
+            attribute: r.target.profile.attribute,
+            isSide: r.target.profile.isSide,
+            isOther: r.target.profile.isOther,
+            customAttribute: r.target.profile.customAttribute,
+            mbti: r.target.profile.mbti,
+            selfIntro: r.target.profile.selfIntro,
           },
         } : {}),
       };

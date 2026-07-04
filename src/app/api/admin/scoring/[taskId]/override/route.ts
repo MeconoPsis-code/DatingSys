@@ -2,6 +2,7 @@ import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
 import { notify } from '@/lib/notifications';
+import { SCORE_ACTION_REVOCATION_WINDOW_MS } from '@/lib/scoring-revocation';
 
 /**
  * POST /api/admin/scoring/[taskId]/override
@@ -27,7 +28,7 @@ export async function POST(
       return error('VALIDATION', '评分必须在 0-10 之间，步长 0.1', 400);
     }
 
-    const published = await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx) => {
       const task = await tx.ratingTask.findUnique({ where: { id: taskId } });
 
       if (!task) {
@@ -36,15 +37,68 @@ export async function POST(
 
       const now = new Date();
 
+      if (task.status === 'COMPLETED') {
+        await tx.ratingTask.update({
+          where: { id: taskId },
+          data: {
+            completedAt: now,
+            pendingActionType: null,
+            pendingActionValue: null,
+            pendingActionExpiresAt: null,
+            pendingActionActorId: null,
+          },
+        });
+
+        await tx.ratingProfile.upsert({
+          where: { userId: task.ratedUserId },
+          create: {
+            userId: task.ratedUserId,
+            ratingStatus: 'COMPLETED',
+            finalScore: score,
+            scoreCompletedAt: now,
+          },
+          update: {
+            ratingStatus: 'COMPLETED',
+            finalScore: score,
+            scoreCompletedAt: now,
+          },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            actorUserId: session.id,
+            action: 'ADMIN_OVERRIDE_SCORE',
+            targetType: 'RatingTask',
+            targetId: taskId,
+            metadata: {
+              ratedUserId: task.ratedUserId,
+              overriddenScore: score,
+              immediatePublish: true,
+            },
+          },
+        });
+
+        return {
+          mode: 'published' as const,
+          ratedUserId: task.ratedUserId,
+        };
+      }
+
+      if (!['PENDING', 'SCORING', 'NEEDS_RESCORE', 'REVIEW'].includes(task.status)) {
+        throw { code: 'INVALID_STATUS', message: '该任务当前不可设定评分', status: 400 };
+      }
+
+      const expiresAt = new Date(now.getTime() + SCORE_ACTION_REVOCATION_WINDOW_MS);
+
       await tx.ratingTask.update({
         where: { id: taskId },
         data: {
-          status: 'COMPLETED',
-          completedAt: now,
-          pendingActionType: null,
-          pendingActionValue: null,
-          pendingActionExpiresAt: null,
-          pendingActionActorId: null,
+          status: 'REVIEW',
+          completedAt: task.completedAt ?? now,
+          pendingActionType: 'OVERRIDE',
+          pendingActionValue: score,
+          pendingActionExpiresAt: expiresAt,
+          pendingActionActorId: session.id,
         },
       });
 
@@ -52,39 +106,49 @@ export async function POST(
         where: { userId: task.ratedUserId },
         create: {
           userId: task.ratedUserId,
-          ratingStatus: 'COMPLETED',
-          finalScore: score,
-          scoreCompletedAt: now,
+          ratingStatus: 'REVIEW',
         },
         update: {
-          ratingStatus: 'COMPLETED',
-          finalScore: score,
-          scoreCompletedAt: now,
+          ratingStatus: 'REVIEW',
+          finalScore: null,
+          scoreCompletedAt: null,
         },
       });
 
       await tx.auditLog.create({
         data: {
           actorUserId: session.id,
-          action: 'ADMIN_OVERRIDE_SCORE',
+          action: 'ADMIN_OVERRIDE_SCORE_PENDING',
           targetType: 'RatingTask',
           targetId: taskId,
           metadata: {
             ratedUserId: task.ratedUserId,
             overriddenScore: score,
-            immediatePublish: true,
+            pendingActionExpiresAt: expiresAt.toISOString(),
+            revocationWindowMinutes: SCORE_ACTION_REVOCATION_WINDOW_MS / 60000,
           },
         },
       });
 
-      return { ratedUserId: task.ratedUserId };
+      return {
+        mode: 'scheduled' as const,
+        pendingActionExpiresAt: expiresAt.toISOString(),
+      };
     });
 
-    await notify.scoringComplete(published.ratedUserId, score);
+    if (result.mode === 'published') {
+      await notify.scoringComplete(result.ratedUserId, score);
+
+      return success({
+        message: '最终评分已直接发布',
+        finalScore: score,
+      });
+    }
 
     return success({
-      message: '最终评分已直接发布',
+      message: '直接设定评分已提交，将在 5 分钟后生效',
       finalScore: score,
+      pendingActionExpiresAt: result.pendingActionExpiresAt,
     });
   } catch (err) {
     console.error('[admin/scoring/override] POST error:', err);

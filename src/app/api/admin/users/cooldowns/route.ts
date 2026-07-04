@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { error, success } from "@/lib/api-response";
@@ -10,32 +12,45 @@ import {
 
 // ── GET /api/admin/users/cooldowns ─────────────────────
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     await requireRole("ADMIN");
 
+    const url = new URL(req.url);
+    const search = url.searchParams.get("search")?.trim() || "";
     const now = new Date();
     const profileEditCutoff = new Date(now.getTime() - PROFILE_EDIT_COOLDOWN_MS);
     const dataDeleteCutoff = new Date(now.getTime() - DATA_DELETE_COOLDOWN_MS);
     const matchPoolCutoff = new Date(now.getTime() - MATCH_PREF_COOLDOWN_MS);
+    const cooldownWhere: Prisma.UserWhereInput = {
+      OR: [
+        { status: "PENDING_DELETE" },
+        { lastProfileClearedAt: { gt: dataDeleteCutoff } },
+        {
+          profile: {
+            is: {
+              OR: [
+                { lastSubmittedAt: { gt: profileEditCutoff } },
+                { matchPrefUpdatedAt: { gt: matchPoolCutoff } },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const searchWhere: Prisma.UserWhereInput | undefined = search
+      ? {
+          OR: [
+            { qqNumber: { contains: search } },
+            { authIdentities: { some: { nickname: { contains: search } } } },
+          ],
+        }
+      : undefined;
 
     const users = await db.user.findMany({
       where: {
         status: { not: "DELETED" },
-        OR: [
-          { status: "PENDING_DELETE" },
-          { lastProfileClearedAt: { gt: dataDeleteCutoff } },
-          {
-            profile: {
-              is: {
-                OR: [
-                  { lastSubmittedAt: { gt: profileEditCutoff } },
-                  { matchPrefUpdatedAt: { gt: matchPoolCutoff } },
-                ],
-              },
-            },
-          },
-        ],
+        ...(searchWhere ? { AND: [cooldownWhere, searchWhere] } : cooldownWhere),
       },
       include: {
         authIdentities: { select: { nickname: true }, take: 1 },

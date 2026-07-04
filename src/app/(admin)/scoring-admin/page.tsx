@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { ArrowDownToLine } from "lucide-react";
 
 /* ─── Lightbox ───────────────────────────────────────── */
 
@@ -438,7 +439,7 @@ function TaskCard({
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   <span className="font-mono text-sm font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                    {timeLeft || "10:00"}
+                    {timeLeft || "05:00"}
                   </span>
                   <button
                     type="button"
@@ -602,6 +603,7 @@ export default function ScoringAdminPage() {
   const [pageInput, setPageInput] = useState("1");
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const pageSize = 20;
@@ -639,11 +641,18 @@ export default function ScoringAdminPage() {
     goToPage(nextPage);
   }
 
+  function handleSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPage(1);
+    setPageInput("1");
+  }
+
   const fetchTasks = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!silent) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+      if (search.trim()) params.set("search", search.trim());
       if (statusFilter) params.set("status", statusFilter);
 
       const res = await fetch(`/api/admin/scoring?${params}`);
@@ -666,7 +675,7 @@ export default function ScoringAdminPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [page, statusFilter]);
+  }, [page, search, statusFilter]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -769,6 +778,17 @@ export default function ScoringAdminPage() {
     }
   }
 
+  function scrollToPageBottom() {
+    const scrollContainer =
+      document.querySelector<HTMLElement>(".ios-webview-scroll") ??
+      document.scrollingElement;
+
+    scrollContainer?.scrollTo({
+      top: scrollContainer.scrollHeight,
+      behavior: "smooth",
+    });
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -784,6 +804,26 @@ export default function ScoringAdminPage() {
           </button>
         )}
       </div>
+
+      <form onSubmit={handleSearch} className="flex flex-col gap-2 sm:w-fit sm:flex-row">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+            setPageInput("1");
+          }}
+          placeholder="搜索 QQ号 / 昵称..."
+          className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-3 py-2 text-sm text-[hsl(var(--foreground))] outline-none focus:border-[hsl(var(--primary))] sm:w-64"
+        />
+        <button
+          type="submit"
+          className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-white transition-all hover:scale-[1.02]"
+        >
+          搜索
+        </button>
+      </form>
 
       {/* Status tabs */}
       <div className="rounded-xl bg-[hsl(var(--secondary))] p-1">
@@ -907,6 +947,15 @@ export default function ScoringAdminPage() {
           </form>
         </div>
       )}
+      <button
+        type="button"
+        aria-label="跳至页面底部"
+        title="跳至页面底部"
+        onClick={scrollToPageBottom}
+        className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand-blue text-white shadow-lg shadow-brand-blue/25 ring-1 ring-white/30 transition-all hover:-translate-y-0.5 hover:bg-[#0958d9] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2 active:translate-y-0 md:bottom-6 md:right-6 md:h-11 md:w-11"
+      >
+        <ArrowDownToLine aria-hidden="true" className="h-5 w-5" strokeWidth={2.4} />
+      </button>
     </div>
   );
 }

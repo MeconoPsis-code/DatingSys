@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { logAudit } from "@/lib/audit";
+import { deleteUsersPermanently } from "@/lib/admin-user-delete";
 import { MembershipStatus } from "@prisma/client";
 import { createLogger } from "@/lib/logger";
 
@@ -73,92 +73,43 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const results: { qqNumber: string; success: boolean; error?: string }[] =
-      [];
+    const membershipsWithUsers = memberships.filter((membership) => membership.user);
+    const missingUsers = memberships.filter((membership) => !membership.user);
+    const userIds = membershipsWithUsers.map((membership) => membership.user!.id);
 
-    for (const membership of memberships) {
-      const userId = membership.user.id;
-      const qqNumber = membership.user.qqNumber || membership.qqNumber;
-
-      try {
-        await db.$transaction(async (tx) => {
-          // Delete profile (cascade deletes ProfilePhotos)
-          await tx.profile.deleteMany({ where: { userId } });
-
-          // Delete preference
-          await tx.preference.deleteMany({ where: { userId } });
-
-          // Delete rating profile
-          await tx.ratingProfile.deleteMany({ where: { userId } });
-
-          // Delete match snapshots (both directions)
-          await tx.matchSnapshot.deleteMany({
-            where: { OR: [{ userId }, { targetUserId: userId }] },
-          });
-
-          // Delete view requests (both directions)
-          await tx.viewRequest.deleteMany({
-            where: {
-              OR: [{ requesterId: userId }, { targetUserId: userId }],
-            },
-          });
-
-          // Update group membership to REMOVED
-          await tx.groupMembership.update({
-            where: { id: membership.id },
-            data: {
-              status: MembershipStatus.REMOVED,
-              removedAt: new Date(),
-              reviewedBy: session.id,
-              reviewRemark: "Batch purged by admin",
-            },
-          });
-
-          // Resolve any pending admin reviews for this user
-          await tx.adminReview.updateMany({
-            where: {
-              userId,
-              type: "group_membership_left",
-              status: "pending",
-            },
-            data: {
-              status: "resolved",
-              resolution: "purged",
-              handledBy: session.id,
-              handledAt: new Date(),
-            },
-          });
-
-          // Delete auth identities
-          await tx.authIdentity.deleteMany({ where: { userId } });
-
-          // Delete notifications
-          await tx.notification.deleteMany({ where: { userId } });
-
-          // Delete the user record
-          await tx.user.delete({ where: { id: userId } });
-        });
-
-        // Audit log (outside transaction — best-effort)
-        await logAudit({
-          actorId: session.id,
-          action: "PROFILE_CLEAR",
-          targetType: "User",
-          targetId: userId,
-          metadata: {
-            qqNumber,
-            resolution: "batch_purged",
-            membershipId: membership.id,
-          },
-        });
-
-        results.push({ qqNumber, success: true });
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : "Unknown error";
-        log.error({ err, userId, qqNumber }, "Failed to purge user in batch");
-        results.push({ qqNumber, success: false, error: errMsg });
-      }
+    if (missingUsers.length > 0) {
+      await db.groupMembership.updateMany({
+        where: { id: { in: missingUsers.map((membership) => membership.id) } },
+        data: {
+          status: MembershipStatus.REMOVED,
+          removedAt: new Date(),
+          reviewedBy: session.id,
+          reviewRemark: "Batch marked removed after user record was missing",
+        },
+      });
     }
+
+    const deleteResult = await deleteUsersPermanently({
+      actorId: session.id,
+      userIds,
+      auditAction: "ADMIN_GROUP_MEMBERSHIP_BATCH_PURGE_USER",
+      auditMetadata: { mode: "group_membership_batch_purge" },
+      groupMembershipRemovalRemark: "Batch purged from membership admin",
+      groupMembershipReviewResolution: "batch_purged",
+    });
+
+    const deletedUserIds = new Set(deleteResult.deletedUsers.map((user) => user.id));
+    const results: { qqNumber: string; success: boolean; error?: string }[] = [
+      ...membershipsWithUsers.map((membership) => ({
+        qqNumber: membership.user?.qqNumber || membership.qqNumber,
+        success: deletedUserIds.has(membership.user!.id),
+        error: deletedUserIds.has(membership.user!.id) ? undefined : "User was not deleted",
+      })),
+      ...missingUsers.map((membership) => ({
+        qqNumber: membership.qqNumber,
+        success: true,
+      })),
+    ];
 
     const purged = results.filter((r) => r.success).length;
     const failed = results.filter((r) => !r.success).length;

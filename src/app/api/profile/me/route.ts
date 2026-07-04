@@ -101,6 +101,14 @@ function resolveProfileAttribute(
   return Attribute.OTHER;
 }
 
+function hasNewPhotoContent(
+  publishedPhotos: Array<{ storageKey: string }>,
+  desiredPhotos: Array<{ storageKey: string }>,
+): boolean {
+  const publishedStorageKeys = new Set(publishedPhotos.map((photo) => photo.storageKey));
+  return desiredPhotos.some((photo) => !publishedStorageKeys.has(photo.storageKey));
+}
+
 /**
  * GET /api/profile/me
  *
@@ -229,6 +237,7 @@ export async function PUT(req: Request) {
           photos: { orderBy: { order: "asc" } },
         },
       },
+      ratingProfile: true,
     },
   });
 
@@ -361,6 +370,8 @@ export async function PUT(req: Request) {
   ]);
 
   // 6. Apply draft photo changes only when publishing.
+  let photoChangeRequiresScoring = false;
+
   if (profileStatus === "ACTIVE") {
     const existingDraft = readProfileDraftData(user?.profile?.draftData);
     const shouldApplyDraftPhotos =
@@ -376,6 +387,10 @@ export async function PUT(req: Request) {
         body.deleteAllPhotos
           ? []
           : existingDraft.photos ?? publishedPhotosToDraftPhotos(user?.profile?.photos ?? []),
+      );
+      photoChangeRequiresScoring = hasNewPhotoContent(
+        user?.profile?.photos ?? [],
+        desiredPhotos,
       );
       const desiredStorageKeys = new Set(desiredPhotos.map((p) => p.storageKey));
       const candidateDeleteKeys = new Set([
@@ -429,54 +444,66 @@ export async function PUT(req: Request) {
     });
 
     if (photoCount > 0) {
-      // Check if there's already a pending/scoring task
-      const existingTask = await db.ratingTask.findFirst({
-        where: {
-          ratedUserId: session.id,
-          status: { in: [...ACTIVE_SCORING_TASK_STATUSES] },
-        },
-      });
+      const isFirstActivePublish = user?.profile?.status !== "ACTIVE";
+      const needsInitialScoring =
+        !user?.ratingProfile || user.ratingProfile.ratingStatus === "NOT_SUBMITTED";
+      const shouldQueueScoring =
+        isFirstActivePublish || photoChangeRequiresScoring || needsInitialScoring;
 
-      if (!existingTask) {
-        // Assign only scorers/admins scheduled for today's duty roster.
-        const scorers = await getOnDutyScorers({ excludeUserId: session.id });
-
-        const firstPhoto = await db.profilePhoto.findFirst({
-          where: { profileId: profile.id },
-          orderBy: { order: "asc" },
+      if (shouldQueueScoring) {
+        // Check if there's already a pending/scoring task
+        const existingTask = await db.ratingTask.findFirst({
+          where: {
+            ratedUserId: session.id,
+            status: { in: [...ACTIVE_SCORING_TASK_STATUSES] },
+          },
         });
 
-        if (firstPhoto) {
-          await db.ratingTask.create({
-            data: {
-              ratedUserId: session.id,
-              photoObjectKey: firstPhoto.storageKey,
-              status: "PENDING",
-              scorerSnapshot: scorers.map((s) => s.id),
-            },
+        if (!existingTask) {
+          // Assign only scorers/admins scheduled for today's duty roster.
+          const scorers = await getOnDutyScorers({ excludeUserId: session.id });
+
+          const firstPhoto = await db.profilePhoto.findFirst({
+            where: { profileId: profile.id },
+            orderBy: { order: "asc" },
           });
 
-          // Upsert RatingProfile
-          await db.ratingProfile.upsert({
-            where: { userId: session.id },
-            create: {
-              userId: session.id,
-              ratingStatus: "PENDING",
-            },
-            update: {
-              ratingStatus: "PENDING",
-            },
-          });
+          if (firstPhoto) {
+            await db.ratingTask.create({
+              data: {
+                ratedUserId: session.id,
+                photoObjectKey: firstPhoto.storageKey,
+                status: "PENDING",
+                scorerSnapshot: scorers.map((s) => s.id),
+              },
+            });
 
-          // Count how many users are ahead in the scoring queue
-          const queueAhead = await db.ratingTask.count({
-            where: {
-              status: { in: ["PENDING", "SCORING"] },
-              ratedUserId: { not: session.id },
-              createdAt: { lt: new Date() },
-            },
-          });
-          await notify.scoringQueued(session.id, queueAhead);
+            // Upsert RatingProfile
+            await db.ratingProfile.upsert({
+              where: { userId: session.id },
+              create: {
+                userId: session.id,
+                ratingStatus: "PENDING",
+                finalScore: null,
+                scoreCompletedAt: null,
+              },
+              update: {
+                ratingStatus: "PENDING",
+                finalScore: null,
+                scoreCompletedAt: null,
+              },
+            });
+
+            // Count how many users are ahead in the scoring queue
+            const queueAhead = await db.ratingTask.count({
+              where: {
+                status: { in: ["PENDING", "SCORING"] },
+                ratedUserId: { not: session.id },
+                createdAt: { lt: new Date() },
+              },
+            });
+            await notify.scoringQueued(session.id, queueAhead);
+          }
         }
       }
     } else {

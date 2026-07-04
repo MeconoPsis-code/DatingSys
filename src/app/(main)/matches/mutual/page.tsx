@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getProvinceName, getCityName } from "@/data/regions";
 import { ATTRIBUTE_LABELS } from "@/data/attributes";
 import {
@@ -9,6 +9,7 @@ import {
   getMaskedIdentity,
 } from "@/lib/pseudonymous-identity";
 import { formatBmi } from "@/lib/bmi";
+import { CollapsibleSelfIntro } from "@/components/profile/collapsible-self-intro";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -320,11 +321,7 @@ function MutualMatchCard({
       </div>
 
       {/* Self intro */}
-      {match.selfIntro && (
-        <p className="mb-4 rounded-lg bg-[hsl(var(--secondary)/0.5)] px-3 py-2 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
-          {match.selfIntro}
-        </p>
-      )}
+      <CollapsibleSelfIntro text={match.selfIntro} className="mb-4" />
 
       {/* View request / QQ reveal section */}
       <div className="mt-3">
@@ -425,7 +422,6 @@ export default function MutualMatchesPage() {
   const [approvedDetails, setApprovedDetails] = useState<Record<string, { qqNumber: string | null; avatarUrl: string | null }>>({});
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const [provinceOnly, setProvinceOnly] = useState(false);
-  const [currentUserProvinceCode, setCurrentUserProvinceCode] = useState<string | null>(null);
   const [canBypassCooldowns, setCanBypassCooldowns] = useState(false);
   const pageSize = 20;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -436,7 +432,7 @@ export default function MutualMatchesPage() {
     setScoringPending(false);
     try {
       const res = await fetch(
-        `/api/matches?type=mutual&page=${page}&pageSize=${pageSize}`
+        `/api/matches?type=mutual&page=${page}&pageSize=${pageSize}&provinceOnly=${provinceOnly ? "true" : "false"}`
       );
       if (!res.ok) {
         const data = await res.json();
@@ -449,6 +445,8 @@ export default function MutualMatchesPage() {
         setScoringPending(true);
         setPreferencePending(false);
         setMatches([]);
+        setTotal(0);
+        setTotalPages(0);
         return;
       }
 
@@ -457,13 +455,12 @@ export default function MutualMatchesPage() {
         setPreferencePending(true);
         setScoringPending(false);
         setMatches([]);
+        setTotal(0);
+        setTotalPages(0);
         return;
       }
 
       setMatches(data.data || []);
-      if (data.currentUserProvinceCode) {
-        setCurrentUserProvinceCode(data.currentUserProvinceCode);
-      }
       setCanBypassCooldowns(Boolean(data.canBypassCooldowns));
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
@@ -474,7 +471,7 @@ export default function MutualMatchesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, provinceOnly]);
 
   // Load view requests in both directions to track pair-level access/status.
   const fetchViewRequests = useCallback(async () => {
@@ -552,6 +549,12 @@ export default function MutualMatchesPage() {
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function handleProvinceFilterChange(enabled: boolean) {
+    setProvinceOnly(enabled);
+    setPage(1);
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function sendViewRequest(targetUserId: string) {
     try {
       const res = await fetch("/api/view-requests", {
@@ -583,6 +586,28 @@ export default function MutualMatchesPage() {
     }
   }
 
+  const sortedMatches = useMemo(
+    () =>
+      [...matches].sort((a, b) => {
+        const aApproved =
+          a.identityUnlocked === true || viewRequestMap[a.userId] === "APPROVED";
+        const bApproved =
+          b.identityUnlocked === true || viewRequestMap[b.userId] === "APPROVED";
+        if (aApproved !== bApproved) return aApproved ? 1 : -1;
+        return b.relevanceScore - a.relevanceScore;
+      }),
+    [matches, viewRequestMap],
+  );
+  const hasApprovedMatches = useMemo(
+    () =>
+      matches.some(
+        (match) =>
+          match.identityUnlocked === true ||
+          viewRequestMap[match.userId] === "APPROVED",
+      ),
+    [matches, viewRequestMap],
+  );
+
   return (
     <div ref={scrollRef} className="flex flex-col gap-5">
       <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
@@ -595,12 +620,12 @@ export default function MutualMatchesPage() {
       <MatchTabs />
 
       {/* Province filter toggle */}
-      {!loading && !scoringPending && !preferencePending && matches.length > 0 && (
-        <div className="flex items-center gap-2">
+      {!loading && !scoringPending && !preferencePending && (matches.length > 0 || total > 0 || provinceOnly) && (
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg border border-brand-line bg-white/90 p-0.5 shadow-sm">
             <button
               type="button"
-              onClick={() => setProvinceOnly(false)}
+              onClick={() => handleProvinceFilterChange(false)}
               className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
                 !provinceOnly
                   ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
@@ -611,7 +636,7 @@ export default function MutualMatchesPage() {
             </button>
             <button
               type="button"
-              onClick={() => setProvinceOnly(true)}
+              onClick={() => handleProvinceFilterChange(true)}
               className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
                 provinceOnly
                   ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
@@ -621,6 +646,14 @@ export default function MutualMatchesPage() {
               同省
             </button>
           </div>
+          {hasApprovedMatches && (
+            <Link
+              href="/requests"
+              className="inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-blue shadow-sm ring-1 ring-brand-blue/25 transition-all hover:bg-blue-1"
+            >
+              已通过的资料已置后 · 点击前往申请页
+            </Link>
+          )}
         </div>
       )}
 
@@ -644,7 +677,7 @@ export default function MutualMatchesPage() {
             评分中，请耐心等待
           </h2>
           <p className="mt-2 max-w-xs text-center text-sm text-[hsl(var(--muted-foreground))]">
-            您的照片正在被评分组审核，评分完成后即可查看匹配结果。
+            您的照片正在被评分组审核，评分完成后即可查看匹配结果，预计 48 小时内出分。
           </p>
         </div>
       )}
@@ -703,10 +736,7 @@ export default function MutualMatchesPage() {
       {/* Match cards */}
       {!loading && (
         <div className="flex flex-col gap-4">
-          {(provinceOnly && currentUserProvinceCode
-            ? matches.filter((m) => m.provinceCode === currentUserProvinceCode)
-            : matches
-          ).map((match) => (
+          {sortedMatches.map((match) => (
             <MutualMatchCard
               key={match.userId}
               match={match}

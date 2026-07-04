@@ -1,5 +1,6 @@
 import { PublicTopNav } from "@/components/public-top-nav";
 import {
+  getRankingDisplayLimit,
   getRankingProfileRequestStatuses,
   getTopRankingEntries,
 } from "@/lib/ranking";
@@ -33,10 +34,11 @@ async function getCurrentUserHasPhotos(userId: string | undefined): Promise<bool
 }
 
 export default async function RankingPage() {
-  const [rankings, session] = await Promise.all([
-    getTopRankingEntries(10),
+  const [rankingLimit, session] = await Promise.all([
+    getRankingDisplayLimit(),
     getSessionPayload(),
   ]);
+  const rankings = await getTopRankingEntries(rankingLimit);
   const [requestStatuses, currentUserHasPhotos] = await Promise.all([
     getRankingProfileRequestStatuses(
       session?.sub,
@@ -78,7 +80,9 @@ export default async function RankingPage() {
             颜值排行
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-brand-muted">
-            娱乐排行仅展示已完成评分且主动开启参与的前 10 名用户。
+            {rankingLimit > 0
+              ? `娱乐排行当前最多展示已完成评分且主动开启参与的前 ${rankingLimit} 名用户，展示上限每周按有照用户总数的 10% 更新。`
+              : "娱乐排行展示已完成评分且主动开启参与的用户，展示上限每周按有照用户总数的 10% 更新。"}
           </p>
         </header>
 

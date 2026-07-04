@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { getProvinceName, getCityName } from "@/data/regions";
 import { ATTRIBUTE_LABELS } from "@/data/attributes";
@@ -10,19 +10,26 @@ import {
   getMaskedIdentity,
 } from "@/lib/pseudonymous-identity";
 import { formatBmi } from "@/lib/bmi";
+import { CollapsibleSelfIntro } from "@/components/profile/collapsible-self-intro";
 
 /* ─── Types ──────────────────────────────────────────── */
 
-interface RequesterProfile {
+interface RequestProfileSummary {
   age: number;
   heightCm: number;
   weightKg: number;
   provinceCode: string;
   cityCode: string;
   attribute: string;
+  isSide: boolean;
+  isOther: boolean;
   customAttribute: string | null;
   mbti: string | null;
+  selfIntro: string | null;
 }
+
+type RequesterProfile = RequestProfileSummary;
+type TargetProfile = RequestProfileSummary;
 
 interface ViewRequest {
   id: string;
@@ -40,13 +47,34 @@ interface ViewRequest {
   targetQQ: string | null;
   targetAvatarUrl: string | null;
   requesterProfile?: RequesterProfile;
+  targetProfile?: TargetProfile;
 }
+
+type RequestFilter = "all" | "handled" | "pending";
+
+const REQUEST_FILTERS: Array<{ value: RequestFilter; label: string }> = [
+  { value: "all", label: "全部" },
+  { value: "handled", label: "已处理" },
+  { value: "pending", label: "未处理" },
+];
 
 /* ─── Helpers ────────────────────────────────────────── */
 
 function getAttrLabel(attr: string, custom?: string | null): string {
   if (attr === "OTHER" && custom) return `其他: ${custom}`;
   return (ATTRIBUTE_LABELS as Record<string, string>)[attr] ?? attr;
+}
+
+function getAttrLabels(
+  attr: string,
+  custom?: string | null,
+  isSide?: boolean,
+  isOther?: boolean,
+): string[] {
+  const labels = [getAttrLabel(attr, custom)];
+  if (isSide && attr !== "SIDE") labels.push("side");
+  if (isOther && attr !== "OTHER") labels.push("其他");
+  return labels;
 }
 
 function formatDate(d: string): string {
@@ -138,6 +166,80 @@ function ReportProfileIconLink({ targetQQ }: { targetQQ: string }) {
   );
 }
 
+function RequestProfileTags({ profile }: { profile: RequestProfileSummary }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+          <path d="M8 14h.01" />
+          <path d="M12 14h.01" />
+          <path d="M16 14h.01" />
+          <path d="M8 18h.01" />
+          <path d="M12 18h.01" />
+          <path d="M16 18h.01" />
+        </svg>
+        <span>{profile.age} 岁</span>
+      </span>
+      <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+          <path d="M21.3 15.3a2.82 2.82 0 0 1 0 4c-1 1-2.5 1-3.5 0L2.8 4.3a2.82 2.82 0 0 1 0-4c1-1 2.5-1 3.5 0Z" />
+          <path d="m5.6 7.2 1.4-1.4" />
+          <path d="m8.4 10 1.4-1.4" />
+          <path d="m11.2 12.8 1.4-1.4" />
+          <path d="m14 15.6 1.4-1.4" />
+          <path d="m16.8 18.5 1.4-1.4" />
+        </svg>
+        <span>{profile.heightCm} cm</span>
+      </span>
+      <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+          <path d="m16 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+          <path d="m2 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
+          <path d="M7 21h10" />
+          <path d="M12 3v18" />
+          <path d="M3 7h18" />
+        </svg>
+        <span>{profile.weightKg} kg</span>
+      </span>
+      <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+        BMI {formatBmi(profile.heightCm, profile.weightKg)}
+      </span>
+      <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+        <span>
+          {getProvinceName(profile.provinceCode)} ·{" "}
+          {getCityName(profile.provinceCode, profile.cityCode)}
+        </span>
+      </span>
+      {getAttrLabels(
+        profile.attribute,
+        profile.customAttribute,
+        profile.isSide,
+        profile.isOther,
+      ).map((label) => (
+        <span
+          key={label}
+          className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]"
+        >
+          {label}
+        </span>
+      ))}
+      {profile.mbti && (
+        <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
+          {profile.mbti}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /* ─── Incoming Card ──────────────────────────────────── */
 
 function IncomingRequestCard({
@@ -203,63 +305,12 @@ function IncomingRequestCard({
 
       {/* Requester profile summary */}
       {request.requesterProfile && (
-        <div className="mb-3 flex flex-wrap gap-2">
-          <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-              <line x1="16" y1="2" x2="16" y2="6" />
-              <line x1="8" y1="2" x2="8" y2="6" />
-              <line x1="3" y1="10" x2="21" y2="10" />
-              <path d="M8 14h.01" />
-              <path d="M12 14h.01" />
-              <path d="M16 14h.01" />
-              <path d="M8 18h.01" />
-              <path d="M12 18h.01" />
-              <path d="M16 18h.01" />
-            </svg>
-            <span>{request.requesterProfile.age} 岁</span>
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
-              <path d="M21.3 15.3a2.82 2.82 0 0 1 0 4c-1 1-2.5 1-3.5 0L2.8 4.3a2.82 2.82 0 0 1 0-4c1-1 2.5-1 3.5 0Z" />
-              <path d="m5.6 7.2 1.4-1.4" />
-              <path d="m8.4 10 1.4-1.4" />
-              <path d="m11.2 12.8 1.4-1.4" />
-              <path d="m14 15.6 1.4-1.4" />
-              <path d="m16.8 18.5 1.4-1.4" />
-            </svg>
-            <span>{request.requesterProfile.heightCm} cm</span>
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
-              <path d="m16 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
-              <path d="m2 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
-              <path d="M7 21h10" />
-              <path d="M12 3v18" />
-              <path d="M3 7h18" />
-            </svg>
-            <span>{request.requesterProfile.weightKg} kg</span>
-          </span>
-          <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            BMI {formatBmi(request.requesterProfile.heightCm, request.requesterProfile.weightKg)}
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-[hsl(var(--muted-foreground))]">
-              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
-            <span>{getProvinceName(request.requesterProfile.provinceCode)} · {getCityName(request.requesterProfile.provinceCode, request.requesterProfile.cityCode)}</span>
-          </span>
-          <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-            {getAttrLabel(request.requesterProfile.attribute, request.requesterProfile.customAttribute)}
-          </span>
-          {request.requesterProfile.mbti && (
-            <span className="rounded-lg bg-[hsl(var(--secondary))] px-2 py-1 text-xs text-[hsl(var(--foreground))]">
-              {request.requesterProfile.mbti}
-            </span>
-          )}
+        <div className="mb-3">
+          <RequestProfileTags profile={request.requesterProfile} />
         </div>
       )}
+
+      <CollapsibleSelfIntro text={request.requesterProfile?.selfIntro} className="mb-3" />
 
       {/* Message */}
       {request.message && (
@@ -372,6 +423,12 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
           </span>
         </div>
       </div>
+      {request.status === "APPROVED" && request.targetProfile && (
+        <div className="mt-3">
+          <RequestProfileTags profile={request.targetProfile} />
+        </div>
+      )}
+      <CollapsibleSelfIntro text={request.targetProfile?.selfIntro} className="mt-3" />
       {request.message && (
         <div className="mt-3 rounded-lg bg-[hsl(var(--secondary)/0.5)] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">
           &ldquo;{request.message}&rdquo;
@@ -401,6 +458,7 @@ function OutgoingRequestCard({ request }: { request: ViewRequest }) {
 
 export default function RequestsPage() {
   const [tab, setTab] = useState<"incoming" | "outgoing">("incoming");
+  const [requestFilter, setRequestFilter] = useState<RequestFilter>("all");
   const [requests, setRequests] = useState<ViewRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -414,7 +472,7 @@ export default function RequestsPage() {
     setError(null);
     try {
       const res = await fetch(
-        `/api/view-requests?type=${tab}&status=all&page=${page}&pageSize=20`
+        `/api/view-requests?type=${tab}&status=${requestFilter}&page=${page}&pageSize=20`
       );
       if (!res.ok) throw new Error("加载失败");
       const data = await res.json();
@@ -427,7 +485,7 @@ export default function RequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, page]);
+  }, [tab, requestFilter, page]);
 
   // Fetch pending count for incoming badge
   const fetchPendingCount = useCallback(async () => {
@@ -476,6 +534,27 @@ export default function RequestsPage() {
     }
   }
 
+  function handleTabChange(nextTab: "incoming" | "outgoing") {
+    setTab(nextTab);
+    setPage(1);
+  }
+
+  function handleRequestFilterChange(nextFilter: RequestFilter) {
+    setRequestFilter(nextFilter);
+    setPage(1);
+  }
+
+  const sortedRequests = useMemo(
+    () =>
+      [...requests].sort((a, b) => {
+        const aApproved = a.status === "APPROVED";
+        const bApproved = b.status === "APPROVED";
+        if (aApproved !== bApproved) return aApproved ? 1 : -1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }),
+    [requests],
+  );
+
   return (
     <div className="flex flex-col gap-5">
       <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
@@ -489,7 +568,7 @@ export default function RequestsPage() {
       {/* Tabs */}
       <div className="flex gap-1 rounded-xl bg-[hsl(var(--secondary))] p-1">
         <button
-          onClick={() => { setTab("incoming"); setPage(1); }}
+          onClick={() => handleTabChange("incoming")}
             className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:px-4 sm:text-sm ${
             tab === "incoming"
               ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
@@ -504,7 +583,7 @@ export default function RequestsPage() {
           )}
         </button>
         <button
-          onClick={() => { setTab("outgoing"); setPage(1); }}
+          onClick={() => handleTabChange("outgoing")}
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:px-4 sm:text-sm ${
             tab === "outgoing"
               ? "bg-brand-blue text-white shadow-[0_4px_12px_rgba(22,119,255,0.15)]"
@@ -513,6 +592,23 @@ export default function RequestsPage() {
         >
           发出的申请
         </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {REQUEST_FILTERS.map((item) => (
+          <button
+            key={item.value}
+            type="button"
+            onClick={() => handleRequestFilterChange(item.value)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
+              requestFilter === item.value
+                ? "bg-brand-blue text-white"
+                : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
 
       {/* Error */}
@@ -554,7 +650,7 @@ export default function RequestsPage() {
       {/* Cards */}
       {!loading && (
         <div className="flex flex-col gap-4">
-          {requests.map((req) =>
+          {sortedRequests.map((req) =>
             tab === "incoming" ? (
               <IncomingRequestCard
                 key={req.id}

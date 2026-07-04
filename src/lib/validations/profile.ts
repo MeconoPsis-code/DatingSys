@@ -4,6 +4,7 @@ import { MBTI_TYPES } from "@/data/mbti";
 import {
   HEIGHT_MAX_CM,
   HEIGHT_MIN_CM,
+  MAX_SELF_INTRO_LENGTH,
   WEIGHT_MAX_KG,
   WEIGHT_MIN_KG,
 } from "@/lib/profile-limits";
@@ -15,7 +16,6 @@ const MIN_HEIGHT = HEIGHT_MIN_CM;
 const MAX_HEIGHT = HEIGHT_MAX_CM;
 const MIN_WEIGHT = WEIGHT_MIN_KG;
 const MAX_WEIGHT = WEIGHT_MAX_KG;
-const MAX_SELF_INTRO = 500;
 const ATTRIBUTE_SCHEMA = z.enum(
   Object.values(Attribute) as [string, ...string[]]
 ) as z.ZodType<Attribute>;
@@ -94,7 +94,7 @@ export const profileSchema = z
 
     selfIntro: z
       .string()
-      .max(MAX_SELF_INTRO, `自我介绍不能超过 ${MAX_SELF_INTRO} 个字`)
+      .max(MAX_SELF_INTRO_LENGTH, `自我介绍不能超过 ${MAX_SELF_INTRO_LENGTH} 个字`)
       .optional()
       .nullable(),
 

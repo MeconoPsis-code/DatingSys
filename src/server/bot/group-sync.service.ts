@@ -99,6 +99,7 @@ export async function syncGroupMembers(
     where: {
       status: MembershipStatus.VERIFIED,
       groupId,
+      userId: { not: null },
     },
     include: {
       user: {
@@ -120,6 +121,8 @@ export async function syncGroupMembers(
   };
 
   for (const membership of verifiedAccounts) {
+    if (!membership.user) continue;
+
     const qqNumber = membership.user.qqNumber;
 
     if (!qqNumber) continue;

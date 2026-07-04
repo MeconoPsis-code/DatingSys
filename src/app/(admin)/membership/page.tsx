@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 
 interface Membership {
   id: string;
-  userId: string;
+  userId: string | null;
   qqNumber: string;
   groupId: string;
   status: string;
@@ -20,8 +20,8 @@ interface Membership {
   leaveType: string | null;
   reviewReason: string | null;
   createdAt: string;
-  userStatus: string;
-  userRole: string;
+  userStatus: string | null;
+  userRole: string | null;
   nickname: string | null;
   avatarUrl: string | null;
 }
@@ -205,7 +205,13 @@ export default function MembershipPage() {
   }, [pagination.page, statusFilter, search]);
 
   useEffect(() => {
-    if (authed) fetchMembers();
+    if (!authed) return;
+
+    const timeout = window.setTimeout(() => {
+      void fetchMembers();
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [authed, fetchMembers]);
 
   /* ─── Handlers ───────────────────────────────────── */
@@ -482,9 +488,16 @@ export default function MembershipPage() {
                         <div className={m.avatarUrl ? "hidden" : ""}>
                           <AvatarFallback name={m.nickname || m.qqNumber} />
                         </div>
-                        <span className="min-w-0 truncate font-medium text-[hsl(var(--foreground))]">
-                          {m.nickname || "—"}
-                        </span>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-[hsl(var(--foreground))]">
+                            {m.nickname || (m.userId ? "—" : "已删除账号")}
+                          </div>
+                          {!m.userId && (
+                            <div className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
+                              账号数据已清除，认证记录已保留
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-[hsl(var(--muted-foreground))]">

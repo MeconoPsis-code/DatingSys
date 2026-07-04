@@ -39,6 +39,16 @@ interface ExpectationCheck {
   expected: string;
 }
 
+type OneWayDirection = 'me_fits_them' | 'they_fit_me';
+
+function getOneWayDirection(
+  matchType: ReturnType<typeof getMatchType>
+): OneWayDirection | null {
+  if (matchType === 'one_way_ba') return 'me_fits_them';
+  if (matchType === 'one_way_ab') return 'they_fit_me';
+  return null;
+}
+
 function formatAttribute(attribute: string): string {
   return (
     ATTRIBUTE_LABELS[attribute as keyof typeof ATTRIBUTE_LABELS] ?? attribute
@@ -300,20 +310,86 @@ export async function GET(req: Request) {
       100,
       Math.max(1, parseInt(url.searchParams.get('pageSize') || '20', 10))
     );
+    const provinceOnly =
+      url.searchParams.get('provinceOnly') === 'true' ||
+      url.searchParams.get('sameProvince') === 'true';
+    const directionParam = url.searchParams.get('direction');
+    const directionFilter: 'all' | OneWayDirection =
+      directionParam === 'me_fits_them' || directionParam === 'they_fit_me'
+        ? directionParam
+        : 'all';
+    const matchesProvince = (m: { candidateUser: MatchCandidate }) =>
+      !provinceOnly ||
+      m.candidateUser.profile.provinceCode === profile.provinceCode;
 
-    // 10. Filter by type
-    let filtered;
+    // 10. Filter by type and requested scopes before counting/pagination.
+    let filtered: typeof allMatches;
+    let oneWaySummary:
+      | { total: number; meFitsThem: number; theyFitMe: number }
+      | null = null;
     if (type === 'one_way') {
-      filtered = allMatches.filter(
-        (m) => m.matchType === 'one_way_ab' || m.matchType === 'one_way_ba'
+      const scopedOneWayMatches = allMatches.filter(
+        (m) => getOneWayDirection(m.matchType) !== null && matchesProvince(m)
       );
+
+      oneWaySummary = scopedOneWayMatches.reduce(
+        (summary, m) => {
+          const direction = getOneWayDirection(m.matchType);
+          if (direction === 'me_fits_them') summary.meFitsThem += 1;
+          if (direction === 'they_fit_me') summary.theyFitMe += 1;
+          summary.total += 1;
+          return summary;
+        },
+        { total: 0, meFitsThem: 0, theyFitMe: 0 }
+      );
+
+      filtered =
+        directionFilter === 'all'
+          ? scopedOneWayMatches
+          : scopedOneWayMatches.filter(
+              (m) => getOneWayDirection(m.matchType) === directionFilter
+            );
     } else {
       // Default: mutual
-      filtered = allMatches.filter((m) => m.matchType === 'mutual');
+      filtered = allMatches.filter(
+        (m) => m.matchType === 'mutual' && matchesProvince(m)
+      );
     }
 
-    // 11. Sort by relevanceScore descending
-    filtered.sort((a, b) => b.relevanceScore - a.relevanceScore);
+    const filteredTargetIds = filtered.map((m) => m.userId);
+    const approvedViewRequests =
+      filteredTargetIds.length > 0
+        ? await db.viewRequest.findMany({
+            where: {
+              status: 'APPROVED',
+              OR: [
+                {
+                  requesterId: session.id,
+                  targetUserId: { in: filteredTargetIds },
+                },
+                {
+                  requesterId: { in: filteredTargetIds },
+                  targetUserId: session.id,
+                },
+              ],
+            },
+            select: { requesterId: true, targetUserId: true },
+          })
+        : [];
+    const approvedTargetIds = new Set(
+      approvedViewRequests.map((request) =>
+        request.requesterId === session.id ? request.targetUserId : request.requesterId
+      )
+    );
+
+    // 11. Sort: unapproved matches first, then approved matches; within each group,
+    // higher relevance stays closer to the top.
+    filtered.sort((a, b) => {
+      const aApproved = approvedTargetIds.has(a.userId);
+      const bApproved = approvedTargetIds.has(b.userId);
+      if (aApproved !== bApproved) return aApproved ? 1 : -1;
+      return b.relevanceScore - a.relevanceScore;
+    });
 
     // 12. Paginate
     const total = filtered.length;
@@ -340,8 +416,7 @@ export async function GET(req: Request) {
             check.matched,
           ])
         ) as Record<ExpectationCheckKey, boolean>;
-        const direction =
-          m.matchType === 'one_way_ba' ? 'me_fits_them' : 'they_fit_me';
+        const direction = getOneWayDirection(m.matchType) ?? 'they_fit_me';
 
         return {
           userId: m.userId,
@@ -350,6 +425,7 @@ export async function GET(req: Request) {
           weightMatch: targetMatchByKey.weight,
           attributeMatch: targetMatchByKey.attribute,
           hasPhotos: p.photos.length > 0 && m.candidate.ratingProfile !== null,
+          selfIntro: p.selfIntro,
           provinceCode: p.provinceCode,
           direction,
           directionLabel:
@@ -365,6 +441,7 @@ export async function GET(req: Request) {
         currentUserProvinceCode: profile.provinceCode,
         currentUserHasPhotos: profile.photos.length > 0 && ratingProfile !== null,
         canBypassCooldowns,
+        summary: oneWaySummary,
         pagination: {
           total,
           page,
@@ -376,31 +453,7 @@ export async function GET(req: Request) {
 
     // Mutual match — profile summary only; identity is unlocked after an approved view request.
     const currentUserHasPhotos = profile.photos.length > 0 && ratingProfile !== null;
-    const pageTargetIds = pageItems.map((m) => m.userId);
-    const approvedViewRequests =
-      pageTargetIds.length > 0
-        ? await db.viewRequest.findMany({
-            where: {
-              status: 'APPROVED',
-              OR: [
-                {
-                  requesterId: session.id,
-                  targetUserId: { in: pageTargetIds },
-                },
-                {
-                  requesterId: { in: pageTargetIds },
-                  targetUserId: session.id,
-                },
-              ],
-            },
-            select: { requesterId: true, targetUserId: true },
-          })
-        : [];
-    const identityUnlockedIds = new Set(
-      approvedViewRequests.map((request) =>
-        request.requesterId === session.id ? request.targetUserId : request.requesterId
-      )
-    );
+    const identityUnlockedIds = approvedTargetIds;
 
     const data = pageItems.map((m) => {
       const c = m.candidate;

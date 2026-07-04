@@ -827,6 +827,7 @@ export default function AdminUsersPage() {
   const [cooldownLoading, setCooldownLoading] = useState(false);
   const [cooldownError, setCooldownError] = useState<string | null>(null);
   const [cooldownTotal, setCooldownTotal] = useState(0);
+  const [cooldownSearch, setCooldownSearch] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
@@ -898,7 +899,10 @@ export default function AdminUsersPage() {
     setCooldownLoading(true);
     setCooldownError(null);
     try {
-      const res = await fetch("/api/admin/users/cooldowns");
+      const params = new URLSearchParams();
+      if (cooldownSearch.trim()) params.set("search", cooldownSearch.trim());
+      const query = params.toString();
+      const res = await fetch(`/api/admin/users/cooldowns${query ? `?${query}` : ""}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "加载冷却列表失败");
 
@@ -910,7 +914,7 @@ export default function AdminUsersPage() {
     } finally {
       setCooldownLoading(false);
     }
-  }, []);
+  }, [cooldownSearch]);
 
   useEffect(() => {
     if (viewMode !== "cooldowns") return;
@@ -922,6 +926,11 @@ export default function AdminUsersPage() {
     e.preventDefault();
     setPage(1);
     fetchUsers();
+  }
+
+  function handleCooldownSearch(e: React.FormEvent) {
+    e.preventDefault();
+    fetchCooldownUsers();
   }
 
   const selectedIdSet = new Set(selectedIds);
@@ -1052,7 +1061,22 @@ export default function AdminUsersPage() {
               仅显示当前存在冷却限制的用户，每项冷却可独立解除。
             </p>
           </div>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex w-full flex-col items-stretch gap-3 lg:w-auto lg:flex-row lg:items-center">
+            <form onSubmit={handleCooldownSearch} className="flex gap-2">
+              <input
+                type="text"
+                value={cooldownSearch}
+                onChange={(e) => setCooldownSearch(e.target.value)}
+                placeholder="搜索 QQ号 / 昵称..."
+                className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-3 py-2 text-sm text-[hsl(var(--foreground))] outline-none focus:border-[hsl(var(--primary))] sm:w-56"
+              />
+              <button
+                type="submit"
+                className="shrink-0 rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-white transition-all hover:scale-[1.02]"
+              >
+                搜索
+              </button>
+            </form>
             <span className="text-xs text-[hsl(var(--muted-foreground))]">
               共 {cooldownTotal} 个用户
             </span>

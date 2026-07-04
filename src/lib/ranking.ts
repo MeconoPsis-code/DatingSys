@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { normalizeNicknameInput } from "@/lib/group-card";
 import type { ViewRequestStatus } from "@prisma/client";
@@ -15,12 +16,49 @@ export type RankingProfileRequestStatus =
   | "PENDING_INCOMING"
   | "SELF";
 
+const RANKING_LIMIT_REVALIDATE_SECONDS = 7 * 24 * 60 * 60;
+const MIN_VISIBLE_RANKING_LIMIT = 10;
+
+function calculateRankingDisplayLimit(photoUserCount: number): number {
+  if (photoUserCount <= 0) return 0;
+
+  const tenPercent = photoUserCount * 0.1;
+  const roundedToNearestTen = Math.round(tenPercent / 10) * 10;
+
+  return Math.max(MIN_VISIBLE_RANKING_LIMIT, roundedToNearestTen);
+}
+
+const getCachedPhotoUserCount = unstable_cache(
+  async () =>
+    db.user.count({
+      where: {
+        status: "ACTIVE",
+        profile: {
+          is: {
+            status: "ACTIVE",
+            photos: { some: {} },
+          },
+        },
+      },
+    }),
+  ["ranking-photo-user-count-v1"],
+  { revalidate: RANKING_LIMIT_REVALIDATE_SECONDS }
+);
+
 function displayNickname(rawNickname: string | null | undefined): string {
   const normalized = normalizeNicknameInput(rawNickname || "");
   return normalized || "未设置昵称";
 }
 
-export async function getTopRankingEntries(limit = 10): Promise<RankingEntry[]> {
+export async function getRankingDisplayLimit(): Promise<number> {
+  const photoUserCount = await getCachedPhotoUserCount();
+  return calculateRankingDisplayLimit(photoUserCount);
+}
+
+export async function getTopRankingEntries(limit?: number): Promise<RankingEntry[]> {
+  const effectiveLimit = limit ?? (await getRankingDisplayLimit());
+  if (effectiveLimit <= 0) return [];
+
   const rows = await db.ratingProfile.findMany({
     where: {
       ratingStatus: "COMPLETED",
@@ -33,7 +71,7 @@ export async function getTopRankingEntries(limit = 10): Promise<RankingEntry[]> 
       { scoreCompletedAt: "asc" },
       { updatedAt: "asc" },
     ],
-    take: limit,
+    take: effectiveLimit,
     select: {
       userId: true,
       finalScore: true,

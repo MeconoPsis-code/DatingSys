@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { error, success } from "@/lib/api-response";
+import { commitExpiredActions } from "@/lib/scoring-revocation";
 
 const SCORE_BUCKETS = [
   { label: "0.0-0.9", min: 0, max: 1 },
@@ -84,6 +85,7 @@ function latestIso(dates: Array<Date | null>) {
 export async function GET() {
   try {
     await requireRole("ADMIN");
+    await commitExpiredActions();
 
     const [publishedProfiles, completedTasks] = await Promise.all([
       db.ratingProfile.findMany({

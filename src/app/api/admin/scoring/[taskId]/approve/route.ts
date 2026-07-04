@@ -1,12 +1,12 @@
 import { requireRole } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { success, error } from '@/lib/api-response';
-import { notify } from '@/lib/notifications';
 import { calculateAverageScore } from '@/lib/scoring';
+import { SCORE_ACTION_REVOCATION_WINDOW_MS } from '@/lib/scoring-revocation';
 
 /**
  * POST /api/admin/scoring/[taskId]/approve
- * Super admin publishes the current live average to the user's RatingProfile.
+ * Super admin schedules the current live average for publishing after the revocation window.
  */
 export async function POST(
   _req: Request,
@@ -16,7 +16,7 @@ export async function POST(
     const session = await requireRole('SUPER_ADMIN');
     const { taskId } = await params;
 
-    const published = await db.$transaction(async (tx) => {
+    const scheduled = await db.$transaction(async (tx) => {
       const task = await tx.ratingTask.findUnique({
         where: { id: taskId },
         include: { scores: { select: { score: true } } },
@@ -36,16 +36,17 @@ export async function POST(
       }
 
       const now = new Date();
+      const expiresAt = new Date(now.getTime() + SCORE_ACTION_REVOCATION_WINDOW_MS);
 
       await tx.ratingTask.update({
         where: { id: taskId },
         data: {
-          status: 'COMPLETED',
-          completedAt: now,
-          pendingActionType: null,
+          status: 'REVIEW',
+          completedAt: task.completedAt ?? now,
+          pendingActionType: 'APPROVE',
           pendingActionValue: null,
-          pendingActionExpiresAt: null,
-          pendingActionActorId: null,
+          pendingActionExpiresAt: expiresAt,
+          pendingActionActorId: session.id,
         },
       });
 
@@ -53,43 +54,41 @@ export async function POST(
         where: { userId: task.ratedUserId },
         create: {
           userId: task.ratedUserId,
-          ratingStatus: 'COMPLETED',
-          finalScore,
-          scoreCompletedAt: now,
+          ratingStatus: 'REVIEW',
         },
         update: {
-          ratingStatus: 'COMPLETED',
-          finalScore,
-          scoreCompletedAt: now,
+          ratingStatus: 'REVIEW',
+          finalScore: null,
+          scoreCompletedAt: null,
         },
       });
 
       await tx.auditLog.create({
         data: {
           actorUserId: session.id,
-          action: 'ADMIN_APPROVE_SCORE',
+          action: 'ADMIN_APPROVE_SCORE_PENDING',
           targetType: 'RatingTask',
           targetId: taskId,
           metadata: {
             ratedUserId: task.ratedUserId,
             finalScore,
             scoredCount: task.scores.length,
-            immediatePublish: true,
+            pendingActionExpiresAt: expiresAt.toISOString(),
+            revocationWindowMinutes: SCORE_ACTION_REVOCATION_WINDOW_MS / 60000,
           },
         },
       });
 
       return {
-        ratedUserId: task.ratedUserId,
         finalScore,
+        pendingActionExpiresAt: expiresAt.toISOString(),
       };
     });
 
-    await notify.scoringComplete(published.ratedUserId, published.finalScore);
-
     return success({
-      message: '已发布当前实时评分',
-      finalScore: published.finalScore,
+      message: '评分审核通过已提交，将在 5 分钟后生效',
+      finalScore: scheduled.finalScore,
+      pendingActionExpiresAt: scheduled.pendingActionExpiresAt,
     });
   } catch (err) {
     console.error('[admin/scoring/approve] POST error:', err);

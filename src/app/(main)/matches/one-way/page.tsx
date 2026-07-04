@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { CollapsibleSelfIntro } from "@/components/profile/collapsible-self-intro";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -22,6 +23,7 @@ interface OneWayMatch {
   weightMatch: boolean;
   attributeMatch: boolean;
   hasPhotos: boolean;
+  selfIntro: string | null;
   provinceCode: string;
   direction: MatchDirection;
   directionLabel: string;
@@ -29,6 +31,18 @@ interface OneWayMatch {
   meAgainstTargetExpectations: ExpectationCheck[];
   relevanceScore: number;
 }
+
+interface OneWaySummary {
+  total: number;
+  meFitsThem: number;
+  theyFitMe: number;
+}
+
+const EMPTY_ONE_WAY_SUMMARY: OneWaySummary = {
+  total: 0,
+  meFitsThem: 0,
+  theyFitMe: 0,
+};
 
 /* ─── Match Tabs ─────────────────────────────────────── */
 
@@ -350,6 +364,8 @@ function OneWayMatchCard({
         )}
       </div>
 
+      <CollapsibleSelfIntro text={match.selfIntro} className="mb-4" />
+
       <div className="mb-4 space-y-3">
         <ExpectationSection
           title="他是否符合我"
@@ -448,13 +464,12 @@ export default function OneWayMatchesPage() {
   const [scoringPending, setScoringPending] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<OneWaySummary>(EMPTY_ONE_WAY_SUMMARY);
   const [viewRequestMap, setViewRequestMap] = useState<Record<string, string>>({});
   const [requesting, setRequesting] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | MatchDirection>("all");
   const [provinceOnly, setProvinceOnly] = useState(false);
-  const [currentUserProvinceCode, setCurrentUserProvinceCode] = useState<string | null>(null);
   const [currentUserHasPhotos, setCurrentUserHasPhotos] = useState(false);
   const [canBypassCooldowns, setCanBypassCooldowns] = useState(false);
   const pageSize = 20;
@@ -466,7 +481,7 @@ export default function OneWayMatchesPage() {
     setScoringPending(false);
     try {
       const res = await fetch(
-        `/api/matches?type=one_way&page=${page}&pageSize=${pageSize}`
+        `/api/matches?type=one_way&page=${page}&pageSize=${pageSize}&provinceOnly=${provinceOnly ? "true" : "false"}&direction=${filter}`
       );
       if (!res.ok) {
         const data = await res.json();
@@ -477,27 +492,26 @@ export default function OneWayMatchesPage() {
       if (data.data?.status === "scoring_pending") {
         setScoringPending(true);
         setMatches([]);
+        setSummary(EMPTY_ONE_WAY_SUMMARY);
+        setTotalPages(0);
         return;
       }
 
       setMatches(data.data || []);
-      if (data.currentUserProvinceCode) {
-        setCurrentUserProvinceCode(data.currentUserProvinceCode);
-      }
       if (data.currentUserHasPhotos !== undefined) {
         setCurrentUserHasPhotos(data.currentUserHasPhotos);
       }
       setCanBypassCooldowns(Boolean(data.canBypassCooldowns));
+      setSummary(data.summary || EMPTY_ONE_WAY_SUMMARY);
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
-        setTotal(data.pagination.total);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, provinceOnly, filter]);
 
   // Load existing view requests in both directions to track pair-level status.
   const fetchViewRequests = useCallback(async () => {
@@ -578,17 +592,37 @@ export default function OneWayMatchesPage() {
     }
   }
 
-  const dirFiltered =
-    filter === "all"
-      ? matches
-      : matches.filter((m) => m.direction === filter);
+  function handlePageChange(newPage: number) {
+    setPage(newPage);
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-  const filteredMatches = provinceOnly && currentUserProvinceCode
-    ? dirFiltered.filter((m) => m.provinceCode === currentUserProvinceCode)
-    : dirFiltered;
+  function handleProvinceFilterChange(enabled: boolean) {
+    setProvinceOnly(enabled);
+    setPage(1);
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-  const meFitsThemCount = matches.filter((m) => m.direction === "me_fits_them").length;
-  const theyFitMeCount = matches.filter((m) => m.direction === "they_fit_me").length;
+  function handleDirectionFilterChange(nextFilter: "all" | MatchDirection) {
+    setFilter(nextFilter);
+    setPage(1);
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const sortedMatches = useMemo(
+    () =>
+      [...matches].sort((a, b) => {
+        const aApproved = viewRequestMap[a.userId] === "APPROVED";
+        const bApproved = viewRequestMap[b.userId] === "APPROVED";
+        if (aApproved !== bApproved) return aApproved ? 1 : -1;
+        return b.relevanceScore - a.relevanceScore;
+      }),
+    [matches, viewRequestMap],
+  );
+  const hasApprovedMatches = useMemo(
+    () => matches.some((match) => viewRequestMap[match.userId] === "APPROVED"),
+    [matches, viewRequestMap],
+  );
 
   return (
     <div ref={scrollRef} className="flex flex-col gap-5">
@@ -602,12 +636,12 @@ export default function OneWayMatchesPage() {
       <MatchTabs />
 
       {/* Province filter toggle */}
-      {!loading && !scoringPending && matches.length > 0 && (
-        <div className="flex items-center gap-2">
+      {!loading && !scoringPending && (matches.length > 0 || summary.total > 0 || provinceOnly) && (
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg border border-brand-line bg-white/90 p-0.5 shadow-sm">
             <button
               type="button"
-              onClick={() => setProvinceOnly(false)}
+              onClick={() => handleProvinceFilterChange(false)}
               className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
                 !provinceOnly
                   ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
@@ -618,7 +652,7 @@ export default function OneWayMatchesPage() {
             </button>
             <button
               type="button"
-              onClick={() => setProvinceOnly(true)}
+              onClick={() => handleProvinceFilterChange(true)}
               className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
                 provinceOnly
                   ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
@@ -628,6 +662,14 @@ export default function OneWayMatchesPage() {
               同省
             </button>
           </div>
+          {hasApprovedMatches && (
+            <Link
+              href="/requests"
+              className="inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-blue shadow-sm ring-1 ring-brand-blue/25 transition-all hover:bg-blue-1"
+            >
+              已通过的资料已置后 · 点击前往申请页
+            </Link>
+          )}
         </div>
       )}
 
@@ -651,7 +693,7 @@ export default function OneWayMatchesPage() {
             评分中，请耐心等待
           </h2>
           <p className="mt-2 max-w-xs text-center text-sm text-[hsl(var(--muted-foreground))]">
-            您的照片正在被评分组审核，评分完成后即可查看匹配结果。
+            您的照片正在被评分组审核，评分完成后即可查看匹配结果，预计 48 小时内出分。
           </p>
         </div>
       )}
@@ -664,40 +706,40 @@ export default function OneWayMatchesPage() {
       )}
 
       {/* Direction filter */}
-      {!loading && !scoringPending && matches.length > 0 && (
+      {!loading && !scoringPending && (matches.length > 0 || summary.total > 0 || filter !== "all") && (
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setFilter("all")}
+            onClick={() => handleDirectionFilterChange("all")}
             className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
               filter === "all"
                 ? "bg-brand-blue text-white"
                 : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
             }`}
           >
-            全部 ({total})
+            全部 ({summary.total})
           </button>
           <button
             type="button"
-            onClick={() => setFilter("me_fits_them")}
+            onClick={() => handleDirectionFilterChange("me_fits_them")}
             className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
               filter === "me_fits_them"
                 ? "bg-brand-blue text-white"
                 : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
             }`}
           >
-            我符合他 ({meFitsThemCount})
+            我符合他 ({summary.meFitsThem})
           </button>
           <button
             type="button"
-            onClick={() => setFilter("they_fit_me")}
+            onClick={() => handleDirectionFilterChange("they_fit_me")}
             className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
               filter === "they_fit_me"
                 ? "bg-emerald-500 text-white"
                 : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
             }`}
           >
-            他符合我 ({theyFitMeCount})
+            他符合我 ({summary.theyFitMe})
           </button>
         </div>
       )}
@@ -723,7 +765,7 @@ export default function OneWayMatchesPage() {
       {/* Match cards */}
       {!loading && (
         <div className="flex flex-col gap-4">
-          {filteredMatches.map((match) => (
+          {sortedMatches.map((match) => (
             <OneWayMatchCard
               key={match.userId}
               match={match}
@@ -742,7 +784,7 @@ export default function OneWayMatchesPage() {
           <button
             type="button"
             disabled={page <= 1}
-            onClick={() => { setPage(page - 1); scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }}
+            onClick={() => handlePageChange(page - 1)}
             className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] disabled:opacity-40"
           >
             上一页
@@ -753,7 +795,7 @@ export default function OneWayMatchesPage() {
           <button
             type="button"
             disabled={page >= totalPages}
-            onClick={() => { setPage(page + 1); scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }}
+            onClick={() => handlePageChange(page + 1)}
             className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] transition-all hover:bg-[hsl(var(--secondary))] disabled:opacity-40"
           >
             下一页

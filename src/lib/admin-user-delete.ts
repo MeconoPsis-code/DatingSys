@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { readProfileDraftData } from "@/lib/profile-draft";
 import { parseReportEvidenceKeys } from "@/lib/report-evidence";
 import { deleteFile } from "@/lib/storage";
+import { MembershipStatus } from "@prisma/client";
 
 export interface DeletedUserSnapshot {
   id: string;
@@ -19,6 +20,8 @@ export interface DeleteUsersPermanentlyOptions {
   userIds: string[];
   auditAction?: string;
   auditMetadata?: Record<string, unknown>;
+  groupMembershipRemovalRemark?: string;
+  groupMembershipReviewResolution?: string;
 }
 
 export interface DeleteUsersPermanentlyResult {
@@ -107,6 +110,8 @@ export async function deleteUsersPermanently({
   userIds,
   auditAction = "ADMIN_DELETE_USER",
   auditMetadata,
+  groupMembershipRemovalRemark = "User permanently deleted by admin",
+  groupMembershipReviewResolution = "user_deleted",
 }: DeleteUsersPermanentlyOptions): Promise<DeleteUsersPermanentlyResult> {
   const uniqueUserIds = uniqueNonEmpty(userIds);
   if (uniqueUserIds.length === 0) {
@@ -129,6 +134,8 @@ export async function deleteUsersPermanently({
   const fileKeys = await collectUserFileKeys(uniqueUserIds);
 
   await db.$transaction(async (tx) => {
+    const now = new Date();
+
     await tx.ratingScore.deleteMany({
       where: { scorerUserId: { in: uniqueUserIds } },
     });
@@ -175,6 +182,16 @@ export async function deleteUsersPermanently({
       where: { revokedBy: { in: uniqueUserIds } },
       data: { revokedBy: null },
     });
+    await tx.groupMembership.updateMany({
+      where: { userId: { in: uniqueUserIds } },
+      data: {
+        userId: null,
+        status: MembershipStatus.REMOVED,
+        removedAt: now,
+        reviewedBy: actorId,
+        reviewRemark: groupMembershipRemovalRemark,
+      },
+    });
     await tx.report.updateMany({
       where: { handledBy: { in: uniqueUserIds } },
       data: { handledBy: null },
@@ -183,8 +200,22 @@ export async function deleteUsersPermanently({
       where: { handledBy: { in: uniqueUserIds } },
       data: { handledBy: null },
     });
-    await tx.adminReview.deleteMany({
+    await tx.adminReview.updateMany({
+      where: {
+        userId: { in: uniqueUserIds },
+        type: "group_membership_left",
+        status: "pending",
+      },
+      data: {
+        status: "resolved",
+        resolution: groupMembershipReviewResolution,
+        handledBy: actorId,
+        handledAt: now,
+      },
+    });
+    await tx.adminReview.updateMany({
       where: { userId: { in: uniqueUserIds } },
+      data: { userId: null },
     });
     await tx.auditLog.deleteMany({
       where: {

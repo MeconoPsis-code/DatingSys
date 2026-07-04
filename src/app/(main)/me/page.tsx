@@ -897,8 +897,8 @@ export default function MePage() {
               </p>
               <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
                 {rankingEnabled
-                  ? "你的昵称和颜值分会进入前 10 名排行计算。"
-                  : "开启后，若进入前 10 名会显示在公开排行页。"}
+                  ? "你的昵称和颜值分会进入公开排行计算。"
+                  : "开启后，若进入当前展示范围会显示在公开排行页。"}
               </p>
               <p className={`mt-1 text-xs ${rankingCooldownActive ? "text-amber-500" : "text-[hsl(var(--muted-foreground))]"}`}>
                 {rankingCooldownHint}

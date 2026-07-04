@@ -181,13 +181,19 @@ export function MainNav() {
   const [role, setRole] = useState<UserRole>("USER");
   const [requestBadge, setRequestBadge] = useState(0);
   const [notificationBadge, setNotificationBadge] = useState(0);
+  const [reviewBadge, setReviewBadge] = useState(0);
   const [isSystemMenuOpen, setIsSystemMenuOpen] = useState(false);
 
   const fetchBadges = useCallback(async () => {
     try {
-      const [reqRes, notiRes] = await Promise.all([
+      const reviewRequest =
+        role === "SUPER_ADMIN"
+          ? fetch("/api/admin/scoring/review-count")
+          : Promise.resolve(null);
+      const [reqRes, notiRes, reviewRes] = await Promise.all([
         fetch("/api/view-requests?type=incoming&status=pending&pageSize=1"),
         fetch("/api/notifications?pageSize=1"),
+        reviewRequest,
       ]);
       if (reqRes.ok) {
         const data = await reqRes.json();
@@ -197,8 +203,14 @@ export function MainNav() {
         const data = await notiRes.json();
         setNotificationBadge(data.data?.unreadCount ?? 0);
       }
+      if (reviewRes?.ok) {
+        const data = await reviewRes.json();
+        setReviewBadge(data.data?.total ?? 0);
+      } else if (role !== "SUPER_ADMIN") {
+        setReviewBadge(0);
+      }
     } catch { /* non-critical */ }
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     let cancelled = false;
@@ -327,10 +339,15 @@ export function MainNav() {
   const getBadge = (href: string) => {
     if (href === "/requests") return requestBadge;
     if (href === "/notifications") return notificationBadge;
+    if (href === "/scoring-review") return reviewBadge;
     return 0;
   };
 
   const isSystemActive = managementSection.some((tab) => isActive(tab.href));
+  const systemBadge = managementSection.reduce(
+    (sum, tab) => sum + getBadge(tab.href),
+    0
+  );
 
   async function handleNavClick(
     event: React.MouseEvent<HTMLAnchorElement>,
@@ -458,6 +475,7 @@ export function MainNav() {
           <div className="grid gap-1 p-2">
             {managementSection.map((tab) => {
               const active = isActive(tab.href);
+              const badge = getBadge(tab.href);
               return (
                 <Link
                   key={tab.href}
@@ -472,7 +490,12 @@ export function MainNav() {
                   <span className="shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
                     {tab.icon}
                   </span>
-                  {tab.label}
+                  <span>{tab.label}</span>
+                  {badge > 0 && (
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[hsl(0,72%,51%)] px-1 text-[10px] font-bold text-white">
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -515,6 +538,11 @@ export function MainNav() {
         >
           <span className="relative shrink-0 [&_svg]:h-5 [&_svg]:w-5 [&_svg]:fill-current [&_svg]:stroke-current [&_svg]:stroke-2 [&_svg]:stroke-linecap-round [&_svg]:stroke-linejoin-round">
             {systemMenuIcon}
+            {systemBadge > 0 && (
+              <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[hsl(0,72%,51%)] px-0.5 text-[9px] font-bold text-white">
+                {systemBadge > 99 ? "99+" : systemBadge}
+              </span>
+            )}
           </span>
           <span className="truncate">系统</span>
         </button>

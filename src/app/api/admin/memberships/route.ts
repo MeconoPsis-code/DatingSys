@@ -98,10 +98,10 @@ export async function GET(req: NextRequest) {
       reviewReason: m.reviewReason,
       createdAt: m.createdAt,
       // User info
-      userStatus: m.user.status,
-      userRole: m.user.role,
-      nickname: m.user.authIdentities[0]?.nickname || null,
-      avatarUrl: m.user.authIdentities[0]?.avatarUrl || null,
+      userStatus: m.user?.status ?? null,
+      userRole: m.user?.role ?? null,
+      nickname: m.user?.authIdentities[0]?.nickname || null,
+      avatarUrl: m.user?.authIdentities[0]?.avatarUrl || null,
     }));
 
     return NextResponse.json({

@@ -19,6 +19,7 @@ import {
   HEIGHT_DEFAULT_CM,
   HEIGHT_MAX_CM,
   HEIGHT_MIN_CM,
+  MAX_SELF_INTRO_LENGTH,
   WEIGHT_DEFAULT_KG,
   WEIGHT_MAX_KG,
   WEIGHT_MIN_KG,
@@ -961,14 +962,15 @@ function ProfileFormSection({
           <textarea
             value={profile.selfIntro}
             onChange={(e) => {
-              if (e.target.value.length <= 500) updateProfile("selfIntro", e.target.value);
+              if (e.target.value.length <= MAX_SELF_INTRO_LENGTH) updateProfile("selfIntro", e.target.value);
             }}
             placeholder="写点什么介绍自己吧..."
-            rows={4}
+            maxLength={MAX_SELF_INTRO_LENGTH}
+            rows={6}
             className="w-full resize-none rounded-lg border border-[hsl(var(--input))] bg-transparent px-3 py-2.5 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] focus:border-[hsl(var(--ring))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--ring))]"
           />
           <span className="absolute bottom-2 right-3 text-xs text-[hsl(var(--muted-foreground))]">
-            {profile.selfIntro.length}/500
+            {profile.selfIntro.length}/{MAX_SELF_INTRO_LENGTH}
           </span>
         </div>
       </section>
