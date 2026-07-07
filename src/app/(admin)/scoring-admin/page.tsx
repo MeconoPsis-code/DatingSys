@@ -173,6 +173,13 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   REPORTED: { label: "被举报", cls: "bg-[#fff1f0] text-[#cf1322] border-[#ffa39e]" },
   NEEDS_RESCORE: { label: "需重评", cls: "bg-[#fff7e6] text-[#d46b08] border-[#ffd591]" },
 };
+const FORCE_PUBLISHABLE_STATUSES = ["PENDING", "SCORING", "NEEDS_RESCORE"] as const;
+
+function canForcePublishStatus(status: string) {
+  return FORCE_PUBLISHABLE_STATUSES.includes(
+    status as (typeof FORCE_PUBLISHABLE_STATUSES)[number]
+  );
+}
 
 function formatDate(d: string) {
   return new Date(d).toLocaleString("zh-CN", {
@@ -333,6 +340,8 @@ function TaskCard({
     calculatedAvg !== task.finalScore
       ? "手动设定"
       : `基于 ${task.scores.length} 个评分`;
+  const canForcePublish =
+    isSuperAdmin && task.photoReports.length === 0 && canForcePublishStatus(task.status);
 
   return (
     <div className="min-w-0 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 transition-all hover:border-[hsl(var(--primary)/0.2)] sm:p-5">
@@ -641,6 +650,41 @@ function TaskCard({
       {/* Actions for non-REVIEW tasks — SUPER_ADMIN only */}
       {task.status !== "REVIEW" && task.photoReports.length === 0 && isSuperAdmin && (
         <div className="flex flex-wrap gap-2">
+          {canForcePublish && (
+            <>
+              <button
+                type="button"
+                disabled={calculatedAvg === null}
+                title={
+                  calculatedAvg === null
+                    ? "当前还没有评分，无法按实时均分发布"
+                    : "终止当前打分并按实时均分直接发布"
+                }
+                onClick={() => {
+                  if (calculatedAvg === null) return;
+                  if (
+                    confirm(
+                      `确定要终止当前打分，并按实时均分 ${calculatedAvg.toFixed(
+                        1
+                      )} 分直接发布吗？未评分的评分员将不再继续评分。`
+                    )
+                  ) {
+                    onApprove(task.id);
+                  }
+                }}
+                className="flex items-center rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                终止并发布均分
+              </button>
+              <OverrideScoreInput onSubmit={(score) => onOverride(task.id, score)} />
+            </>
+          )}
           <button
             type="button"
             onClick={() => {

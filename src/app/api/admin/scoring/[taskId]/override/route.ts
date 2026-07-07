@@ -2,7 +2,39 @@ import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { success, error } from "@/lib/api-response";
 import { notify } from "@/lib/notifications";
+import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
+import {
+  getAssignedScorerIdsForTask,
+  getScoringTaskTimeline,
+  SCOREABLE_TASK_STATUSES,
+} from "@/lib/scoring";
 import { SCORE_ACTION_REVOCATION_WINDOW_MS } from "@/lib/scoring-revocation";
+
+function canPublishImmediately(status: string) {
+  return (
+    status === "COMPLETED" ||
+    SCOREABLE_TASK_STATUSES.includes(status as (typeof SCOREABLE_TASK_STATUSES)[number])
+  );
+}
+
+async function getCurrentAssignedScorerIds(task: {
+  status: string;
+  ratedUserId: string;
+  scorerSnapshot: unknown;
+  createdAt: Date;
+}) {
+  const timeline = getScoringTaskTimeline(task.createdAt);
+  const onDutyScorerIds = await getOnDutyScorerIds({
+    weekday: getChinaDutyWeekday(timeline.publishAt),
+  });
+
+  return getAssignedScorerIdsForTask({
+    status: task.status,
+    ratedUserId: task.ratedUserId,
+    scorerSnapshot: task.scorerSnapshot,
+    onDutyScorerIds: onDutyScorerIds.filter((id) => id !== task.ratedUserId),
+  });
+}
 
 /**
  * POST /api/admin/scoring/[taskId]/override
@@ -37,11 +69,18 @@ export async function POST(
 
       const now = new Date();
 
-      if (task.status === "COMPLETED") {
+      if (canPublishImmediately(task.status)) {
+        const scorerSnapshot =
+          task.status === "COMPLETED"
+            ? undefined
+            : await getCurrentAssignedScorerIds(task);
+
         await tx.ratingTask.update({
           where: { id: taskId },
           data: {
+            status: "COMPLETED",
             completedAt: now,
+            ...(scorerSnapshot ? { scorerSnapshot } : {}),
             pendingActionType: null,
             pendingActionValue: null,
             pendingActionExpiresAt: null,
@@ -72,6 +111,7 @@ export async function POST(
             targetId: taskId,
             metadata: {
               ratedUserId: task.ratedUserId,
+              previousStatus: task.status,
               overriddenScore: score,
               immediatePublish: true,
             },
