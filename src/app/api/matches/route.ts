@@ -1,15 +1,18 @@
-import { requireAuth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { success, error } from '@/lib/api-response';
-import { NextResponse } from 'next/server';
+import { requireAuth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { success, error } from "@/lib/api-response";
+import { NextResponse } from "next/server";
 import {
   getMatchType,
   computeRelevanceScore,
   profileMatchesExpectedAttributes,
   type MatchCandidate,
-} from '@/lib/matching';
-import { commitExpiredActions } from '@/lib/scoring-revocation';
-import { ATTRIBUTE_LABELS } from '@/data/attributes';
+} from "@/lib/matching";
+import { commitExpiredActions } from "@/lib/scoring-revocation";
+import { ATTRIBUTE_LABELS } from "@/data/attributes";
+import { PROVINCES } from "@/data/regions";
+
+const PROVINCE_CODES = new Set(PROVINCES.map((province) => province.code));
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -30,7 +33,7 @@ function resolveQQAvatarUrl(
   return `https://q1.qlogo.cn/g?b=qq&nk=${encodeURIComponent(qqNumber)}&s=640`;
 }
 
-type ExpectationCheckKey = 'age' | 'height' | 'weight' | 'attribute';
+type ExpectationCheckKey = "age" | "height" | "weight" | "attribute";
 
 interface ExpectationCheck {
   key: ExpectationCheckKey;
@@ -39,25 +42,23 @@ interface ExpectationCheck {
   expected: string;
 }
 
-type OneWayDirection = 'me_fits_them' | 'they_fit_me';
+type OneWayDirection = "me_fits_them" | "they_fit_me";
 
 function getOneWayDirection(
   matchType: ReturnType<typeof getMatchType>
 ): OneWayDirection | null {
-  if (matchType === 'one_way_ba') return 'me_fits_them';
-  if (matchType === 'one_way_ab') return 'they_fit_me';
+  if (matchType === "one_way_ba") return "me_fits_them";
+  if (matchType === "one_way_ab") return "they_fit_me";
   return null;
 }
 
 function formatAttribute(attribute: string): string {
-  return (
-    ATTRIBUTE_LABELS[attribute as keyof typeof ATTRIBUTE_LABELS] ?? attribute
-  );
+  return ATTRIBUTE_LABELS[attribute as keyof typeof ATTRIBUTE_LABELS] ?? attribute;
 }
 
 function formatAttributeList(attributes: string[]): string {
-  if (attributes.length === 0) return '未设置';
-  return attributes.map(formatAttribute).join(' / ');
+  if (attributes.length === 0) return "未设置";
+  return attributes.map(formatAttribute).join(" / ");
 }
 
 function buildExpectationChecks(
@@ -69,32 +70,32 @@ function buildExpectationChecks(
 
   return [
     {
-      key: 'age',
-      label: '年龄',
+      key: "age",
+      label: "年龄",
       matched:
         subjectAge >= preferenceOwner.preference.ageMin &&
         subjectAge <= preferenceOwner.preference.ageMax,
       expected: `${preferenceOwner.preference.ageMin}-${preferenceOwner.preference.ageMax} 岁`,
     },
     {
-      key: 'height',
-      label: '身高',
+      key: "height",
+      label: "身高",
       matched:
         subject.profile.heightCm >= preferenceOwner.preference.heightMinCm &&
         subject.profile.heightCm <= preferenceOwner.preference.heightMaxCm,
       expected: `${preferenceOwner.preference.heightMinCm}-${preferenceOwner.preference.heightMaxCm} cm`,
     },
     {
-      key: 'weight',
-      label: '体重',
+      key: "weight",
+      label: "体重",
       matched:
         subject.profile.weightKg >= preferenceOwner.preference.weightMinKg &&
         subject.profile.weightKg <= preferenceOwner.preference.weightMaxKg,
       expected: `${preferenceOwner.preference.weightMinKg}-${preferenceOwner.preference.weightMaxKg} kg`,
     },
     {
-      key: 'attribute',
-      label: '属性',
+      key: "attribute",
+      label: "属性",
       matched: profileMatchesExpectedAttributes(expectedAttributes, subject.profile),
       expected: formatAttributeList(expectedAttributes),
     },
@@ -107,7 +108,7 @@ export async function GET(req: Request) {
   try {
     await commitExpiredActions();
     const session = await requireAuth();
-    const canBypassCooldowns = session.role === 'SUPER_ADMIN';
+    const canBypassCooldowns = session.role === "SUPER_ADMIN";
 
     // 1. Load current user's profile + preference
     const profile = await db.profile.findUnique({
@@ -119,8 +120,8 @@ export async function GET(req: Request) {
     });
 
     // 2. Must have an active profile
-    if (!profile || profile.status !== 'ACTIVE' || !preference) {
-      return error('NO_PROFILE', '请先完善并发布资料', 400);
+    if (!profile || profile.status !== "ACTIVE" || !preference) {
+      return error("NO_PROFILE", "请先完善并发布资料", 400);
     }
 
     // 3. Load the user's RatingProfile
@@ -132,13 +133,13 @@ export async function GET(req: Request) {
     if (
       profile.photos.length > 0 &&
       ratingProfile &&
-      (ratingProfile.ratingStatus === 'PENDING' ||
-        ratingProfile.ratingStatus === 'SCORING' ||
-        ratingProfile.ratingStatus === 'REVIEW')
+      (ratingProfile.ratingStatus === "PENDING" ||
+        ratingProfile.ratingStatus === "SCORING" ||
+        ratingProfile.ratingStatus === "REVIEW")
     ) {
       return success({
-        status: 'scoring_pending',
-        message: '评分中，请耐心等待',
+        status: "scoring_pending",
+        message: "评分中，请耐心等待",
       });
     }
 
@@ -146,12 +147,12 @@ export async function GET(req: Request) {
     if (
       profile.photos.length > 0 &&
       ratingProfile &&
-      ratingProfile.ratingStatus === 'COMPLETED' &&
+      ratingProfile.ratingStatus === "COMPLETED" &&
       !profile.photoMatchPref
     ) {
       return success({
-        status: 'preference_pending',
-        message: '评分已完成，请先设置匹配偏好',
+        status: "preference_pending",
+        message: "评分已完成，请先设置匹配偏好",
         finalScore: ratingProfile.finalScore,
       });
     }
@@ -160,8 +161,8 @@ export async function GET(req: Request) {
     const candidates = await db.user.findMany({
       where: {
         id: { not: session.id },
-        status: 'ACTIVE',
-        profile: { status: 'ACTIVE' },
+        status: "ACTIVE",
+        profile: { status: "ACTIVE" },
       },
       include: {
         profile: { include: { photos: { select: { id: true } } } },
@@ -217,9 +218,9 @@ export async function GET(req: Request) {
       if (
         c.profile.photos.length > 0 &&
         c.ratingProfile &&
-        (c.ratingProfile.ratingStatus === 'PENDING' ||
-          c.ratingProfile.ratingStatus === 'SCORING' ||
-          c.ratingProfile.ratingStatus === 'REVIEW')
+        (c.ratingProfile.ratingStatus === "PENDING" ||
+          c.ratingProfile.ratingStatus === "SCORING" ||
+          c.ratingProfile.ratingStatus === "REVIEW")
       ) {
         continue;
       }
@@ -228,7 +229,7 @@ export async function GET(req: Request) {
       if (
         c.profile.photos.length > 0 &&
         c.ratingProfile &&
-        c.ratingProfile.ratingStatus === 'COMPLETED' &&
+        c.ratingProfile.ratingStatus === "COMPLETED" &&
         !c.profile.photoMatchPref
       ) {
         continue;
@@ -264,7 +265,7 @@ export async function GET(req: Request) {
       };
 
       const matchType = getMatchType(currentUser, candidateUser);
-      if (matchType === 'none') continue;
+      if (matchType === "none") continue;
 
       const relevanceScore = computeRelevanceScore(currentUser, candidateUser);
 
@@ -279,55 +280,156 @@ export async function GET(req: Request) {
 
     // 8. Populate MatchSnapshot cache (best-effort, don't break on failure)
     try {
-      await db.matchSnapshot.deleteMany({ where: { userId: session.id } });
+      const now = new Date();
+      const currentTargetIds = allMatches.map((match) => match.userId);
+      const existingSnapshots = await db.matchSnapshot.findMany({
+        where: { userId: session.id },
+        select: {
+          targetUserId: true,
+          matchType: true,
+          mutualMatchedAt: true,
+        },
+      });
+      const existingByTargetId = new Map(
+        existingSnapshots.map((snapshot) => [snapshot.targetUserId, snapshot])
+      );
+      const mutualTargetIds = allMatches
+        .filter((match) => match.matchType === "mutual")
+        .map((match) => match.userId);
+      const existingReciprocalSnapshots =
+        mutualTargetIds.length > 0
+          ? await db.matchSnapshot.findMany({
+              where: {
+                userId: { in: mutualTargetIds },
+                targetUserId: session.id,
+              },
+              select: {
+                userId: true,
+                matchType: true,
+                mutualMatchedAt: true,
+              },
+            })
+          : [];
+      const reciprocalByUserId = new Map(
+        existingReciprocalSnapshots.map((snapshot) => [snapshot.userId, snapshot])
+      );
+
+      await db.matchSnapshot.deleteMany({
+        where:
+          currentTargetIds.length > 0
+            ? {
+                userId: session.id,
+                targetUserId: { notIn: currentTargetIds },
+              }
+            : { userId: session.id },
+      });
 
       for (const match of allMatches) {
-        await db.matchSnapshot.create({
-          data: {
+        const matchType = match.matchType === "mutual" ? "mutual" : "one_way";
+        const direction =
+          match.matchType === "mutual"
+            ? "mutual"
+            : match.matchType === "one_way_ba"
+              ? "me_fits_them"
+              : "they_fit_me";
+        const existing = existingByTargetId.get(match.userId);
+        const mutualMatchedAt =
+          matchType === "mutual"
+            ? existing?.matchType === "mutual" && existing.mutualMatchedAt
+              ? existing.mutualMatchedAt
+              : now
+            : null;
+
+        await db.matchSnapshot.upsert({
+          where: {
+            userId_targetUserId: {
+              userId: session.id,
+              targetUserId: match.userId,
+            },
+          },
+          create: {
             userId: session.id,
             targetUserId: match.userId,
-            matchType:
-              match.matchType === 'mutual' ? 'mutual' : 'one_way',
-            direction:
-              match.matchType === 'mutual'
-                ? 'mutual'
-                : match.matchType === 'one_way_ba'
-                  ? 'me_fits_them'
-                  : 'they_fit_me',
+            matchType,
+            direction,
             score: match.relevanceScore,
+            computedAt: now,
+            mutualMatchedAt,
+          },
+          update: {
+            matchType,
+            direction,
+            score: match.relevanceScore,
+            computedAt: now,
+            mutualMatchedAt,
           },
         });
+
+        if (matchType === "mutual") {
+          const reciprocalExisting = reciprocalByUserId.get(match.userId);
+          const reciprocalMutualMatchedAt =
+            reciprocalExisting?.matchType === "mutual" &&
+            reciprocalExisting.mutualMatchedAt
+              ? reciprocalExisting.mutualMatchedAt
+              : (mutualMatchedAt ?? now);
+          const reciprocalScore = computeRelevanceScore(match.candidateUser, currentUser);
+
+          await db.matchSnapshot.upsert({
+            where: {
+              userId_targetUserId: {
+                userId: match.userId,
+                targetUserId: session.id,
+              },
+            },
+            create: {
+              userId: match.userId,
+              targetUserId: session.id,
+              matchType: "mutual",
+              direction: "mutual",
+              score: reciprocalScore,
+              computedAt: now,
+              mutualMatchedAt: reciprocalMutualMatchedAt,
+            },
+            update: {
+              matchType: "mutual",
+              direction: "mutual",
+              score: reciprocalScore,
+              computedAt: now,
+              mutualMatchedAt: reciprocalMutualMatchedAt,
+            },
+          });
+        }
       }
     } catch (cacheError) {
-      console.error('[matches] Failed to update MatchSnapshot cache:', cacheError);
+      console.error("[matches] Failed to update MatchSnapshot cache:", cacheError);
     }
 
     // 9. Parse query params
     const url = new URL(req.url);
-    const type = url.searchParams.get('type') || 'mutual';
-    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10));
+    const type = url.searchParams.get("type") || "mutual";
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10));
     const pageSize = Math.min(
       100,
-      Math.max(1, parseInt(url.searchParams.get('pageSize') || '20', 10))
+      Math.max(1, parseInt(url.searchParams.get("pageSize") || "20", 10))
     );
-    const provinceOnly =
-      url.searchParams.get('provinceOnly') === 'true' ||
-      url.searchParams.get('sameProvince') === 'true';
-    const directionParam = url.searchParams.get('direction');
-    const directionFilter: 'all' | OneWayDirection =
-      directionParam === 'me_fits_them' || directionParam === 'they_fit_me'
+    const requestedProvinceCode = url.searchParams.get("provinceCode")?.trim() || "";
+    if (requestedProvinceCode && !PROVINCE_CODES.has(requestedProvinceCode)) {
+      return error("VALIDATION_ERROR", "请选择有效省份", 422);
+    }
+    const directionParam = url.searchParams.get("direction");
+    const directionFilter: "all" | OneWayDirection =
+      directionParam === "me_fits_them" || directionParam === "they_fit_me"
         ? directionParam
-        : 'all';
+        : "all";
     const matchesProvince = (m: { candidateUser: MatchCandidate }) =>
-      !provinceOnly ||
-      m.candidateUser.profile.provinceCode === profile.provinceCode;
+      !requestedProvinceCode ||
+      m.candidateUser.profile.provinceCode === requestedProvinceCode;
 
     // 10. Filter by type and requested scopes before counting/pagination.
     let filtered: typeof allMatches;
-    let oneWaySummary:
-      | { total: number; meFitsThem: number; theyFitMe: number }
-      | null = null;
-    if (type === 'one_way') {
+    let oneWaySummary: { total: number; meFitsThem: number; theyFitMe: number } | null =
+      null;
+    if (type === "one_way") {
       const scopedOneWayMatches = allMatches.filter(
         (m) => getOneWayDirection(m.matchType) !== null && matchesProvince(m)
       );
@@ -335,8 +437,8 @@ export async function GET(req: Request) {
       oneWaySummary = scopedOneWayMatches.reduce(
         (summary, m) => {
           const direction = getOneWayDirection(m.matchType);
-          if (direction === 'me_fits_them') summary.meFitsThem += 1;
-          if (direction === 'they_fit_me') summary.theyFitMe += 1;
+          if (direction === "me_fits_them") summary.meFitsThem += 1;
+          if (direction === "they_fit_me") summary.theyFitMe += 1;
           summary.total += 1;
           return summary;
         },
@@ -344,16 +446,14 @@ export async function GET(req: Request) {
       );
 
       filtered =
-        directionFilter === 'all'
+        directionFilter === "all"
           ? scopedOneWayMatches
           : scopedOneWayMatches.filter(
               (m) => getOneWayDirection(m.matchType) === directionFilter
             );
     } else {
       // Default: mutual
-      filtered = allMatches.filter(
-        (m) => m.matchType === 'mutual' && matchesProvince(m)
-      );
+      filtered = allMatches.filter((m) => m.matchType === "mutual" && matchesProvince(m));
     }
 
     const filteredTargetIds = filtered.map((m) => m.userId);
@@ -361,7 +461,7 @@ export async function GET(req: Request) {
       filteredTargetIds.length > 0
         ? await db.viewRequest.findMany({
             where: {
-              status: 'APPROVED',
+              status: "APPROVED",
               OR: [
                 {
                   requesterId: session.id,
@@ -397,7 +497,7 @@ export async function GET(req: Request) {
     const pageItems = filtered.slice(start, start + pageSize);
 
     // 13. Format response based on match type
-    if (type === 'one_way') {
+    if (type === "one_way") {
       // Desensitized one-way response: show rule outcomes and expected ranges,
       // but do not expose the other user's exact profile values.
       const data = pageItems.map((m) => {
@@ -411,12 +511,9 @@ export async function GET(req: Request) {
           currentUser
         );
         const targetMatchByKey = Object.fromEntries(
-          targetAgainstMyExpectations.map((check) => [
-            check.key,
-            check.matched,
-          ])
+          targetAgainstMyExpectations.map((check) => [check.key, check.matched])
         ) as Record<ExpectationCheckKey, boolean>;
-        const direction = getOneWayDirection(m.matchType) ?? 'they_fit_me';
+        const direction = getOneWayDirection(m.matchType) ?? "they_fit_me";
 
         return {
           userId: m.userId,
@@ -428,8 +525,7 @@ export async function GET(req: Request) {
           selfIntro: p.selfIntro,
           provinceCode: p.provinceCode,
           direction,
-          directionLabel:
-            direction === 'me_fits_them' ? '我符合他' : '他符合我',
+          directionLabel: direction === "me_fits_them" ? "我符合他" : "他符合我",
           targetAgainstMyExpectations,
           meAgainstTargetExpectations,
           relevanceScore: m.relevanceScore,
@@ -502,11 +598,11 @@ export async function GET(req: Request) {
       },
     });
   } catch (err) {
-    console.error('[matches] GET error:', err);
-    if (err && typeof err === 'object' && 'status' in err) {
+    console.error("[matches] GET error:", err);
+    if (err && typeof err === "object" && "status" in err) {
       const appErr = err as { code: string; message: string; status: number };
       return error(appErr.code, appErr.message, appErr.status);
     }
-    return error('INTERNAL_ERROR', '服务器内部错误', 500);
+    return error("INTERNAL_ERROR", "服务器内部错误", 500);
   }
 }

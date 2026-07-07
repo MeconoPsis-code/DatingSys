@@ -13,10 +13,24 @@ interface TaskPhoto {
   url: string;
 }
 
+interface ScoringTimeline {
+  pendingAt: string;
+  publishAt: string;
+  publishEndsAt: string;
+  scoringDeadlineAt: string;
+  reviewDeadlineAt: string;
+  phase: string;
+  isReleasedForScoring: boolean;
+  isPublishingOpen: boolean;
+  isScoringClosed: boolean;
+  isReviewOverdue: boolean;
+}
+
 interface ScoringTask {
   id: string;
   status: string;
   createdAt: string;
+  timeline: ScoringTimeline;
   progress: { scored: number; total: number };
   photos: TaskPhoto[];
   // completed tab only
@@ -41,6 +55,16 @@ function createInitialScores() {
 
 function normalizeScore(value: number) {
   return Number(Math.min(SCORE_MAX, Math.max(SCORE_MIN, value)).toFixed(1));
+}
+
+function formatTaskTime(value: string) {
+  return new Date(value).toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function ScoreSlider({
@@ -91,6 +115,7 @@ export default function ScoringPage() {
   const [tasks, setTasks] = useState<ScoringTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nextAvailableAt, setNextAvailableAt] = useState<string | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   // Current index in the task list (page flipping)
@@ -147,6 +172,7 @@ export default function ScoringPage() {
         if (res.status === 403) {
           setError("无权访问评分功能");
           setTasks([]);
+          setNextAvailableAt(null);
           return;
         }
         throw new Error("加载失败");
@@ -154,12 +180,14 @@ export default function ScoringPage() {
       const data = await res.json();
       const fetched = data.data?.tasks || [];
       setTasks(fetched);
+      setNextAvailableAt(data.data?.nextAvailableAt ?? null);
       setCurrentIndex(0);
       setPhotoIndex(0);
       setScores(createInitialScores());
       setSubmitError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
+      setNextAvailableAt(null);
     } finally {
       setLoading(false);
     }
@@ -223,7 +251,10 @@ export default function ScoringPage() {
     return (
       <div className="flex flex-col gap-6">
         <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-pink-500 stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-6 w-6 fill-none stroke-pink-500 stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0"
+          >
             <circle cx="12" cy="12" r="10" />
             <circle cx="12" cy="12" r="6" />
             <circle cx="12" cy="12" r="2" />
@@ -242,7 +273,10 @@ export default function ScoringPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="flex items-center gap-2 text-2xl font-bold">
-          <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-pink-500 stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-6 w-6 fill-none stroke-pink-500 stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0"
+          >
             <circle cx="12" cy="12" r="10" />
             <circle cx="12" cy="12" r="6" />
             <circle cx="12" cy="12" r="2" />
@@ -256,8 +290,6 @@ export default function ScoringPage() {
         )}
       </div>
 
-
-
       {/* Error */}
       {error && (
         <div className="rounded-lg border border-[hsl(0,62%,50%/0.3)] bg-[hsl(0,62%,50%/0.1)] px-4 py-3 text-sm text-[hsl(0,62%,70%)]">
@@ -270,7 +302,10 @@ export default function ScoringPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="animate-bounce rounded-2xl bg-emerald-500 px-8 py-6 text-center shadow-2xl">
             <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-white/20 text-white">
-              <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-[2.5] stroke-linecap-round stroke-linejoin-round">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-6 w-6 fill-none stroke-current stroke-[2.5] stroke-linecap-round stroke-linejoin-round"
+              >
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
@@ -286,16 +321,21 @@ export default function ScoringPage() {
           {totalPending === 0 && !error && (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-20">
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 shrink-0">
-                <svg viewBox="0 0 24 24" className="h-8 w-8 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-8 w-8 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                >
                   <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                   <polyline points="22 4 12 14.01 9 11.01" />
                 </svg>
               </div>
               <p className="text-base font-medium text-[hsl(var(--foreground))]">
-                全部评分完成
+                {nextAvailableAt ? "下一批待发布" : "全部评分完成"}
               </p>
               <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">
-                暂无待评分任务
+                {nextAvailableAt
+                  ? `${formatTaskTime(nextAvailableAt)} 发布给评分员`
+                  : "暂无待评分任务"}
               </p>
             </div>
           )}
@@ -367,10 +407,24 @@ export default function ScoringPage() {
 
               {/* Scoring controls */}
               <div className="p-5 space-y-5">
+                <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.25)] px-4 py-3 text-xs text-[hsl(var(--muted-foreground))]">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      评分截止 {formatTaskTime(currentTask.timeline.scoringDeadlineAt)}
+                    </span>
+                    {!currentTask.timeline.isPublishingOpen && (
+                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-400">
+                        已停止新增发布
+                      </span>
+                    )}
+                  </div>
+                </div>
 
                 {/* ── Hardware scores (60%) ── */}
                 <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4 space-y-4">
-                  <div className="text-xs font-semibold text-[hsl(var(--foreground))]">硬件分</div>
+                  <div className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                    硬件分
+                  </div>
 
                   <ScoreSlider
                     label="轮廓与骨相"
@@ -393,7 +447,9 @@ export default function ScoringPage() {
 
                 {/* ── Software score (20%) ── */}
                 <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4 space-y-4">
-                  <div className="text-xs font-semibold text-[hsl(var(--foreground))]">软件分</div>
+                  <div className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                    软件分
+                  </div>
 
                   <ScoreSlider
                     label="发型与造型"
@@ -404,7 +460,9 @@ export default function ScoringPage() {
 
                 {/* ── Subjective score (20%) ── */}
                 <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4 space-y-4">
-                  <div className="text-xs font-semibold text-[hsl(var(--foreground))]">主观分</div>
+                  <div className="text-xs font-semibold text-[hsl(var(--foreground))]">
+                    主观分
+                  </div>
 
                   <ScoreSlider
                     label="气质与眼缘"
@@ -413,9 +471,10 @@ export default function ScoringPage() {
                   />
                 </div>
 
-
                 {submitError && (
-                  <p className="text-center text-xs text-[hsl(0,62%,70%)]">{submitError}</p>
+                  <p className="text-center text-xs text-[hsl(0,62%,70%)]">
+                    {submitError}
+                  </p>
                 )}
 
                 {/* Submit button */}
@@ -437,7 +496,10 @@ export default function ScoringPage() {
                   }}
                   className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(0,60%,65%)]"
                 >
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                  >
                     <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
                     <line x1="4" y1="22" x2="4" y2="15" />
                   </svg>

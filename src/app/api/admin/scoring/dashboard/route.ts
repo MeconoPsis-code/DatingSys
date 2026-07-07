@@ -3,23 +3,19 @@ import { db } from "@/lib/db";
 import { error, success } from "@/lib/api-response";
 import { commitExpiredActions } from "@/lib/scoring-revocation";
 
-const SCORE_BUCKETS = [
-  { label: "0.0-0.9", min: 0, max: 1 },
-  { label: "1.0-1.9", min: 1, max: 2 },
-  { label: "2.0-2.9", min: 2, max: 3 },
-  { label: "3.0-3.9", min: 3, max: 4 },
-  { label: "4.0-4.9", min: 4, max: 5 },
-  { label: "5.0-5.9", min: 5, max: 6 },
-  { label: "6.0-6.9", min: 6, max: 7 },
-  { label: "7.0-7.9", min: 7, max: 8 },
-  { label: "8.0-8.9", min: 8, max: 9 },
-  { label: "9.0-10.0", min: 9, max: 10.1 },
-] as const;
-
 function round(value: number, digits = 1) {
   const multiplier = 10 ** digits;
   return Math.round(value * multiplier) / multiplier;
 }
+
+const SCORE_DISTRIBUTION_POINTS = Array.from({ length: 101 }, (_, index) => {
+  const score = round(index / 10, 1);
+
+  return {
+    label: score.toFixed(1),
+    score,
+  };
+});
 
 function average(values: number[]) {
   if (values.length === 0) return null;
@@ -125,20 +121,17 @@ export async function GET() {
       .map((profile) => profile.finalScore)
       .filter((score): score is number => typeof score === "number");
 
-    const distribution = SCORE_BUCKETS.map((bucket) => ({
-      label: bucket.label,
-      min: bucket.min,
-      max: bucket.max >= 10 ? 10 : bucket.max - 0.1,
+    const distribution = SCORE_DISTRIBUTION_POINTS.map((point) => ({
+      label: point.label,
+      score: point.score,
       count: 0,
       percentage: 0,
     }));
 
     for (const score of publishedScores) {
-      const bucketIndex = SCORE_BUCKETS.findIndex(
-        (bucket) => score >= bucket.min && score < bucket.max
-      );
+      const bucketIndex = Math.round(score * 10);
 
-      if (bucketIndex >= 0) {
+      if (bucketIndex >= 0 && bucketIndex < distribution.length) {
         distribution[bucketIndex].count += 1;
       }
     }

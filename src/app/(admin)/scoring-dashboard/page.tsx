@@ -1,13 +1,35 @@
 "use client";
 
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 type ActiveView = "distribution" | "scorers";
+type SortDirection = "asc" | "desc";
+type ScorerSortKey =
+  | "scorer"
+  | "scoreCount"
+  | "averageScore"
+  | "mode"
+  | "medianScore"
+  | "stdDevScore"
+  | "scoreRange"
+  | "latestScoredAt";
+
+interface ScorerSortState {
+  key: ScorerSortKey;
+  direction: SortDirection;
+}
+
+interface ScorerTableColumn {
+  key: ScorerSortKey;
+  label: string;
+  defaultDirection: SortDirection;
+  title?: string;
+}
 
 interface DistributionBucket {
   label: string;
-  min: number;
-  max: number;
+  score: number;
   count: number;
   percentage: number;
 }
@@ -46,6 +68,27 @@ const viewTabs: Array<{ value: ActiveView; label: string }> = [
   { value: "scorers", label: "评分员统计" },
 ];
 
+const scorerNameCollator = new Intl.Collator("zh-CN", {
+  numeric: true,
+  sensitivity: "base",
+});
+
+const scorerTableColumns: ScorerTableColumn[] = [
+  { key: "scorer", label: "评分员", defaultDirection: "asc" },
+  { key: "scoreCount", label: "评分次数", defaultDirection: "desc" },
+  { key: "averageScore", label: "平均分", defaultDirection: "desc" },
+  { key: "mode", label: "众数", defaultDirection: "desc" },
+  { key: "medianScore", label: "中位数", defaultDirection: "desc" },
+  { key: "stdDevScore", label: "标准差", defaultDirection: "desc" },
+  {
+    key: "scoreRange",
+    label: "最低/最高",
+    defaultDirection: "desc",
+    title: "按最低分排序，最低分相同时按最高分排序",
+  },
+  { key: "latestScoredAt", label: "最近评分", defaultDirection: "desc" },
+];
+
 function formatScore(score: number | null | undefined, digits = 1) {
   return typeof score === "number" ? score.toFixed(digits) : "—";
 }
@@ -76,6 +119,68 @@ function scoreTone(score: number) {
   if (score >= 7) return "text-brand-green";
   if (score >= 5) return "text-brand-gold";
   return "text-brand-red";
+}
+
+function compareNumbers(a: number, b: number, direction: SortDirection) {
+  return direction === "asc" ? a - b : b - a;
+}
+
+function compareNullableNumbers(
+  a: number | null,
+  b: number | null,
+  direction: SortDirection
+) {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+
+  return compareNumbers(a, b, direction);
+}
+
+function compareScorerStats(
+  a: ScorerStat,
+  b: ScorerStat,
+  { key, direction }: ScorerSortState
+) {
+  switch (key) {
+    case "scorer": {
+      const result = scorerNameCollator.compare(getScorerName(a), getScorerName(b));
+      return direction === "asc" ? result : -result;
+    }
+    case "scoreCount":
+      return compareNumbers(a.scoreCount, b.scoreCount, direction);
+    case "averageScore":
+      return compareNumbers(a.averageScore, b.averageScore, direction);
+    case "mode": {
+      const modeResult = compareNullableNumbers(
+        a.modeScores[0] ?? null,
+        b.modeScores[0] ?? null,
+        direction
+      );
+
+      if (modeResult !== 0) return modeResult;
+
+      return compareNumbers(a.modeFrequency, b.modeFrequency, direction);
+    }
+    case "medianScore":
+      return compareNumbers(a.medianScore, b.medianScore, direction);
+    case "stdDevScore":
+      return compareNumbers(a.stdDevScore, b.stdDevScore, direction);
+    case "scoreRange": {
+      const minResult = compareNumbers(a.minScore, b.minScore, direction);
+      if (minResult !== 0) return minResult;
+
+      return compareNumbers(a.maxScore, b.maxScore, direction);
+    }
+    case "latestScoredAt":
+      return compareNullableNumbers(
+        a.latestScoredAt ? Date.parse(a.latestScoredAt) : null,
+        b.latestScoredAt ? Date.parse(b.latestScoredAt) : null,
+        direction
+      );
+  }
+
+  return 0;
 }
 
 function SectionHeader({ title, desc }: { title: string; desc?: string }) {
@@ -132,6 +237,45 @@ function EmptyPanel({ text }: { text: string }) {
   );
 }
 
+function SortableScorerHeader({
+  column,
+  sort,
+  onSort,
+}: {
+  column: ScorerTableColumn;
+  sort: ScorerSortState;
+  onSort: (key: ScorerSortKey) => void;
+}) {
+  const active = sort.key === column.key;
+  const nextDirection =
+    active && sort.direction === "asc" ? "desc" : column.defaultDirection;
+  const Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  const ariaSort = active
+    ? sort.direction === "asc"
+      ? "ascending"
+      : "descending"
+    : "none";
+
+  return (
+    <th className="px-4 py-3" aria-sort={ariaSort}>
+      <button
+        type="button"
+        className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition hover:bg-white hover:text-brand-blue ${
+          active ? "text-brand-blue" : ""
+        }`}
+        title={`${column.title ?? `按${column.label}排序`}，点击切换为${
+          nextDirection === "asc" ? "升序" : "降序"
+        }`}
+        aria-label={`按${column.label}${nextDirection === "asc" ? "升序" : "降序"}排列`}
+        onClick={() => onSort(column.key)}
+      >
+        <span>{column.label}</span>
+        <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      </button>
+    </th>
+  );
+}
+
 function ScoreDistributionChart({
   buckets,
   total,
@@ -150,22 +294,29 @@ function ScoreDistributionChart({
     ])
   ).sort((a, b) => b - a);
   const gridStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(${buckets.length}, minmax(0, 1fr))`,
+    gridTemplateColumns: `repeat(${buckets.length}, minmax(16px, 1fr))`,
+  };
+  const chartStyle: CSSProperties = {
+    width: Math.max(960, buckets.length * 24),
+  };
+  const xLabelStyle: CSSProperties = {
+    transform: "rotate(-55deg)",
+    transformOrigin: "top center",
   };
 
   if (total === 0) {
-    return <EmptyPanel text="暂无已发布评分，发布后这里会显示分数段分布。" />;
+    return <EmptyPanel text="暂无已发布评分，发布后这里会显示 0.1 分值分布。" />;
   }
 
   return (
     <div className="rounded-[20px] border border-brand-line bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <SectionHeader title="已发布评分分布" desc="横轴为分数段，纵轴为对应人数。" />
+        <SectionHeader title="已发布评分分布" desc="横轴为 0.1 分值，纵轴为对应人数。" />
         <span className="text-xs font-semibold text-brand-muted">样本 {total} 人</span>
       </div>
 
       <div className="overflow-x-auto pb-2">
-        <div className="min-w-[720px]">
+        <div style={chartStyle}>
           <div className="grid grid-cols-[52px_1fr] gap-3">
             <div className="relative h-64">
               {yTicks.map((tick) => (
@@ -187,7 +338,7 @@ function ScoreDistributionChart({
                 />
               ))}
               <div
-                className="absolute inset-x-3 bottom-0 top-0 grid items-end gap-3"
+                className="absolute inset-x-2 bottom-0 top-0 grid items-end gap-1"
                 style={gridStyle}
               >
                 {buckets.map((bucket) => {
@@ -197,13 +348,15 @@ function ScoreDistributionChart({
                     <div
                       key={bucket.label}
                       className="flex h-full min-w-0 flex-col items-center justify-end"
-                      title={`${bucket.label}: ${bucket.count} 人，占 ${bucket.percentage}%`}
+                      title={`${bucket.label} 分: ${bucket.count} 人，占 ${bucket.percentage}%`}
                     >
-                      <span className="mb-2 text-xs font-bold text-brand-muted">
-                        {bucket.count}
-                      </span>
+                      {bucket.count > 0 && (
+                        <span className="mb-2 text-[10px] font-bold text-brand-muted">
+                          {bucket.count}
+                        </span>
+                      )}
                       <div
-                        className="w-full rounded-t-lg bg-brand-blue shadow-[0_10px_20px_rgba(22,119,255,0.18)] transition-all"
+                        className="w-full rounded-t-[3px] bg-brand-blue shadow-[0_10px_20px_rgba(22,119,255,0.18)] transition-all"
                         style={{
                           height: `${height}%`,
                           minHeight: bucket.count > 0 ? 8 : 0,
@@ -219,21 +372,26 @@ function ScoreDistributionChart({
             <span className="text-right text-[11px] font-semibold text-brand-subtle">
               人数
             </span>
-            <div className="grid gap-3 px-3" style={gridStyle}>
+            <div className="grid gap-1 px-2" style={gridStyle}>
               {buckets.map((bucket) => (
                 <div key={bucket.label} className="min-w-0 text-center">
-                  <div className="text-[11px] font-semibold text-brand-muted">
-                    {bucket.label}
+                  <div className="flex h-12 items-start justify-center overflow-visible">
+                    <span
+                      className="whitespace-nowrap text-[10px] font-semibold text-brand-muted"
+                      style={xLabelStyle}
+                    >
+                      {bucket.label}
+                    </span>
                   </div>
-                  <div className="mt-1 text-[10px] text-brand-subtle">
-                    {bucket.percentage}%
+                  <div className="mt-1 h-3 text-[10px] text-brand-subtle">
+                    {bucket.count > 0 ? `${bucket.percentage}%` : ""}
                   </div>
                 </div>
               ))}
             </div>
           </div>
           <div className="mt-3 pl-[64px] text-center text-[11px] font-semibold text-brand-subtle">
-            分数段
+            分值
           </div>
         </div>
       </div>
@@ -305,6 +463,36 @@ function ScorerAverageChart({ stats }: { stats: ScorerStat[] }) {
 }
 
 function ScorerStatsTable({ stats }: { stats: ScorerStat[] }) {
+  const [sort, setSort] = useState<ScorerSortState>({
+    key: "scoreCount",
+    direction: "desc",
+  });
+  const sortedStats = useMemo(
+    () =>
+      stats
+        .map((stat, index) => ({ stat, index }))
+        .sort((a, b) => compareScorerStats(a.stat, b.stat, sort) || a.index - b.index)
+        .map(({ stat }) => stat),
+    [stats, sort]
+  );
+  const handleSort = (key: ScorerSortKey) => {
+    const column = scorerTableColumns.find((item) => item.key === key);
+
+    setSort((current) => {
+      if (current.key === key) {
+        return {
+          key,
+          direction: current.direction === "asc" ? "desc" : "asc",
+        };
+      }
+
+      return {
+        key,
+        direction: column?.defaultDirection ?? "desc",
+      };
+    });
+  };
+
   if (stats.length === 0) {
     return <EmptyPanel text="暂无评分员明细。" />;
   }
@@ -318,18 +506,18 @@ function ScorerStatsTable({ stats }: { stats: ScorerStat[] }) {
         <table className="min-w-[920px] w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs font-bold uppercase text-brand-subtle">
             <tr>
-              <th className="px-4 py-3">评分员</th>
-              <th className="px-4 py-3">评分次数</th>
-              <th className="px-4 py-3">平均分</th>
-              <th className="px-4 py-3">众数</th>
-              <th className="px-4 py-3">中位数</th>
-              <th className="px-4 py-3">标准差</th>
-              <th className="px-4 py-3">最低/最高</th>
-              <th className="px-4 py-3">最近评分</th>
+              {scorerTableColumns.map((column) => (
+                <SortableScorerHeader
+                  key={column.key}
+                  column={column}
+                  sort={sort}
+                  onSort={handleSort}
+                />
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-brand-line">
-            {stats.map((stat) => (
+            {sortedStats.map((stat) => (
               <tr key={stat.scorerUserId} className="hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <div className="font-semibold text-brand-text">

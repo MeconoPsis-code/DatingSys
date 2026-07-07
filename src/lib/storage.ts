@@ -1,4 +1,5 @@
 import { Client } from "minio";
+import type { Readable } from "stream";
 
 const globalForMinio = globalThis as unknown as {
   minioClient: Client | undefined;
@@ -58,6 +59,23 @@ export async function getSignedUrl(
   bucket: string = DEFAULT_BUCKET
 ): Promise<string> {
   return await minioClient.presignedGetObject(bucket, key, expirySeconds);
+}
+
+/**
+ * Read an object into memory for server-side image processing.
+ */
+export async function getFileBuffer(
+  key: string,
+  bucket: string = DEFAULT_BUCKET
+): Promise<Buffer> {
+  const stream = (await minioClient.getObject(bucket, key)) as Readable;
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  return Buffer.concat(chunks);
 }
 
 /**

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CollapsibleSelfIntro } from "@/components/profile/collapsible-self-intro";
+import { ProvinceFilterSelect } from "../province-filter-select";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -53,7 +54,10 @@ function MatchTabs() {
       label: "双向匹配",
       href: "/matches/mutual",
       icon: (
-        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+        >
           <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
         </svg>
       ),
@@ -62,7 +66,10 @@ function MatchTabs() {
       label: "单向匹配",
       href: "/matches/one-way",
       icon: (
-        <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+        >
           <rect width="20" height="16" x="2" y="4" rx="2" />
           <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
         </svg>
@@ -92,7 +99,15 @@ function MatchTabs() {
 
 /* ─── Match Indicator ────────────────────────────────── */
 
-function MatchBadge({ icon, label, match }: { icon: React.ReactNode; label: string; match: boolean }) {
+function MatchBadge({
+  icon,
+  label,
+  match,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  match: boolean;
+}) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium ${
@@ -101,7 +116,10 @@ function MatchBadge({ icon, label, match }: { icon: React.ReactNode; label: stri
           : "border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.08)] text-[hsl(0,60%,65%)]"
       }`}
     >
-      {icon} <span>{label} {match ? "符合" : "不符合"}</span>
+      {icon}{" "}
+      <span>
+        {label} {match ? "符合" : "不符合"}
+      </span>
     </span>
   );
 }
@@ -138,7 +156,10 @@ function getCheckIcon(key: ExpectationCheck["key"]) {
   switch (key) {
     case "age":
       return (
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+        >
           <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
           <line x1="16" y1="2" x2="16" y2="6" />
           <line x1="8" y1="2" x2="8" y2="6" />
@@ -150,7 +171,10 @@ function getCheckIcon(key: ExpectationCheck["key"]) {
       );
     case "height":
       return (
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+        >
           <path d="M21.3 15.3a2.82 2.82 0 0 1 0 4c-1 1-2.5 1-3.5 0L2.8 4.3a2.82 2.82 0 0 1 0-4c1-1 2.5-1 3.5 0Z" />
           <path d="m5.6 7.2 1.4-1.4" />
           <path d="m8.4 10 1.4-1.4" />
@@ -160,7 +184,10 @@ function getCheckIcon(key: ExpectationCheck["key"]) {
       );
     case "weight":
       return (
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+        >
           <path d="m16 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
           <path d="m2 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
           <path d="M7 21h10" />
@@ -170,7 +197,10 @@ function getCheckIcon(key: ExpectationCheck["key"]) {
       );
     case "attribute":
       return (
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+        >
           <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
         </svg>
       );
@@ -269,12 +299,9 @@ function OneWayMatchCard({
   const isMeFitsThem = match.direction === "me_fits_them";
   const directionLabel = isMeFitsThem ? "我符合他" : "他符合我";
   const oneWayReasonChecks = (
-    isMeFitsThem
-      ? match.targetAgainstMyExpectations
-      : match.meAgainstTargetExpectations
+    isMeFitsThem ? match.targetAgainstMyExpectations : match.meAgainstTargetExpectations
   ).filter((check) => !check.matched);
-  const canRequestAfterRejected =
-    viewRequestStatus === "REJECTED" && canBypassCooldowns;
+  const canRequestAfterRejected = viewRequestStatus === "REJECTED" && canBypassCooldowns;
 
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-all hover:border-[hsl(var(--primary)/0.3)] sm:p-5">
@@ -300,7 +327,10 @@ function OneWayMatchCard({
       <div className="mb-4 flex flex-wrap gap-2">
         <MatchBadge
           icon={
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
               <line x1="16" y1="2" x2="16" y2="6" />
               <line x1="8" y1="2" x2="8" y2="6" />
@@ -318,7 +348,10 @@ function OneWayMatchCard({
         />
         <MatchBadge
           icon={
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <path d="M21.3 15.3a2.82 2.82 0 0 1 0 4c-1 1-2.5 1-3.5 0L2.8 4.3a2.82 2.82 0 0 1 0-4c1-1 2.5-1 3.5 0Z" />
               <path d="m5.6 7.2 1.4-1.4" />
               <path d="m8.4 10 1.4-1.4" />
@@ -332,7 +365,10 @@ function OneWayMatchCard({
         />
         <MatchBadge
           icon={
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <path d="m16 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
               <path d="m2 16 3-8 3 8c-.87.65-2.24 1-3 1s-2.13-.35-3-1Z" />
               <path d="M7 21h10" />
@@ -346,7 +382,10 @@ function OneWayMatchCard({
 
         <MatchBadge
           icon={
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
             </svg>
           }
@@ -355,7 +394,10 @@ function OneWayMatchCard({
         />
         {match.hasPhotos && (
           <span className="inline-flex items-center gap-1 shrink-0 rounded-full border border-brand-blue/30 bg-blue-1 px-2 py-0.5 text-[10px] font-medium text-brand-blue">
-            <svg viewBox="0 0 24 24" className="h-3 w-3 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3 w-3 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
               <circle cx="12" cy="13" r="3" />
             </svg>
@@ -394,7 +436,10 @@ function OneWayMatchCard({
             href="/requests"
             className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-xs font-medium text-amber-500 transition-all hover:bg-amber-500/15 sm:inline-flex sm:w-auto sm:py-1.5"
           >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <rect width="20" height="16" x="2" y="4" rx="2" />
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
@@ -403,7 +448,10 @@ function OneWayMatchCard({
         )}
         {viewRequestStatus === "PENDING" && (
           <span className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[hsl(var(--secondary))] px-3 py-2 text-center text-xs text-[hsl(var(--muted-foreground))] sm:inline-flex sm:w-auto sm:py-1.5">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
@@ -416,7 +464,10 @@ function OneWayMatchCard({
               href={`/matches/${match.userId}`}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-2 text-center text-xs font-medium text-white transition-all hover:scale-[1.02] sm:inline-flex sm:w-auto sm:py-1.5"
             >
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+              >
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                 <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
@@ -426,7 +477,10 @@ function OneWayMatchCard({
         )}
         {viewRequestStatus === "REJECTED" && !canRequestAfterRejected && (
           <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[hsl(0,60%,50%/0.3)] bg-[hsl(0,60%,50%/0.1)] px-3 py-2 text-center text-xs text-[hsl(0,60%,65%)] sm:inline-flex sm:w-auto sm:py-1.5">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <circle cx="12" cy="12" r="10" />
               <line x1="15" y1="9" x2="9" y2="15" />
               <line x1="9" y1="9" x2="15" y2="15" />
@@ -440,7 +494,10 @@ function OneWayMatchCard({
             onClick={() => onRequestView(match.userId)}
             className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gradient-to-r from-[#1677ff] to-[#0958d9] px-4 py-2 text-center text-xs font-semibold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] sm:inline-flex sm:w-auto"
           >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 9.9-1" />
             </svg>
@@ -450,7 +507,6 @@ function OneWayMatchCard({
           </button>
         )}
       </div>
-
     </div>
   );
 }
@@ -469,7 +525,7 @@ export default function OneWayMatchesPage() {
   const [requesting, setRequesting] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | MatchDirection>("all");
-  const [provinceOnly, setProvinceOnly] = useState(false);
+  const [selectedProvinceCode, setSelectedProvinceCode] = useState("");
   const [currentUserHasPhotos, setCurrentUserHasPhotos] = useState(false);
   const [canBypassCooldowns, setCanBypassCooldowns] = useState(false);
   const pageSize = 20;
@@ -480,9 +536,15 @@ export default function OneWayMatchesPage() {
     setError(null);
     setScoringPending(false);
     try {
-      const res = await fetch(
-        `/api/matches?type=one_way&page=${page}&pageSize=${pageSize}&provinceOnly=${provinceOnly ? "true" : "false"}&direction=${filter}`
-      );
+      const params = new URLSearchParams({
+        type: "one_way",
+        page: String(page),
+        pageSize: String(pageSize),
+        direction: filter,
+      });
+      if (selectedProvinceCode) params.set("provinceCode", selectedProvinceCode);
+
+      const res = await fetch(`/api/matches?${params}`);
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error?.message || "加载失败");
@@ -511,7 +573,7 @@ export default function OneWayMatchesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, provinceOnly, filter]);
+  }, [page, selectedProvinceCode, filter]);
 
   // Load existing view requests in both directions to track pair-level status.
   const fetchViewRequests = useCallback(async () => {
@@ -570,7 +632,11 @@ export default function OneWayMatchesPage() {
       const data = await res.json();
       if (!res.ok) {
         const code = data.error?.code;
-        if (code === "ALREADY_APPROVED" || code === "INCOMING_PENDING" || code === "DUPLICATE") {
+        if (
+          code === "ALREADY_APPROVED" ||
+          code === "INCOMING_PENDING" ||
+          code === "DUPLICATE"
+        ) {
           setViewRequestMap((prev) => ({
             ...prev,
             [targetUserId]:
@@ -597,8 +663,8 @@ export default function OneWayMatchesPage() {
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function handleProvinceFilterChange(enabled: boolean) {
-    setProvinceOnly(enabled);
+  function handleProvinceFilterChange(provinceCode: string) {
+    setSelectedProvinceCode(provinceCode);
     setPage(1);
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -617,17 +683,20 @@ export default function OneWayMatchesPage() {
         if (aApproved !== bApproved) return aApproved ? 1 : -1;
         return b.relevanceScore - a.relevanceScore;
       }),
-    [matches, viewRequestMap],
+    [matches, viewRequestMap]
   );
   const hasApprovedMatches = useMemo(
     () => matches.some((match) => viewRequestMap[match.userId] === "APPROVED"),
-    [matches, viewRequestMap],
+    [matches, viewRequestMap]
   );
 
   return (
     <div ref={scrollRef} className="flex flex-col gap-5">
       <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
-        <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue"
+        >
           <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
         </svg>
         匹配结果
@@ -635,48 +704,34 @@ export default function OneWayMatchesPage() {
 
       <MatchTabs />
 
-      {/* Province filter toggle */}
-      {!loading && !scoringPending && (matches.length > 0 || summary.total > 0 || provinceOnly) && (
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-brand-line bg-white/90 p-0.5 shadow-sm">
-            <button
-              type="button"
-              onClick={() => handleProvinceFilterChange(false)}
-              className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
-                !provinceOnly
-                  ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
-                  : "text-brand-muted hover:bg-white hover:text-brand-text"
-              }`}
-            >
-              全部
-            </button>
-            <button
-              type="button"
-              onClick={() => handleProvinceFilterChange(true)}
-              className={`rounded-md px-3 py-1 text-xs font-bold transition-all ${
-                provinceOnly
-                  ? "bg-white text-brand-text shadow-sm ring-1 ring-brand-line"
-                  : "text-brand-muted hover:bg-white hover:text-brand-text"
-              }`}
-            >
-              同省
-            </button>
+      {/* Province filter */}
+      {!loading &&
+        !scoringPending &&
+        (matches.length > 0 || summary.total > 0 || selectedProvinceCode) && (
+          <div className="flex flex-wrap items-center gap-2">
+            <ProvinceFilterSelect
+              value={selectedProvinceCode}
+              onChange={handleProvinceFilterChange}
+            />
+            {hasApprovedMatches && (
+              <Link
+                href="/requests"
+                className="inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-blue shadow-sm ring-1 ring-brand-blue/25 transition-all hover:bg-blue-1"
+              >
+                已通过的资料已置后 · 点击前往申请页
+              </Link>
+            )}
           </div>
-          {hasApprovedMatches && (
-            <Link
-              href="/requests"
-              className="inline-flex items-center rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-blue shadow-sm ring-1 ring-brand-blue/25 transition-all hover:bg-blue-1"
-            >
-              已通过的资料已置后 · 点击前往申请页
-            </Link>
-          )}
-        </div>
-      )}
+        )}
 
       {/* Error */}
       {error && (
         <div className="flex items-center gap-2.5 rounded-xl border border-red-100 bg-white px-4 py-3.5 text-sm font-semibold text-red-500 shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
-          <svg viewBox="0 0 24 24" strokeWidth="2.5" className="h-5 w-5 shrink-0 fill-none stroke-current stroke-linecap-round stroke-linejoin-round">
+          <svg
+            viewBox="0 0 24 24"
+            strokeWidth="2.5"
+            className="h-5 w-5 shrink-0 fill-none stroke-current stroke-linecap-round stroke-linejoin-round"
+          >
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="13" />
             <circle cx="12" cy="17" r="1.25" fill="currentColor" stroke="none" />
@@ -706,49 +761,54 @@ export default function OneWayMatchesPage() {
       )}
 
       {/* Direction filter */}
-      {!loading && !scoringPending && (matches.length > 0 || summary.total > 0 || filter !== "all") && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => handleDirectionFilterChange("all")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
-              filter === "all"
-                ? "bg-brand-blue text-white"
-                : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
-            }`}
-          >
-            全部 ({summary.total})
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDirectionFilterChange("me_fits_them")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
-              filter === "me_fits_them"
-                ? "bg-brand-blue text-white"
-                : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
-            }`}
-          >
-            我符合他 ({summary.meFitsThem})
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDirectionFilterChange("they_fit_me")}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
-              filter === "they_fit_me"
-                ? "bg-emerald-500 text-white"
-                : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
-            }`}
-          >
-            他符合我 ({summary.theyFitMe})
-          </button>
-        </div>
-      )}
+      {!loading &&
+        !scoringPending &&
+        (matches.length > 0 || summary.total > 0 || filter !== "all") && (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => handleDirectionFilterChange("all")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
+                filter === "all"
+                  ? "bg-brand-blue text-white"
+                  : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
+              }`}
+            >
+              全部 ({summary.total})
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDirectionFilterChange("me_fits_them")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
+                filter === "me_fits_them"
+                  ? "bg-brand-blue text-white"
+                  : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
+              }`}
+            >
+              我符合他 ({summary.meFitsThem})
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDirectionFilterChange("they_fit_me")}
+              className={`rounded-lg px-3 py-1.5 text-xs font-bold shadow-sm transition-all ${
+                filter === "they_fit_me"
+                  ? "bg-emerald-500 text-white"
+                  : "bg-white/85 text-brand-muted ring-1 ring-brand-line/70 hover:bg-white hover:text-brand-text"
+              }`}
+            >
+              他符合我 ({summary.theyFitMe})
+            </button>
+          </div>
+        )}
 
       {/* Empty state */}
       {!loading && !scoringPending && !error && matches.length === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
           <div className="mb-3 text-[hsl(var(--muted-foreground))]">
-            <svg viewBox="0 0 24 24" className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-12 w-12 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <rect width="20" height="16" x="2" y="4" rx="2" />
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
@@ -808,7 +868,10 @@ export default function OneWayMatchesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5 shadow-xl sm:p-6">
             <div className="mb-4 flex justify-center text-[hsl(var(--primary))]">
-              <svg viewBox="0 0 24 24" className="h-10 w-10 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-10 w-10 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+              >
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 9.9-1" />
               </svg>
@@ -819,13 +882,25 @@ export default function OneWayMatchesPage() {
             <p className="mb-5 text-center text-sm leading-relaxed text-[hsl(var(--muted-foreground))]">
               {currentUserHasPhotos ? (
                 <>
-                  申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号和照片</span>。
-                  同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号和照片</span>。资料查看权限是双向的。
+                  申请通过后，您将可以查看对方的
+                  <span className="font-medium text-[hsl(var(--primary))]">
+                    QQ号和照片
+                  </span>
+                  。 同时，
+                  <span className="font-medium text-amber-400">
+                    对方也将能查看您的QQ号和照片
+                  </span>
+                  。资料查看权限是双向的。
                 </>
               ) : (
                 <>
-                  申请通过后，您将可以查看对方的<span className="font-medium text-[hsl(var(--primary))]">QQ号</span>。
-                  同时，<span className="font-medium text-amber-400">对方也将能查看您的QQ号</span>。
+                  申请通过后，您将可以查看对方的
+                  <span className="font-medium text-[hsl(var(--primary))]">QQ号</span>。
+                  同时，
+                  <span className="font-medium text-amber-400">
+                    对方也将能查看您的QQ号
+                  </span>
+                  。
                   <span className="mt-1 block text-[hsl(var(--muted-foreground))]">
                     注：您没有上传照片，无法查看对方照片和颜值评分。
                   </span>

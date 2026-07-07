@@ -7,6 +7,8 @@
  */
 
 import { db } from "@/lib/db";
+import { formatChinaDateTime } from "@/lib/scoring";
+import type { ScoringTaskTimeline } from "@/lib/scoring";
 
 // ── Core create function ────────────────────────────────
 
@@ -46,16 +48,23 @@ export const notify = {
   },
 
   /** Photo scoring task queued */
-  async scoringQueued(userId: string, queuePosition: number) {
+  async scoringQueued(
+    userId: string,
+    queuePosition: number,
+    timeline?: ScoringTaskTimeline
+  ) {
     const queueMsg =
       queuePosition > 0
         ? `目前排在你前面的有 ${queuePosition} 位用户，请耐心等待。`
         : `你是当前队列中的第一位，评分将很快开始。`;
+    const timelineMsg = timeline
+      ? `照片将于 ${formatChinaDateTime(timeline.pendingAt)} 进入待定，${formatChinaDateTime(timeline.publishAt)} 发布给评分员，${formatChinaDateTime(timeline.publishEndsAt)} 停止新增发布，${formatChinaDateTime(timeline.scoringDeadlineAt)} 前完成打分，${formatChinaDateTime(timeline.reviewDeadlineAt)} 前完成审核。`
+      : "照片已进入评分队列，评分员将按顺序对你的照片进行评分。";
     await create(
       userId,
       "SCORING_QUEUED",
       "资料发布成功",
-      `你的资料已成功发布！照片已进入评分队列，评分员将按顺序对你的照片进行评分。${queueMsg}`
+      `你的资料已成功发布！${timelineMsg}${queueMsg}`
     );
   },
 

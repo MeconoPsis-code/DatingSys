@@ -4,8 +4,13 @@ import { can } from "@/lib/rbac";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
-import { getOnDutyScorerIds } from "@/lib/scorer-duty";
-import { getAssignedScorerIdsForTask, SCOREABLE_TASK_STATUSES } from "@/lib/scoring";
+import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
+import {
+  formatChinaDateTime,
+  getAssignedScorerIdsForTask,
+  getScoringTaskTimeline,
+  SCOREABLE_TASK_STATUSES,
+} from "@/lib/scoring";
 
 // Valid scores: 0, 0.1, 0.2, ..., 10
 function isValidScore(score: number): boolean {
@@ -57,12 +62,26 @@ export async function POST(
     return error("NOT_FOUND", "评分任务不存在", 404);
   }
 
-  if (!SCOREABLE_TASK_STATUSES.includes(task.status as (typeof SCOREABLE_TASK_STATUSES)[number])) {
+  if (
+    !SCOREABLE_TASK_STATUSES.includes(
+      task.status as (typeof SCOREABLE_TASK_STATUSES)[number]
+    )
+  ) {
     return error("CONFLICT", "该任务当前不可评分", 409);
   }
 
+  const now = new Date();
+  const timeline = getScoringTaskTimeline(task.createdAt, now);
+  if (!timeline.isReleasedForScoring) {
+    const message =
+      now.getTime() < timeline.publishAt.getTime()
+        ? `该任务将于 ${formatChinaDateTime(timeline.publishAt)} 发布给评分员`
+        : "该任务已过当日 24:00 评分截止时间";
+    return error("SCORING_WINDOW_CLOSED", message, 409);
+  }
+
   const onDutyScorerIds = await getOnDutyScorerIds({
-    excludeUserId: task.ratedUserId,
+    weekday: getChinaDutyWeekday(timeline.publishAt),
   });
   const eligibleScorerIds = getAssignedScorerIdsForTask({
     status: task.status,
@@ -126,7 +145,8 @@ export async function POST(
       where: { id: taskId },
       data: {
         status: "REVIEW",
-        completedAt: new Date(),
+        completedAt: now,
+        scorerSnapshot: eligibleScorerIds,
       },
     });
 

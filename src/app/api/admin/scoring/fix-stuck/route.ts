@@ -1,8 +1,12 @@
-import { requireRole } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { success, error } from '@/lib/api-response';
-import { getOnDutyScorerIds } from '@/lib/scorer-duty';
-import { getAssignedScorerIdsForTask, parseScorerSnapshot } from '@/lib/scoring';
+import { requireRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { success, error } from "@/lib/api-response";
+import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
+import {
+  getAssignedScorerIdsForTask,
+  getScoringTaskTimeline,
+  parseScorerSnapshot,
+} from "@/lib/scoring";
 
 /**
  * POST /api/admin/scoring/fix-stuck
@@ -11,13 +15,13 @@ import { getAssignedScorerIdsForTask, parseScorerSnapshot } from '@/lib/scoring'
  */
 export async function POST() {
   try {
-    await requireRole('SUPER_ADMIN');
+    await requireRole("SUPER_ADMIN");
 
     // Find tasks that are not yet in REVIEW or COMPLETED. REPORTED tasks
     // must be resolved by a super admin before they can move forward.
     const stuckTasks = await db.ratingTask.findMany({
       where: {
-        status: { notIn: ['REVIEW', 'COMPLETED', 'REPORTED'] },
+        status: { notIn: ["REVIEW", "COMPLETED", "REPORTED"] },
       },
       include: {
         scores: { select: { id: true, scorerUserId: true } },
@@ -36,8 +40,9 @@ export async function POST() {
 
     for (const task of stuckTasks) {
       const scorerIds = parseScorerSnapshot(task.scorerSnapshot);
+      const timeline = getScoringTaskTimeline(task.createdAt);
       const onDutyScorerIds = await getOnDutyScorerIds({
-        excludeUserId: task.ratedUserId,
+        weekday: getChinaDutyWeekday(timeline.publishAt),
       });
       const eligibleScorerIds = getAssignedScorerIdsForTask({
         status: task.status,
@@ -65,8 +70,9 @@ export async function POST() {
         await db.ratingTask.update({
           where: { id: task.id },
           data: {
-            status: 'REVIEW',
+            status: "REVIEW",
             completedAt: task.completedAt ?? new Date(),
+            scorerSnapshot: eligibleScorerIds,
           },
         });
 
@@ -74,10 +80,10 @@ export async function POST() {
           where: { userId: task.ratedUserId },
           create: {
             userId: task.ratedUserId,
-            ratingStatus: 'REVIEW',
+            ratingStatus: "REVIEW",
           },
           update: {
-            ratingStatus: 'REVIEW',
+            ratingStatus: "REVIEW",
           },
         });
 
@@ -92,11 +98,11 @@ export async function POST() {
       debug: debugInfo,
     });
   } catch (err) {
-    console.error('[admin/scoring/fix-stuck] POST error:', err);
-    if (err && typeof err === 'object' && 'status' in err) {
+    console.error("[admin/scoring/fix-stuck] POST error:", err);
+    if (err && typeof err === "object" && "status" in err) {
       const appErr = err as { code: string; message: string; status: number };
       return error(appErr.code, appErr.message, appErr.status);
     }
-    return error('INTERNAL_ERROR', '服务器内部错误', 500);
+    return error("INTERNAL_ERROR", "服务器内部错误", 500);
   }
 }

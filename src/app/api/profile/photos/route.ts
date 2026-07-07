@@ -1,11 +1,12 @@
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
-import { uploadFile, deleteFile, getSignedUrl } from "@/lib/storage";
+import { uploadFile, deleteFile } from "@/lib/storage";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { success, error } from "@/lib/api-response";
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
+import { buildImageProxyUrl } from "@/lib/image-proxy";
 import {
   orderDraftPhotos,
   publishedPhotosToDraftPhotos,
@@ -39,19 +40,25 @@ export async function GET(req: Request) {
   const draftData = readProfileDraftData(profile.draftData);
   const sourcePhotos =
     mode === "draft" && profile.status === "ACTIVE"
-      ? draftData.photos ?? (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos))
+      ? (draftData.photos ??
+        (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos)))
       : publishedPhotosToDraftPhotos(profile.photos);
 
-  // Generate signed URLs for each photo
-  const photosWithUrls = await Promise.all(
-    sourcePhotos.map(async (p) => ({
-      id: p.id,
-      order: p.order,
-      originalName: p.originalName,
-      url: await getSignedUrl(p.storageKey, 3600),
-      source: p.source,
-    }))
-  );
+  // Generate per-user image proxy URLs for each photo.
+  const photosWithUrls = sourcePhotos.map((p) => ({
+    id: p.id,
+    order: p.order,
+    originalName: p.originalName,
+    url: buildImageProxyUrl(p.storageKey, {
+      viewerId: session.id,
+      variant: "large",
+    }),
+    thumbUrl: buildImageProxyUrl(p.storageKey, {
+      viewerId: session.id,
+      variant: "thumb",
+    }),
+    source: p.source,
+  }));
 
   return success({ photos: photosWithUrls });
 }
@@ -94,9 +101,12 @@ export async function POST(req: Request) {
   const draftData = readProfileDraftData(profile.draftData);
   const isActiveDraftMode = mode === "draft" && profile.status === "ACTIVE";
   const currentDraftPhotos = isActiveDraftMode
-    ? draftData.photos ?? (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos))
+    ? (draftData.photos ??
+      (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos)))
     : [];
-  const currentPhotoCount = isActiveDraftMode ? currentDraftPhotos.length : profile.photos.length;
+  const currentPhotoCount = isActiveDraftMode
+    ? currentDraftPhotos.length
+    : profile.photos.length;
 
   // 2. Check photo limit
   if (currentPhotoCount >= MAX_PHOTOS) {
@@ -140,9 +150,7 @@ export async function POST(req: Request) {
   try {
     const arrayBuf = await file.arrayBuffer();
     const rawBuffer = Buffer.from(arrayBuf);
-    webpBuffer = await sharp(rawBuffer)
-      .webp({ quality: 80 })
-      .toBuffer();
+    webpBuffer = await sharp(rawBuffer).webp({ quality: 80 }).toBuffer();
   } catch (err) {
     console.error("[Photo Upload] Image processing error:", err);
     return error("VALIDATION_ERROR", "照片处理失败，请确保上传有效的图片文件", 422);
@@ -204,13 +212,19 @@ export async function POST(req: Request) {
     action: AUDIT_ACTIONS.PROFILE_UPDATE,
     targetType: "ProfilePhoto",
     targetId: photo.id,
-    metadata: { action: isActiveDraftMode ? "draft_upload" : "upload", key } as Prisma.InputJsonValue,
+    metadata: {
+      action: isActiveDraftMode ? "draft_upload" : "upload",
+      key,
+    } as Prisma.InputJsonValue,
     ip: getClientIp(req),
     userAgent: req.headers.get("user-agent"),
   });
 
   // 10. Return photo with signed URL
-  const url = await getSignedUrl(key, 3600);
+  const url = buildImageProxyUrl(key, {
+    viewerId: session.id,
+    variant: "large",
+  });
 
   return success({
     photo: {
@@ -218,6 +232,10 @@ export async function POST(req: Request) {
       order: photo.order,
       originalName: photo.originalName,
       url,
+      thumbUrl: buildImageProxyUrl(key, {
+        viewerId: session.id,
+        variant: "thumb",
+      }),
       source: isActiveDraftMode ? "draft" : "published",
     },
   });
@@ -253,7 +271,8 @@ export async function DELETE(req: Request) {
     if (profile?.status === "ACTIVE") {
       const draftData = readProfileDraftData(profile.draftData);
       const currentDraftPhotos =
-        draftData.photos ?? (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos));
+        draftData.photos ??
+        (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos));
       const photo = currentDraftPhotos.find((p) => p.id === photoId);
 
       if (!photo) {
@@ -268,7 +287,9 @@ export async function DELETE(req: Request) {
         }
       }
 
-      const remaining = orderDraftPhotos(currentDraftPhotos.filter((p) => p.id !== photoId));
+      const remaining = orderDraftPhotos(
+        currentDraftPhotos.filter((p) => p.id !== photoId)
+      );
       await db.profile.update({
         where: { id: profile.id },
         data: {
@@ -285,7 +306,10 @@ export async function DELETE(req: Request) {
         action: AUDIT_ACTIONS.PROFILE_UPDATE,
         targetType: "ProfilePhoto",
         targetId: photoId,
-        metadata: { action: "draft_delete", key: photo.storageKey } as Prisma.InputJsonValue,
+        metadata: {
+          action: "draft_delete",
+          key: photo.storageKey,
+        } as Prisma.InputJsonValue,
         ip: getClientIp(req),
         userAgent: req.headers.get("user-agent"),
       });

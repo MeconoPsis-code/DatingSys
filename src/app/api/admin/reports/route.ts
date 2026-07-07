@@ -1,19 +1,22 @@
-import { requireRole } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { error, paginated } from '@/lib/api-response';
-import { getReportEvidenceUrls } from '@/lib/report-evidence';
+import { requireRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { error, paginated } from "@/lib/api-response";
+import { getReportEvidenceUrls } from "@/lib/report-evidence";
 
 // ── GET /api/admin/reports — admin report queue ────────
 
 export async function GET(req: Request) {
   try {
-    await requireRole('ADMIN');
+    const session = await requireRole("ADMIN");
 
     const url = new URL(req.url);
-    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
-    const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
-    const status = url.searchParams.get('status') || undefined;
-    const type = url.searchParams.get('type') || undefined;
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
+    const pageSize = Math.min(
+      50,
+      Math.max(1, parseInt(url.searchParams.get("pageSize") || "20"))
+    );
+    const status = url.searchParams.get("status") || undefined;
+    const type = url.searchParams.get("type") || undefined;
 
     const where: Record<string, unknown> = {};
     if (status) where.status = status;
@@ -40,7 +43,7 @@ export async function GET(req: Request) {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -59,21 +62,21 @@ export async function GET(req: Request) {
         description: r.description,
         status: r.status,
         resolution: r.resolution,
-        evidence: await getReportEvidenceUrls(r.evidenceObjectKeys),
+        evidence: await getReportEvidenceUrls(r.evidenceObjectKeys, session.id),
         handledBy: r.handledBy,
         handlerNickname: r.handler?.authIdentities[0]?.nickname ?? null,
         handledAt: r.handledAt,
         createdAt: r.createdAt,
-      })),
+      }))
     );
 
     return paginated(data, total, page, pageSize);
   } catch (err) {
-    console.error('[admin/reports] GET error:', err);
-    if (err && typeof err === 'object' && 'status' in err) {
+    console.error("[admin/reports] GET error:", err);
+    if (err && typeof err === "object" && "status" in err) {
       const appErr = err as { code: string; message: string; status: number };
       return error(appErr.code, appErr.message, appErr.status);
     }
-    return error('INTERNAL_ERROR', '服务器内部错误', 500);
+    return error("INTERNAL_ERROR", "服务器内部错误", 500);
   }
 }

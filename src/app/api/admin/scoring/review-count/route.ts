@@ -1,10 +1,12 @@
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { error, success } from "@/lib/api-response";
+import { promoteExpiredScoringTasks } from "@/lib/scoring-deadlines";
 
 export async function GET() {
   try {
     await requireRole("SUPER_ADMIN");
+    await promoteExpiredScoringTasks();
 
     const total = await db.ratingTask.count({
       where: { status: { in: ["REVIEW", "REPORTED"] } },

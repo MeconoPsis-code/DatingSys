@@ -12,14 +12,11 @@ import { success, error } from "@/lib/api-response";
 import { Attribute, Prisma } from "@prisma/client";
 import { notify } from "@/lib/notifications";
 import { napcatClient } from "@/server/bot/clients/napcat.client";
-import {
-  buildGroupCardForProfile,
-  normalizeNicknameInput,
-} from "@/lib/group-card";
+import { buildGroupCardForProfile, normalizeNicknameInput } from "@/lib/group-card";
 import { createLogger } from "@/lib/logger";
 import { commitExpiredActions } from "@/lib/scoring-revocation";
-import { getOnDutyScorers } from "@/lib/scorer-duty";
-import { ACTIVE_SCORING_TASK_STATUSES } from "@/lib/scoring";
+import { getChinaDutyWeekday, getOnDutyScorers } from "@/lib/scorer-duty";
+import { ACTIVE_SCORING_TASK_STATUSES, getScoringTaskTimeline } from "@/lib/scoring";
 import {
   orderDraftPhotos,
   publishedPhotosToDraftPhotos,
@@ -58,10 +55,15 @@ function formatCooldownRemaining(ms: number): string {
   return `${Math.ceil(safeMs / DAY_MS)}天`;
 }
 
-function getEditCooldownInfo(profile: {
-  lastSubmittedAt: Date | null;
-  draftData: unknown;
-} | null | undefined) {
+function getEditCooldownInfo(
+  profile:
+    | {
+        lastSubmittedAt: Date | null;
+        draftData: unknown;
+      }
+    | null
+    | undefined
+) {
   if (!profile?.lastSubmittedAt) {
     return {
       isActive: false,
@@ -93,7 +95,7 @@ function getEditCooldownInfo(profile: {
 function resolveProfileAttribute(
   attribute: Attribute | "" | null | undefined,
   isSide?: boolean,
-  isOther?: boolean,
+  isOther?: boolean
 ): Attribute {
   if (attribute) return attribute;
   if (isSide) return Attribute.SIDE;
@@ -103,7 +105,7 @@ function resolveProfileAttribute(
 
 function hasNewPhotoContent(
   publishedPhotos: Array<{ storageKey: string }>,
-  desiredPhotos: Array<{ storageKey: string }>,
+  desiredPhotos: Array<{ storageKey: string }>
 ): boolean {
   const publishedStorageKeys = new Set(publishedPhotos.map((photo) => photo.storageKey));
   return desiredPhotos.some((photo) => !publishedStorageKeys.has(photo.storageKey));
@@ -152,14 +154,12 @@ export async function GET() {
         cooldownBypassed: true,
       }
     : {
-        canPublish:
-          clearDays === null || clearDays >= CLEAR_COOLDOWN_DAYS,
+        canPublish: clearDays === null || clearDays >= CLEAR_COOLDOWN_DAYS,
         publishCooldownRemaining:
           clearDays !== null && clearDays < CLEAR_COOLDOWN_DAYS
             ? CLEAR_COOLDOWN_DAYS - clearDays
             : 0,
-        canEdit:
-          !hasPublishedBefore || !editCooldown.isActive,
+        canEdit: !hasPublishedBefore || !editCooldown.isActive,
         editCooldownRemaining: editCooldown.remainingDays,
         editCooldownRemainingText: editCooldown.remainingText,
         isPhotoRevokeCooldown: editCooldown.isPhotoRevokeCooldown,
@@ -207,24 +207,27 @@ export async function PUT(req: Request) {
   const result = profileFormSchema.safeParse(body);
   if (!result.success) {
     const firstError = result.error.issues[0];
-    return error(
-      "VALIDATION_ERROR",
-      firstError?.message || "数据验证失败",
-      422
-    );
+    return error("VALIDATION_ERROR", firstError?.message || "数据验证失败", 422);
   }
 
-  const { profile: profileData, preference: prefData, nickname: nicknameInput } = result.data;
+  const {
+    profile: profileData,
+    preference: prefData,
+    nickname: nicknameInput,
+  } = result.data;
   const profileStatus = profileData.status || "DRAFT";
   const resolvedAttribute = resolveProfileAttribute(
     profileData.attribute,
     profileData.isSide,
-    profileData.isOther,
+    profileData.isOther
   );
   const requestedNickname =
     typeof nicknameInput === "string" ? normalizeNicknameInput(nicknameInput) : null;
 
-  if (typeof nicknameInput === "string" && (!requestedNickname || requestedNickname.length > 30)) {
+  if (
+    typeof nicknameInput === "string" &&
+    (!requestedNickname || requestedNickname.length > 30)
+  ) {
     return error("VALIDATION_ERROR", "昵称长度需在 1-30 个字符之间", 422);
   }
 
@@ -255,7 +258,8 @@ export async function PUT(req: Request) {
   // ─── DRAFT SAVE FOR ACTIVE PROFILES → store in draftData, don't touch published ───
   if (profileStatus === "DRAFT" && user?.profile?.status === "ACTIVE") {
     const existingDraft = readProfileDraftData(user.profile.draftData);
-    const deleteAllPhotos = body.deleteAllPhotos ?? existingDraft.deleteAllPhotos ?? false;
+    const deleteAllPhotos =
+      body.deleteAllPhotos ?? existingDraft.deleteAllPhotos ?? false;
 
     // Store draft data without modifying published profile fields or photos.
     const draftPayload = {
@@ -289,11 +293,7 @@ export async function PUT(req: Request) {
   }
 
   // 3a. Check 7-day edit cooldown (blocks re-publishing if previously published within cooldown)
-  if (
-    !isSuperAdmin &&
-    profileStatus === "ACTIVE" &&
-    user?.profile?.lastSubmittedAt
-  ) {
+  if (!isSuperAdmin && profileStatus === "ACTIVE" && user?.profile?.lastSubmittedAt) {
     const editCooldown = getEditCooldownInfo(user.profile);
     if (editCooldown.isActive) {
       const cooldownLabel = editCooldown.isPhotoRevokeCooldown
@@ -376,7 +376,9 @@ export async function PUT(req: Request) {
     const existingDraft = readProfileDraftData(user?.profile?.draftData);
     const shouldApplyDraftPhotos =
       user?.profile?.status === "ACTIVE" &&
-      (existingDraft.photos !== undefined || existingDraft.deleteAllPhotos || body.deleteAllPhotos);
+      (existingDraft.photos !== undefined ||
+        existingDraft.deleteAllPhotos ||
+        body.deleteAllPhotos);
 
     if (shouldApplyDraftPhotos) {
       const currentPhotos = await db.profilePhoto.findMany({
@@ -386,11 +388,12 @@ export async function PUT(req: Request) {
       const desiredPhotos = orderDraftPhotos(
         body.deleteAllPhotos
           ? []
-          : existingDraft.photos ?? publishedPhotosToDraftPhotos(user?.profile?.photos ?? []),
+          : (existingDraft.photos ??
+              publishedPhotosToDraftPhotos(user?.profile?.photos ?? []))
       );
       photoChangeRequiresScoring = hasNewPhotoContent(
         user?.profile?.photos ?? [],
-        desiredPhotos,
+        desiredPhotos
       );
       const desiredStorageKeys = new Set(desiredPhotos.map((p) => p.storageKey));
       const candidateDeleteKeys = new Set([
@@ -404,7 +407,7 @@ export async function PUT(req: Request) {
       await Promise.all(
         [...candidateDeleteKeys]
           .filter((key) => !desiredStorageKeys.has(key))
-          .map((key) => deleteStorageFile(key).catch(() => {})),
+          .map((key) => deleteStorageFile(key).catch(() => {}))
       );
 
       await db.$transaction([
@@ -419,7 +422,7 @@ export async function PUT(req: Request) {
               mimeType: photo.mimeType,
               sizeBytes: photo.sizeBytes,
             },
-          }),
+          })
         ),
       ]);
     } else if (body.deleteAllPhotos) {
@@ -430,7 +433,7 @@ export async function PUT(req: Request) {
 
       const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
       await Promise.all(
-        photosToDelete.map((p) => deleteStorageFile(p.storageKey).catch(() => {})),
+        photosToDelete.map((p) => deleteStorageFile(p.storageKey).catch(() => {}))
       );
 
       await db.profilePhoto.deleteMany({ where: { profileId: profile.id } });
@@ -460,8 +463,12 @@ export async function PUT(req: Request) {
         });
 
         if (!existingTask) {
-          // Assign only scorers/admins scheduled for today's duty roster.
-          const scorers = await getOnDutyScorers({ excludeUserId: session.id });
+          const taskCreatedAt = new Date();
+          const timeline = getScoringTaskTimeline(taskCreatedAt);
+          const scorers = await getOnDutyScorers({
+            excludeUserId: session.id,
+            weekday: getChinaDutyWeekday(timeline.publishAt),
+          });
 
           const firstPhoto = await db.profilePhoto.findFirst({
             where: { profileId: profile.id },
@@ -469,12 +476,13 @@ export async function PUT(req: Request) {
           });
 
           if (firstPhoto) {
-            await db.ratingTask.create({
+            const ratingTask = await db.ratingTask.create({
               data: {
                 ratedUserId: session.id,
                 photoObjectKey: firstPhoto.storageKey,
                 status: "PENDING",
                 scorerSnapshot: scorers.map((s) => s.id),
+                createdAt: taskCreatedAt,
               },
             });
 
@@ -499,10 +507,10 @@ export async function PUT(req: Request) {
               where: {
                 status: { in: ["PENDING", "SCORING"] },
                 ratedUserId: { not: session.id },
-                createdAt: { lt: new Date() },
+                createdAt: { lt: ratingTask.createdAt },
               },
             });
-            await notify.scoringQueued(session.id, queueAhead);
+            await notify.scoringQueued(session.id, queueAhead, timeline);
           }
         }
       }
@@ -532,7 +540,8 @@ export async function PUT(req: Request) {
         select: { nickname: true },
       });
 
-      const nickname = requestedNickname ?? normalizeNicknameInput(identity?.nickname || "");
+      const nickname =
+        requestedNickname ?? normalizeNicknameInput(identity?.nickname || "");
 
       if (nickname) {
         const groupCard = buildGroupCardForProfile(nickname, profileData);
@@ -572,7 +581,10 @@ export async function PUT(req: Request) {
       }
     } catch (err) {
       // Group card sync is best-effort, don't fail the request
-      log.warn({ err, qqNumber: session.qqNumber }, "Failed to sync group card after profile update");
+      log.warn(
+        { err, qqNumber: session.qqNumber },
+        "Failed to sync group card after profile update"
+      );
     }
   }
 

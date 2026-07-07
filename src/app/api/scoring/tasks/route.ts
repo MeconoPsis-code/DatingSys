@@ -1,10 +1,16 @@
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { can } from "@/lib/rbac";
-import { getSignedUrl } from "@/lib/storage";
 import { success, error } from "@/lib/api-response";
-import { getOnDutyScorerIds } from "@/lib/scorer-duty";
-import { getAssignedScorerIdsForTask, SCOREABLE_TASK_STATUSES } from "@/lib/scoring";
+import { buildImageProxyUrl } from "@/lib/image-proxy";
+import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
+import {
+  getAssignedScorerIdsForTask,
+  getScoringTaskTimeline,
+  SCOREABLE_TASK_STATUSES,
+  serializeScoringTaskTimeline,
+} from "@/lib/scoring";
+import { promoteExpiredScoringTasks } from "@/lib/scoring-deadlines";
 
 /**
  * GET /api/scoring/tasks
@@ -28,7 +34,8 @@ export async function GET(req: Request) {
   }
 
   if (statusFilter === "pending") {
-    const onDutyScorerIds = await getOnDutyScorerIds();
+    await promoteExpiredScoringTasks();
+    const now = new Date();
 
     // Tasks not yet scored by this user
     const tasks = await db.ratingTask.findMany({
@@ -61,19 +68,52 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "asc" },
     });
 
-    const visibleTasks = tasks.filter((task) => {
+    const dutyCache = new Map<number, string[]>();
+    const visibleTasks: Array<{
+      task: (typeof tasks)[number];
+      timeline: ReturnType<typeof getScoringTaskTimeline>;
+      eligibleScorerIds: string[];
+    }> = [];
+    let nextAvailableAt: string | null = null;
+
+    for (const task of tasks) {
+      const timeline = getScoringTaskTimeline(task.createdAt, now);
+      const dutyWeekday = getChinaDutyWeekday(timeline.publishAt);
+      let onDutyScorerIds = dutyCache.get(dutyWeekday);
+
+      if (!onDutyScorerIds) {
+        onDutyScorerIds = await getOnDutyScorerIds({
+          weekday: dutyWeekday,
+        });
+        dutyCache.set(dutyWeekday, onDutyScorerIds);
+      }
+
       const eligibleScorerIds = getAssignedScorerIdsForTask({
         status: task.status,
         ratedUserId: task.ratedUserId,
         scorerSnapshot: task.scorerSnapshot,
         onDutyScorerIds,
       });
-      return eligibleScorerIds.includes(session.id);
-    });
+
+      if (!eligibleScorerIds.includes(session.id)) continue;
+
+      if (!timeline.isReleasedForScoring) {
+        const publishAt = timeline.publishAt.toISOString();
+        if (
+          timeline.publishAt.getTime() > now.getTime() &&
+          (!nextAvailableAt || publishAt < nextAvailableAt)
+        ) {
+          nextAvailableAt = publishAt;
+        }
+        continue;
+      }
+
+      visibleTasks.push({ task, timeline, eligibleScorerIds });
+    }
 
     // Enrich with photos + signed URLs
     const enriched = await Promise.all(
-      visibleTasks.map(async (task) => {
+      visibleTasks.map(async ({ task, timeline, eligibleScorerIds }) => {
         const photos = await db.profilePhoto.findMany({
           where: {
             profile: { userId: task.ratedUserId },
@@ -81,20 +121,15 @@ export async function GET(req: Request) {
           orderBy: { order: "asc" },
         });
 
-        const photosWithUrls = await Promise.all(
-          photos.map(async (p) => ({
-            id: p.id,
-            order: p.order,
-            url: await getSignedUrl(p.storageKey, 3600),
-          }))
-        );
+        const photosWithUrls = photos.map((p) => ({
+          id: p.id,
+          order: p.order,
+          url: buildImageProxyUrl(p.storageKey, {
+            viewerId: session.id,
+            variant: "large",
+          }),
+        }));
 
-        const eligibleScorerIds = getAssignedScorerIdsForTask({
-          status: task.status,
-          ratedUserId: task.ratedUserId,
-          scorerSnapshot: task.scorerSnapshot,
-          onDutyScorerIds,
-        });
         const eligibleScorerIdSet = new Set(eligibleScorerIds);
         const scoredCount = task.scores.filter((score) =>
           eligibleScorerIdSet.has(score.scorerUserId)
@@ -105,6 +140,7 @@ export async function GET(req: Request) {
           id: task.id,
           status: task.status,
           createdAt: task.createdAt,
+          timeline: serializeScoringTaskTimeline(timeline),
           progress: { scored: scoredCount, total: totalScorers },
           profile: task.ratedUser.profile
             ? {
@@ -120,6 +156,6 @@ export async function GET(req: Request) {
       })
     );
 
-    return success({ tasks: enriched });
+    return success({ tasks: enriched, nextAvailableAt });
   }
 }

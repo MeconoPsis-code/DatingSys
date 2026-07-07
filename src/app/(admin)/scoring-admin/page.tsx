@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import Image from "next/image";
 import { ArrowDownToLine } from "lucide-react";
 
 /* ─── Lightbox ───────────────────────────────────────── */
@@ -48,11 +49,16 @@ function PhotoLightbox({
         </button>
 
         {/* Image */}
-        <img
-          src={photo.url}
-          alt={`照片 ${photo.order + 1}`}
-          className="max-h-[85vh] max-w-[85vw] rounded-xl object-contain"
-        />
+        <div className="relative h-[85vh] w-[85vw]">
+          <Image
+            src={photo.url}
+            alt={`照片 ${photo.order + 1}`}
+            fill
+            unoptimized
+            sizes="85vw"
+            className="rounded-xl object-contain"
+          />
+        </div>
 
         {/* Nav arrows */}
         {photos.length > 1 && (
@@ -100,12 +106,26 @@ interface TaskPhoto {
   id: string;
   order: number;
   url: string;
+  thumbUrl?: string;
 }
 
 interface PhotoReport {
   reporterId: string;
   reason: string;
   createdAt: string;
+}
+
+interface ScoringTimeline {
+  pendingAt: string;
+  publishAt: string;
+  publishEndsAt: string;
+  scoringDeadlineAt: string;
+  reviewDeadlineAt: string;
+  phase: string;
+  isReleasedForScoring: boolean;
+  isPublishingOpen: boolean;
+  isScoringClosed: boolean;
+  isReviewOverdue: boolean;
 }
 
 interface ScoringTask {
@@ -123,6 +143,7 @@ interface ScoringTask {
   photos: TaskPhoto[];
   completedAt: string | null;
   createdAt: string;
+  timeline: ScoringTimeline;
   finalScore: number | null;
   liveScore: number | null;
   photoReports: PhotoReport[];
@@ -139,13 +160,13 @@ const STATUS_TABS = [
   { value: "REVIEW", label: "待审核", superOnly: true },
   { value: "REPORTED", label: "被举报" },
   { value: "NEEDS_RESCORE", label: "需重评" },
-  { value: "PENDING", label: "待评分" },
+  { value: "PENDING", label: "待定" },
   { value: "SCORING", label: "评分中" },
   { value: "COMPLETED", label: "已完成" },
 ] as const;
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "待评分", cls: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]" },
+  PENDING: { label: "待定", cls: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]" },
   SCORING: { label: "评分中", cls: "bg-[#e6f4ff] text-[#0958d9] border-[#91caff]" },
   REVIEW: { label: "待审核", cls: "bg-[#fffbe6] text-[#d48806] border-[#ffe58f]" },
   COMPLETED: { label: "已完成", cls: "bg-[#f6ffed] text-[#389e0d] border-[#b7eb8f]" },
@@ -185,7 +206,10 @@ function OverrideScoreInput({ onSubmit }: { onSubmit: (score: number) => void })
         onClick={() => setOpen(true)}
         className="flex items-center rounded-lg border border-brand-blue/30 bg-blue-1 px-3 py-1.5 text-xs font-medium text-brand-blue transition-all hover:bg-brand-blue/20"
       >
-        <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+        <svg
+          viewBox="0 0 24 24"
+          className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+        >
           <path d="M12 20h9" />
           <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
         </svg>
@@ -280,6 +304,13 @@ function TaskCard({
   const badge = STATUS_BADGE[task.status] || { label: task.status, cls: "" };
   const progress = task.totalScorers > 0 ? task.scoredCount / task.totalScorers : 0;
   const progressPct = Math.round(progress * 100);
+  const timelineItems = [
+    { label: "待定", value: task.timeline.pendingAt },
+    { label: "发布", value: task.timeline.publishAt },
+    { label: "停发", value: task.timeline.publishEndsAt },
+    { label: "评分截止", value: task.timeline.scoringDeadlineAt },
+    { label: "审核截止", value: task.timeline.reviewDeadlineAt },
+  ];
 
   // Map scored user IDs
   const scoredUserIds = new Set(task.scores.map((s) => s.scorerUserId));
@@ -287,15 +318,21 @@ function TaskCard({
   const calculatedAvg =
     task.liveScore ??
     (task.scores.length > 0
-      ? Math.round((task.scores.reduce((sum, s) => sum + s.score, 0) / task.scores.length) * 10) / 10
+      ? Math.round(
+          (task.scores.reduce((sum, s) => sum + s.score, 0) / task.scores.length) * 10
+        ) / 10
       : null);
-  const displayScore = task.status === "COMPLETED" && task.finalScore !== null ? task.finalScore : calculatedAvg;
+  const displayScore =
+    task.status === "COMPLETED" && task.finalScore !== null
+      ? task.finalScore
+      : calculatedAvg;
   const scoreLabel = task.status === "COMPLETED" ? "已发布评分" : "实时均分";
   const scoreFootnote =
-    task.status === "COMPLETED" && task.finalScore !== null && calculatedAvg !== task.finalScore
+    task.status === "COMPLETED" &&
+    task.finalScore !== null &&
+    calculatedAvg !== task.finalScore
       ? "手动设定"
       : `基于 ${task.scores.length} 个评分`;
-  const canPublishLiveScore = isSuperAdmin && task.status !== "COMPLETED" && task.photoReports.length === 0 && calculatedAvg !== null;
 
   return (
     <div className="min-w-0 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3 transition-all hover:border-[hsl(var(--primary)/0.2)] sm:p-5">
@@ -310,12 +347,29 @@ function TaskCard({
           </p>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${badge.cls}`}>
+          <span
+            className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${badge.cls}`}
+          >
             {badge.label}
           </span>
           <span className="text-[11px] text-[hsl(var(--muted-foreground))]">
             {formatDate(task.createdAt)}
           </span>
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-5">
+          {timelineItems.map((item) => (
+            <div
+              key={item.label}
+              className="min-w-0 rounded-md border border-[hsl(var(--border)/0.6)] bg-[hsl(var(--card)/0.35)] px-2 py-1"
+            >
+              <div className="truncate text-[10px] text-[hsl(var(--muted-foreground))]">
+                {item.label}
+              </div>
+              <div className="truncate text-[11px] font-medium text-[hsl(var(--foreground))]">
+                {formatDate(item.value)}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -327,12 +381,15 @@ function TaskCard({
               key={photo.id}
               type="button"
               onClick={() => setLightboxIdx(i)}
-              className="aspect-square overflow-hidden rounded-lg border border-[hsl(var(--border)/0.5)] transition-all hover:border-[hsl(var(--primary)/0.5)] hover:scale-[1.03] focus:outline-none sm:h-32 sm:w-32 sm:shrink-0"
+              className="relative aspect-square overflow-hidden rounded-lg border border-[hsl(var(--border)/0.5)] transition-all hover:border-[hsl(var(--primary)/0.5)] hover:scale-[1.03] focus:outline-none sm:h-32 sm:w-32 sm:shrink-0"
             >
-              <img
-                src={photo.url}
+              <Image
+                src={photo.thumbUrl ?? photo.url}
                 alt={`照片 ${photo.order + 1}`}
-                className="h-full w-full object-cover"
+                fill
+                unoptimized
+                sizes="(min-width: 640px) 128px, 50vw"
+                className="object-cover"
               />
             </button>
           ))}
@@ -367,7 +424,9 @@ function TaskCard({
       {/* Live / published score */}
       {displayScore !== null && (
         <div className="mb-3 flex items-center gap-2 rounded-lg bg-[hsl(var(--secondary)/0.5)] px-3 py-2">
-          <span className="text-xs text-[hsl(var(--muted-foreground))]">{scoreLabel}:</span>
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">
+            {scoreLabel}:
+          </span>
           <span className={`text-lg font-bold ${scoreColor(displayScore)}`}>
             {displayScore.toFixed(1)}
           </span>
@@ -380,7 +439,9 @@ function TaskCard({
 
       {/* Scorer details */}
       <div className="mb-3">
-        <p className="mb-2 text-xs font-medium text-[hsl(var(--muted-foreground))]">评分详情:</p>
+        <p className="mb-2 text-xs font-medium text-[hsl(var(--muted-foreground))]">
+          评分详情:
+        </p>
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
           {/* Scored entries */}
           {task.scores.map((s) => (
@@ -462,7 +523,10 @@ function TaskCard({
                   onClick={() => onApprove(task.id)}
                   className="flex items-center rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/25"
                 >
-                  <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                  >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                   通过并发布
@@ -476,7 +540,10 @@ function TaskCard({
                   }}
                   className="flex items-center rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20"
                 >
-                  <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                  >
                     <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                     <path d="M3 3v5h5" />
                     <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
@@ -495,7 +562,10 @@ function TaskCard({
       {task.photoReports.length > 0 && isSuperAdmin && (
         <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3">
           <p className="mb-2 text-xs font-medium text-red-400 flex items-center gap-1">
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round shrink-0"
+            >
               <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
               <line x1="4" y1="22" x2="4" y2="15" />
             </svg>
@@ -507,8 +577,12 @@ function TaskCard({
               const name = info?.nickname || info?.qq || r.reporterId.slice(0, 8);
               return (
                 <div key={i} className="rounded-md bg-red-500/5 px-3 py-2 text-xs">
-                  <span className="font-medium text-[hsl(var(--foreground))]">{name}:</span>
-                  <span className="ml-1.5 text-[hsl(var(--muted-foreground))]">{r.reason}</span>
+                  <span className="font-medium text-[hsl(var(--foreground))]">
+                    {name}:
+                  </span>
+                  <span className="ml-1.5 text-[hsl(var(--muted-foreground))]">
+                    {r.reason}
+                  </span>
                 </div>
               );
             })}
@@ -517,13 +591,20 @@ function TaskCard({
             <button
               type="button"
               onClick={() => {
-                if (confirm("确认照片违规并撤销该用户的照片吗？照片将被删除，用户会收到包含举报原因的通知。")) {
+                if (
+                  confirm(
+                    "确认照片违规并撤销该用户的照片吗？照片将被删除，用户会收到包含举报原因的通知。"
+                  )
+                ) {
                   onRevokePhotos(task.id);
                 }
               }}
               className="flex items-center rounded-lg bg-red-500/15 border border-red-500/30 px-3 py-1.5 text-xs font-medium text-red-400 transition-all hover:bg-red-500/25"
             >
-              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <svg
+                viewBox="0 0 24 24"
+                className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+              >
                 <polyline points="3 6 5 6 21 6" />
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
@@ -532,13 +613,20 @@ function TaskCard({
             <button
               type="button"
               onClick={() => {
-                if (confirm("确认照片不违规并继续评分吗？举报记录将被清除，仅举报评分员和未评分评分员会收到重新评分任务。")) {
+                if (
+                  confirm(
+                    "确认照片不违规并继续评分吗？举报记录将被清除，仅举报评分员和未评分评分员会收到重新评分任务。"
+                  )
+                ) {
                   onRescore(task.id, "reporters_and_unscored");
                 }
               }}
               className="flex items-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/20"
             >
-              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <svg
+                viewBox="0 0 24 24"
+                className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+              >
                 <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                 <path d="M3 3v5h5" />
                 <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
@@ -553,32 +641,23 @@ function TaskCard({
       {/* Actions for non-REVIEW tasks — SUPER_ADMIN only */}
       {task.status !== "REVIEW" && task.photoReports.length === 0 && isSuperAdmin && (
         <div className="flex flex-wrap gap-2">
-          {canPublishLiveScore && (
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm(`确认发布当前实时评分 ${calculatedAvg?.toFixed(1)} 分吗？仍未评分的评分员将不再影响本次结果。`)) {
-                  onApprove(task.id);
-                }
-              }}
-              className="flex items-center rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 text-xs font-medium text-emerald-400 transition-all hover:bg-emerald-500/25"
-            >
-              <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              发布当前评分
-            </button>
-          )}
           <button
             type="button"
             onClick={() => {
-              if (confirm("确定要重置此用户的评分吗？所有已提交的评分将被清除，评分员需要重新评分。")) {
+              if (
+                confirm(
+                  "确定要重置此用户的评分吗？所有已提交的评分将被清除，评分员需要重新评分。"
+                )
+              ) {
                 onRescore(task.id);
               }
             }}
             className="flex items-center rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 transition-all hover:bg-amber-500/20"
           >
-            <svg viewBox="0 0 24 24" className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="mr-1 h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
               <path d="M3 3v5h5" />
               <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
@@ -586,7 +665,6 @@ function TaskCard({
             </svg>
             重新评分
           </button>
-          <OverrideScoreInput onSubmit={(score) => onOverride(task.id, score)} />
         </div>
       )}
     </div>
@@ -647,35 +725,41 @@ export default function ScoringAdminPage() {
     setPageInput("1");
   }
 
-  const fetchTasks = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (!silent) setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-      if (search.trim()) params.set("search", search.trim());
-      if (statusFilter) params.set("status", statusFilter);
+  const fetchTasks = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (!silent) setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(pageSize),
+        });
+        if (search.trim()) params.set("search", search.trim());
+        if (statusFilter) params.set("status", statusFilter);
 
-      const res = await fetch(`/api/admin/scoring?${params}`);
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || "加载失败");
-      }
-      const data = await res.json();
-      setTasks(data.data || []);
-      if (data.pagination) {
-        setTotalPages(data.pagination.totalPages);
-        setTotal(data.pagination.total);
-        if (data.pagination.totalPages > 0 && page > data.pagination.totalPages) {
-          setPage(data.pagination.totalPages);
-          setPageInput(String(data.pagination.totalPages));
+        const res = await fetch(`/api/admin/scoring?${params}`);
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error?.message || "加载失败");
         }
+        const data = await res.json();
+        setTasks(data.data || []);
+        if (data.pagination) {
+          setTotalPages(data.pagination.totalPages);
+          setTotal(data.pagination.total);
+          if (data.pagination.totalPages > 0 && page > data.pagination.totalPages) {
+            setPage(data.pagination.totalPages);
+            setPageInput(String(data.pagination.totalPages));
+          }
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "加载失败");
+      } finally {
+        if (!silent) setLoading(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, [page, search, statusFilter]);
+    },
+    [page, search, statusFilter]
+  );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -734,7 +818,9 @@ export default function ScoringAdminPage() {
 
   async function handleRevokePhotos(taskId: string) {
     try {
-      const res = await fetch(`/api/admin/scoring/${taskId}/revoke-photos`, { method: "POST" });
+      const res = await fetch(`/api/admin/scoring/${taskId}/revoke-photos`, {
+        method: "POST",
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "操作失败");
       alert(data.data?.message || "照片已撤销，用户已收到通知");
@@ -764,11 +850,20 @@ export default function ScoringAdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "修复失败");
       const result = data.data;
-      const debugStr = result.debug
-        ?.map((d: { taskId: string; status: string; snapshotLength: number; eligibleCount: number; scoredCount: number; promoted: boolean }) =>
-          `任务${d.taskId.slice(0, 6)}… 状态:${d.status} 快照:${d.snapshotLength} 有效:${d.eligibleCount} 已评:${d.scoredCount} → ${d.promoted ? '已修复' : '未修复'}`
-        )
-        .join('\n') || '';
+      const debugStr =
+        result.debug
+          ?.map(
+            (d: {
+              taskId: string;
+              status: string;
+              snapshotLength: number;
+              eligibleCount: number;
+              scoredCount: number;
+              promoted: boolean;
+            }) =>
+              `任务${d.taskId.slice(0, 6)}… 状态:${d.status} 快照:${d.snapshotLength} 有效:${d.eligibleCount} 已评:${d.scoredCount} → ${d.promoted ? "已修复" : "未修复"}`
+          )
+          .join("\n") || "";
       alert(`${result.message}\n\n${debugStr}`);
       fetchTasks();
     } catch (err) {
@@ -828,33 +923,47 @@ export default function ScoringAdminPage() {
       {/* Status tabs */}
       <div className="rounded-xl bg-[hsl(var(--secondary))] p-1">
         <div className="grid grid-cols-3 gap-1 sm:flex sm:flex-wrap">
-        {STATUS_TABS
-          .filter((tab) => !('superOnly' in tab && tab.superOnly) || isSuperAdmin)
-          .map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => { setStatusFilter(tab.value); setPage(1); setPageInput("1"); }}
-            className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:justify-start sm:px-4 ${
-              statusFilter === tab.value
-                ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
-                : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
-            }`}
-          >
-            {tab.value === "REVIEW" && (
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-500">
-                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <circle cx="12" cy="17" r="1" style={{ fill: "currentColor", stroke: "none" }} />
-              </svg>
-            )}
-            {tab.label}
-          </button>
-        ))}
+          {STATUS_TABS.filter(
+            (tab) => !("superOnly" in tab && tab.superOnly) || isSuperAdmin
+          ).map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => {
+                setStatusFilter(tab.value);
+                setPage(1);
+                setPageInput("1");
+              }}
+              className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:justify-start sm:px-4 ${
+                statusFilter === tab.value
+                  ? "bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-sm"
+                  : "text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+              }`}
+            >
+              {tab.value === "REVIEW" && (
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-3.5 w-3.5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-amber-500"
+                >
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <circle
+                    cx="12"
+                    cy="17"
+                    r="1"
+                    style={{ fill: "currentColor", stroke: "none" }}
+                  />
+                </svg>
+              )}
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="text-xs text-[hsl(var(--muted-foreground))]">共 {total} 个评分任务</div>
+      <div className="text-xs text-[hsl(var(--muted-foreground))]">
+        共 {total} 个评分任务
+      </div>
 
       {/* Error */}
       {error && (
@@ -925,7 +1034,10 @@ export default function ScoringAdminPage() {
             下一页
           </button>
           <form onSubmit={handlePageJump} className="flex items-center gap-1.5">
-            <label htmlFor="scoring-page-jump" className="text-sm text-[hsl(var(--muted-foreground))]">
+            <label
+              htmlFor="scoring-page-jump"
+              className="text-sm text-[hsl(var(--muted-foreground))]"
+            >
               跳至
             </label>
             <input

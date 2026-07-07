@@ -1,8 +1,8 @@
-import { requireAuth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { success, error } from '@/lib/api-response';
-import { getSignedUrl } from '@/lib/storage';
-import { commitExpiredActions } from '@/lib/scoring-revocation';
+import { requireAuth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { success, error } from "@/lib/api-response";
+import { commitExpiredActions } from "@/lib/scoring-revocation";
+import { buildImageProxyUrl } from "@/lib/image-proxy";
 
 // ── Helpers ─────────────────────────────────────────────
 
@@ -43,12 +43,12 @@ export async function GET(
         },
       },
     });
-    const isMutual = matchSnapshot?.matchType === 'mutual';
+    const isMutual = matchSnapshot?.matchType === "mutual";
 
     // Photo approval is bidirectional: if either party approved, both can see photos
     const approvedRequest = await db.viewRequest.findFirst({
       where: {
-        status: 'APPROVED',
+        status: "APPROVED",
         OR: [
           { requesterId: session.id, targetUserId: userId },
           { requesterId: userId, targetUserId: session.id },
@@ -57,7 +57,7 @@ export async function GET(
     });
 
     if (!isMutual && !approvedRequest) {
-      return error('FORBIDDEN', '无权查看该用户资料', 403);
+      return error("FORBIDDEN", "无权查看该用户资料", 403);
     }
 
     // 2. Load target user's full profile
@@ -72,7 +72,7 @@ export async function GET(
     });
 
     if (!targetUser || !targetUser.profile) {
-      return error('NOT_FOUND', '用户不存在或未完善资料', 404);
+      return error("NOT_FOUND", "用户不存在或未完善资料", 404);
     }
 
     // 3. Check if current user has completed the photo-participation requirements.
@@ -90,13 +90,14 @@ export async function GET(
     const photoApproved = !!approvedRequest;
     let photos: { id: string; url: string; order: number }[] = [];
     if (photoApproved && currentUserHasPhotos) {
-      photos = await Promise.all(
-        (targetUser.profile.photos ?? []).map(async (p) => ({
-          id: p.id,
-          url: await getSignedUrl(p.storageKey),
-          order: p.order,
-        }))
-      );
+      photos = (targetUser.profile.photos ?? []).map((p) => ({
+        id: p.id,
+        url: buildImageProxyUrl(p.storageKey, {
+          viewerId: session.id,
+          variant: "large",
+        }),
+        order: p.order,
+      }));
     }
 
     // 5. Build response — no-photo users cannot see appearance score
@@ -108,10 +109,7 @@ export async function GET(
       qqNumber: approvedRequest ? targetUser.qqNumber : null,
       nickname: targetUser.authIdentities[0]?.nickname ?? null,
       avatarUrl: approvedRequest
-        ? resolveQQAvatarUrl(
-            targetUser.authIdentities[0]?.avatarUrl,
-            targetUser.qqNumber
-          )
+        ? resolveQQAvatarUrl(targetUser.authIdentities[0]?.avatarUrl, targetUser.qqNumber)
         : null,
       age,
       heightCm: p.heightCm,
@@ -125,17 +123,20 @@ export async function GET(
       customAttribute: p.customAttribute,
       mbti: p.mbti,
       selfIntro: p.selfIntro,
-      hasPhotos: (targetUser.profile.photos ?? []).length > 0 && targetUser.ratingProfile !== null,
+      hasPhotos:
+        (targetUser.profile.photos ?? []).length > 0 && targetUser.ratingProfile !== null,
       photoApproved: photoApproved && currentUserHasPhotos,
-      finalScore: currentUserHasPhotos ? (targetUser.ratingProfile?.finalScore ?? null) : null,
+      finalScore: currentUserHasPhotos
+        ? (targetUser.ratingProfile?.finalScore ?? null)
+        : null,
       photos,
     });
   } catch (err) {
-    console.error('[matches/:userId] GET error:', err);
-    if (err && typeof err === 'object' && 'status' in err) {
+    console.error("[matches/:userId] GET error:", err);
+    if (err && typeof err === "object" && "status" in err) {
       const appErr = err as { code: string; message: string; status: number };
       return error(appErr.code, appErr.message, appErr.status);
     }
-    return error('INTERNAL_ERROR', '服务器内部错误', 500);
+    return error("INTERNAL_ERROR", "服务器内部错误", 500);
   }
 }

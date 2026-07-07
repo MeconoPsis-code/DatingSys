@@ -2,16 +2,13 @@ import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { success, error } from "@/lib/api-response";
 import { deleteUsersPermanently } from "@/lib/admin-user-delete";
-import { getSignedUrl } from "@/lib/storage";
+import { buildImageProxyUrl } from "@/lib/image-proxy";
 
 // ── GET /api/admin/users/:id ────────────────────────────
 
-export async function GET(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    await requireRole("ADMIN");
+    const session = await requireRole("ADMIN");
     const { id } = await params;
 
     const user = await db.user.findUnique({
@@ -56,24 +53,22 @@ export async function GET(
     // Fetch recent audit logs separately (target-based, not actor-based)
     const recentAuditLogs = await db.auditLog.findMany({
       where: {
-        OR: [
-          { actorUserId: id },
-          { targetId: id, targetType: "User" },
-        ],
+        OR: [{ actorUserId: id }, { targetId: id, targetType: "User" }],
       },
       orderBy: { createdAt: "desc" },
       take: 20,
     });
 
     const photos = user.profile
-      ? await Promise.all(
-          user.profile.photos.map(async (photo) => ({
-            id: photo.id,
-            order: photo.order,
-            originalName: photo.originalName,
-            url: await getSignedUrl(photo.storageKey, 3600),
-          })),
-        )
+      ? user.profile.photos.map((photo) => ({
+          id: photo.id,
+          order: photo.order,
+          originalName: photo.originalName,
+          url: buildImageProxyUrl(photo.storageKey, {
+            viewerId: session.id,
+            variant: "large",
+          }),
+        }))
       : [];
 
     const profile = user.profile

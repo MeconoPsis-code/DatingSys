@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import sharp from "sharp";
-import { deleteFile, getSignedUrl, uploadFile } from "@/lib/storage";
+import { buildImageProxyUrl } from "@/lib/image-proxy";
+import { deleteFile, uploadFile } from "@/lib/storage";
 
 export const MAX_REPORT_EVIDENCE_FILES = 6;
 export const MAX_REPORT_EVIDENCE_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -28,19 +29,18 @@ export function parseReportEvidenceKeys(value: unknown): string[] {
   return value.filter((key): key is string => typeof key === "string" && key.length > 0);
 }
 
-export async function getReportEvidenceUrls(value: unknown): Promise<ReportEvidenceItem[]> {
+export async function getReportEvidenceUrls(
+  value: unknown,
+  viewerId: string
+): Promise<ReportEvidenceItem[]> {
   const keys = parseReportEvidenceKeys(value);
-  const items = await Promise.all(
-    keys.map(async (key) => {
-      try {
-        return { key, url: await getSignedUrl(key, 3600) };
-      } catch {
-        return null;
-      }
+  return keys.map((key) => ({
+    key,
+    url: buildImageProxyUrl(key, {
+      viewerId,
+      variant: "large",
     }),
-  );
-
-  return items.filter((item): item is ReportEvidenceItem => item !== null);
+  }));
 }
 
 export async function deleteReportEvidence(keys: string[]): Promise<void> {
@@ -49,12 +49,12 @@ export async function deleteReportEvidence(keys: string[]): Promise<void> {
 
 export async function uploadReportEvidenceFiles(
   files: File[],
-  reporterId: string,
+  reporterId: string
 ): Promise<string[]> {
   if (files.length > MAX_REPORT_EVIDENCE_FILES) {
     throw new ReportEvidenceError(
       "TOO_MANY_EVIDENCE_FILES",
-      `最多上传 ${MAX_REPORT_EVIDENCE_FILES} 张证据图片`,
+      `最多上传 ${MAX_REPORT_EVIDENCE_FILES} 张证据图片`
     );
   }
 
@@ -65,15 +65,12 @@ export async function uploadReportEvidenceFiles(
       if (!REPORT_EVIDENCE_ALLOWED_TYPES.includes(file.type)) {
         throw new ReportEvidenceError(
           "INVALID_EVIDENCE_TYPE",
-          "证据图片仅支持 JPEG、PNG、WebP 格式",
+          "证据图片仅支持 JPEG、PNG、WebP 格式"
         );
       }
 
       if (file.size > MAX_REPORT_EVIDENCE_FILE_SIZE) {
-        throw new ReportEvidenceError(
-          "EVIDENCE_TOO_LARGE",
-          "单张证据图片不能超过 5MB",
-        );
+        throw new ReportEvidenceError("EVIDENCE_TOO_LARGE", "单张证据图片不能超过 5MB");
       }
 
       let webpBuffer: Buffer;
@@ -92,7 +89,7 @@ export async function uploadReportEvidenceFiles(
       } catch {
         throw new ReportEvidenceError(
           "EVIDENCE_PROCESSING_FAILED",
-          "证据图片处理失败，请确认上传的是有效图片",
+          "证据图片处理失败，请确认上传的是有效图片"
         );
       }
 
@@ -103,7 +100,7 @@ export async function uploadReportEvidenceFiles(
         throw new ReportEvidenceError(
           "EVIDENCE_UPLOAD_FAILED",
           "证据图片上传失败，请稍后重试",
-          500,
+          500
         );
       }
       uploadedKeys.push(key);

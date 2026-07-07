@@ -291,6 +291,29 @@ export default function AdminReportsPage() {
     fetchReports();
   }, [fetchReports]);
 
+  async function handleOpenResolve(report: AdminReport) {
+    if (report.status !== "PENDING") {
+      setResolveTarget(report);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/reports/${report.id}/review`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "标记审核中失败");
+
+      const reviewingReport = { ...report, status: "REVIEWING" };
+      setReports((prev) =>
+        prev.map((item) => (item.id === report.id ? reviewingReport : item))
+      );
+      setResolveTarget(reviewingReport);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "标记审核中失败");
+    }
+  }
+
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">举报管理</h1>
@@ -406,7 +429,7 @@ export default function AdminReportsPage() {
                 {canResolve && (
                   <button
                     type="button"
-                    onClick={() => setResolveTarget(r)}
+                    onClick={() => void handleOpenResolve(r)}
                     className="rounded-lg bg-brand-blue px-4 py-1.5 text-xs font-semibold text-white transition-all hover:scale-[1.02] hover:bg-brand-blue/90"
                   >
                     处理举报

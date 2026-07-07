@@ -398,12 +398,14 @@ model MatchSnapshot {
   direction    String // "me_fits_them" | "they_fit_me" | "mutual"
   score        Float? // relevance score for sorting
   computedAt   DateTime @default(now())
+  mutualMatchedAt DateTime?
 
   user   User @relation("MatchUser", fields: [userId], references: [id])
   target User @relation("MatchTarget", fields: [targetUserId], references: [id])
 
   @@unique([userId, targetUserId])
   @@index([userId, matchType])
+  @@index([matchType, mutualMatchedAt])
   @@map("match_snapshots")
 }
 

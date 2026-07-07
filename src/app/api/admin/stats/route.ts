@@ -1,15 +1,41 @@
 import { requireRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { success, error } from "@/lib/api-response";
+import { getChinaDayStart } from "@/lib/scoring";
+import { promoteExpiredScoringTasks } from "@/lib/scoring-deadlines";
+import { commitExpiredActions } from "@/lib/scoring-revocation";
+
+const OPEN_SCORING_TASK_STATUSES = [
+  "PENDING",
+  "SCORING",
+  "NEEDS_RESCORE",
+  "REPORTED",
+  "REVIEW",
+] as const;
+
+function countUniquePairs(rows: Array<{ userId: string; targetUserId: string }>) {
+  const pairKeys = new Set<string>();
+
+  for (const row of rows) {
+    const [a, b] =
+      row.userId < row.targetUserId
+        ? [row.userId, row.targetUserId]
+        : [row.targetUserId, row.userId];
+    pairKeys.add(`${a}:${b}`);
+  }
+
+  return pairKeys.size;
+}
 
 // ── GET /api/admin/stats ────────────────────────────────
 
 export async function GET() {
   try {
-    const session = await requireRole("ADMIN");
+    await requireRole("ADMIN");
+    await commitExpiredActions();
+    await promoteExpiredScoringTasks();
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const todayStart = getChinaDayStart(new Date());
 
     const [
       totalUsers,
@@ -22,7 +48,7 @@ export async function GET() {
       reviewingReports,
       scoringInProgress,
       todayNewUsers,
-      todayMatches,
+      todayMutualMatchRows,
     ] = await Promise.all([
       db.user.count({ where: { status: { not: "DELETED" } } }),
       db.user.count({ where: { status: "ACTIVE" } }),
@@ -32,17 +58,29 @@ export async function GET() {
         where: { type: 'WARNING', revokedAt: null },
       }).then((g) => g.length),
       db.groupMembership.count({ where: { status: "VERIFIED" } }),
-      db.groupMembership.count({ where: { status: "PENDING" } }),
+      db.groupMembership.count({
+        where: { status: { in: ["PENDING", "LEFT_PENDING_REVIEW"] } },
+      }),
       db.report.count({ where: { status: "PENDING" } }),
       db.report.count({ where: { status: "REVIEWING" } }),
-      db.ratingProfile.count({ where: { ratingStatus: "SCORING" } }),
+      db.ratingTask.count({
+        where: { status: { in: [...OPEN_SCORING_TASK_STATUSES] } },
+      }),
       db.user.count({
         where: { createdAt: { gte: todayStart }, status: { not: "DELETED" } },
       }),
-      db.matchSnapshot.count({
-        where: { computedAt: { gte: todayStart } },
+      db.matchSnapshot.findMany({
+        where: {
+          matchType: "mutual",
+          mutualMatchedAt: { gte: todayStart },
+        },
+        select: {
+          userId: true,
+          targetUserId: true,
+        },
       }),
     ]);
+    const todayMatches = countUniquePairs(todayMutualMatchRows);
 
     return success({
       totalUsers,

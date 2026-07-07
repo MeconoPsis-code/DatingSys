@@ -1,37 +1,46 @@
-import { requireRole } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { error, paginated } from '@/lib/api-response';
-import { getSignedUrl } from '@/lib/storage';
-import { commitExpiredActions } from '@/lib/scoring-revocation';
-import { getOnDutyScorers } from '@/lib/scorer-duty';
-import { calculateAverageScore, getAssignedScorerIdsForTask, parsePhotoReports } from '@/lib/scoring';
+import { requireRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { error, paginated } from "@/lib/api-response";
+import { commitExpiredActions } from "@/lib/scoring-revocation";
+import { buildImageProxyUrl } from "@/lib/image-proxy";
+import { getChinaDutyWeekday, getOnDutyScorers } from "@/lib/scorer-duty";
+import {
+  calculateAverageScore,
+  getAssignedScorerIdsForTask,
+  getScoringTaskTimeline,
+  parsePhotoReports,
+  serializeScoringTaskTimeline,
+} from "@/lib/scoring";
+import { promoteExpiredScoringTasks } from "@/lib/scoring-deadlines";
 
 // ── GET /api/admin/scoring — admin scoring management ──
 
 export async function GET(req: Request) {
   try {
-    await requireRole('ADMIN');
+    const session = await requireRole("ADMIN");
 
     // Process any expired revocation windows first
     await commitExpiredActions();
+    await promoteExpiredScoringTasks();
+    const now = new Date();
 
     const url = new URL(req.url);
-    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
-    const pageSize = Math.min(50, Math.max(1, parseInt(url.searchParams.get('pageSize') || '20')));
-    const status = url.searchParams.get('status') || undefined;
-    const search = url.searchParams.get('search')?.trim() || '';
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
+    const pageSize = Math.min(
+      50,
+      Math.max(1, parseInt(url.searchParams.get("pageSize") || "20"))
+    );
+    const status = url.searchParams.get("status") || undefined;
+    const search = url.searchParams.get("search")?.trim() || "";
 
     const where: Record<string, unknown> = {};
     if (status) {
       const statuses = status
-        .split(',')
+        .split(",")
         .map((item) => item.trim())
         .filter((item) => item.length > 0);
 
-      where.status =
-        statuses.length > 1
-          ? { in: statuses }
-          : statuses[0] ?? status;
+      where.status = statuses.length > 1 ? { in: statuses } : (statuses[0] ?? status);
     }
     if (search) {
       where.ratedUser = {
@@ -55,7 +64,7 @@ export async function GET(req: Request) {
               ratingProfile: { select: { finalScore: true } },
               profile: {
                 include: {
-                  photos: { orderBy: { order: 'asc' } },
+                  photos: { orderBy: { order: "asc" } },
                 },
               },
             },
@@ -68,30 +77,52 @@ export async function GET(req: Request) {
                 },
               },
             },
-            orderBy: { createdAt: 'asc' },
+            orderBy: { createdAt: "asc" },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
     ]);
 
-    const onDutyScorerIds = (await getOnDutyScorers()).map((scorer) => scorer.id);
+    const timelinesByTaskId = new Map(
+      tasks.map((task) => [task.id, getScoringTaskTimeline(task.createdAt, now)])
+    );
+    const dutyWeekdays = Array.from(
+      new Set(
+        tasks.map((task) => {
+          const timeline =
+            timelinesByTaskId.get(task.id) ?? getScoringTaskTimeline(task.createdAt, now);
+          return getChinaDutyWeekday(timeline.publishAt);
+        })
+      )
+    );
+    const onDutyScorersByWeekday = new Map<number, Array<{ id: string }>>();
+    await Promise.all(
+      dutyWeekdays.map(async (weekday) => {
+        onDutyScorersByWeekday.set(weekday, await getOnDutyScorers({ weekday }));
+      })
+    );
+    const onDutyScorerIds = Array.from(
+      new Set(
+        Array.from(onDutyScorersByWeekday.values()).flatMap((scorers) =>
+          scorers.map((scorer) => scorer.id)
+        )
+      )
+    );
     const reportScorerIds = tasks.flatMap((task) => {
       return parsePhotoReports(task.photoReports).map((report) => report.reporterId);
     });
     const knownScorerIds = Array.from(
-      new Set(
-        [
-          ...onDutyScorerIds,
-          ...reportScorerIds,
-          ...tasks.flatMap((task) => {
-            const snapshot = task.scorerSnapshot as unknown;
-            return Array.isArray(snapshot) ? snapshot.map(String) : [];
-          }),
-        ]
-      )
+      new Set([
+        ...onDutyScorerIds,
+        ...reportScorerIds,
+        ...tasks.flatMap((task) => {
+          const snapshot = task.scorerSnapshot as unknown;
+          return Array.isArray(snapshot) ? snapshot.map(String) : [];
+        }),
+      ])
     );
 
     const knownScorers = await db.user.findMany({
@@ -99,14 +130,15 @@ export async function GET(req: Request) {
       include: { authIdentities: { select: { nickname: true }, take: 1 } },
     });
 
-    const scorerNameMap: Record<string, { nickname: string | null; qq: string | null }> = {};
+    const scorerNameMap: Record<string, { nickname: string | null; qq: string | null }> =
+      {};
     const eligibleScorerIds = new Set<string>();
     for (const u of knownScorers) {
       scorerNameMap[u.id] = {
         nickname: u.authIdentities[0]?.nickname ?? null,
         qq: u.qqNumber,
       };
-      if (u.role === 'SCORER' || u.role === 'ADMIN') {
+      if (u.role === "SCORER" || u.role === "ADMIN") {
         eligibleScorerIds.add(u.id);
       }
     }
@@ -114,12 +146,17 @@ export async function GET(req: Request) {
     const data = await Promise.all(
       tasks.map(async (t) => {
         const photos = t.ratedUser.profile?.photos ?? [];
+        const timeline =
+          timelinesByTaskId.get(t.id) ?? getScoringTaskTimeline(t.createdAt, now);
+        const taskOnDutyScorerIds = (
+          onDutyScorersByWeekday.get(getChinaDutyWeekday(timeline.publishAt)) ?? []
+        ).map((scorer) => scorer.id);
 
         const assignedScorerIds = getAssignedScorerIdsForTask({
           status: t.status,
           ratedUserId: t.ratedUserId,
           scorerSnapshot: t.scorerSnapshot,
-          onDutyScorerIds,
+          onDutyScorerIds: taskOnDutyScorerIds,
         });
         const liveAssignedScorerList = assignedScorerIds.filter(
           (id) => id !== t.ratedUserId && eligibleScorerIds.has(id)
@@ -127,13 +164,18 @@ export async function GET(req: Request) {
         const assignedScorerSet = new Set(liveAssignedScorerList);
         const liveScore = calculateAverageScore(t.scores);
 
-        const photosWithUrls = await Promise.all(
-          photos.map(async (p) => ({
-            id: p.id,
-            order: p.order,
-            url: await getSignedUrl(p.storageKey, 3600),
-          }))
-        );
+        const photosWithUrls = photos.map((p) => ({
+          id: p.id,
+          order: p.order,
+          url: buildImageProxyUrl(p.storageKey, {
+            viewerId: session.id,
+            variant: "large",
+          }),
+          thumbUrl: buildImageProxyUrl(p.storageKey, {
+            viewerId: session.id,
+            variant: "thumb",
+          }),
+        }));
 
         return {
           id: t.id,
@@ -152,17 +194,22 @@ export async function GET(req: Request) {
             score: s.score,
             createdAt: s.createdAt,
           })),
-          scoredCount: t.scores.filter((score) => assignedScorerSet.has(score.scorerUserId)).length,
+          scoredCount: t.scores.filter((score) =>
+            assignedScorerSet.has(score.scorerUserId)
+          ).length,
           totalScorers: liveAssignedScorerList.length,
           photos: photosWithUrls,
           completedAt: t.completedAt,
           createdAt: t.createdAt,
+          timeline: serializeScoringTaskTimeline(timeline),
           finalScore: t.ratedUser.ratingProfile?.finalScore ?? null,
           liveScore,
           photoReports: parsePhotoReports(t.photoReports),
           pendingActionType: t.pendingActionType,
           pendingActionValue: t.pendingActionValue,
-          pendingActionExpiresAt: t.pendingActionExpiresAt ? t.pendingActionExpiresAt.toISOString() : null,
+          pendingActionExpiresAt: t.pendingActionExpiresAt
+            ? t.pendingActionExpiresAt.toISOString()
+            : null,
           pendingActionActorId: t.pendingActionActorId,
         };
       })
@@ -170,11 +217,11 @@ export async function GET(req: Request) {
 
     return paginated(data, total, page, pageSize);
   } catch (err) {
-    console.error('[admin/scoring] GET error:', err);
-    if (err && typeof err === 'object' && 'status' in err) {
+    console.error("[admin/scoring] GET error:", err);
+    if (err && typeof err === "object" && "status" in err) {
       const appErr = err as { code: string; message: string; status: number };
       return error(appErr.code, appErr.message, appErr.status);
     }
-    return error('INTERNAL_ERROR', '服务器内部错误', 500);
+    return error("INTERNAL_ERROR", "服务器内部错误", 500);
   }
 }

@@ -1,8 +1,8 @@
-import { requireRole } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { success, error } from '@/lib/api-response';
-import { calculateAverageScore } from '@/lib/scoring';
-import { SCORE_ACTION_REVOCATION_WINDOW_MS } from '@/lib/scoring-revocation';
+import { requireRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { success, error } from "@/lib/api-response";
+import { calculateAverageScore } from "@/lib/scoring";
+import { SCORE_ACTION_REVOCATION_WINDOW_MS } from "@/lib/scoring-revocation";
 
 /**
  * POST /api/admin/scoring/[taskId]/approve
@@ -13,7 +13,7 @@ export async function POST(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
-    const session = await requireRole('SUPER_ADMIN');
+    const session = await requireRole("SUPER_ADMIN");
     const { taskId } = await params;
 
     const scheduled = await db.$transaction(async (tx) => {
@@ -23,16 +23,20 @@ export async function POST(
       });
 
       if (!task) {
-        throw { code: 'NOT_FOUND', message: '评分任务不存在', status: 404 };
+        throw { code: "NOT_FOUND", message: "评分任务不存在", status: 404 };
       }
 
-      if (!['PENDING', 'SCORING', 'NEEDS_RESCORE', 'REVIEW'].includes(task.status)) {
-        throw { code: 'INVALID_STATUS', message: '该任务当前不可发布评分', status: 400 };
+      if (task.status !== "REVIEW") {
+        throw { code: "INVALID_STATUS", message: "该任务当前不可发布评分", status: 400 };
       }
 
       const finalScore = calculateAverageScore(task.scores);
       if (finalScore === null) {
-        throw { code: 'NO_SCORES', message: '当前还没有评分，无法发布最终分数', status: 400 };
+        throw {
+          code: "NO_SCORES",
+          message: "当前还没有评分，无法发布最终分数",
+          status: 400,
+        };
       }
 
       const now = new Date();
@@ -41,9 +45,9 @@ export async function POST(
       await tx.ratingTask.update({
         where: { id: taskId },
         data: {
-          status: 'REVIEW',
+          status: "REVIEW",
           completedAt: task.completedAt ?? now,
-          pendingActionType: 'APPROVE',
+          pendingActionType: "APPROVE",
           pendingActionValue: null,
           pendingActionExpiresAt: expiresAt,
           pendingActionActorId: session.id,
@@ -54,10 +58,10 @@ export async function POST(
         where: { userId: task.ratedUserId },
         create: {
           userId: task.ratedUserId,
-          ratingStatus: 'REVIEW',
+          ratingStatus: "REVIEW",
         },
         update: {
-          ratingStatus: 'REVIEW',
+          ratingStatus: "REVIEW",
           finalScore: null,
           scoreCompletedAt: null,
         },
@@ -66,8 +70,8 @@ export async function POST(
       await tx.auditLog.create({
         data: {
           actorUserId: session.id,
-          action: 'ADMIN_APPROVE_SCORE_PENDING',
-          targetType: 'RatingTask',
+          action: "ADMIN_APPROVE_SCORE_PENDING",
+          targetType: "RatingTask",
           targetId: taskId,
           metadata: {
             ratedUserId: task.ratedUserId,
@@ -86,16 +90,16 @@ export async function POST(
     });
 
     return success({
-      message: '评分审核通过已提交，将在 5 分钟后生效',
+      message: "评分审核通过已提交，将在 5 分钟后生效",
       finalScore: scheduled.finalScore,
       pendingActionExpiresAt: scheduled.pendingActionExpiresAt,
     });
   } catch (err) {
-    console.error('[admin/scoring/approve] POST error:', err);
-    if (err && typeof err === 'object' && 'status' in err) {
+    console.error("[admin/scoring/approve] POST error:", err);
+    if (err && typeof err === "object" && "status" in err) {
       const appErr = err as { code: string; message: string; status: number };
       return error(appErr.code, appErr.message, appErr.status);
     }
-    return error('INTERNAL_ERROR', '服务器内部错误', 500);
+    return error("INTERNAL_ERROR", "服务器内部错误", 500);
   }
 }

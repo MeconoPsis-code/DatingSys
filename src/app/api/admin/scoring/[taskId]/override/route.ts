@@ -1,8 +1,8 @@
-import { requireRole } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { success, error } from '@/lib/api-response';
-import { notify } from '@/lib/notifications';
-import { SCORE_ACTION_REVOCATION_WINDOW_MS } from '@/lib/scoring-revocation';
+import { requireRole } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { success, error } from "@/lib/api-response";
+import { notify } from "@/lib/notifications";
+import { SCORE_ACTION_REVOCATION_WINDOW_MS } from "@/lib/scoring-revocation";
 
 /**
  * POST /api/admin/scoring/[taskId]/override
@@ -14,30 +14,30 @@ export async function POST(
   { params }: { params: Promise<{ taskId: string }> }
 ) {
   try {
-    const session = await requireRole('SUPER_ADMIN');
+    const session = await requireRole("SUPER_ADMIN");
     const { taskId } = await params;
 
     const body = await req.json();
     const { score } = body as { score?: number };
 
-    if (score === undefined || score === null || typeof score !== 'number') {
-      return error('VALIDATION', '请提供评分', 400);
+    if (score === undefined || score === null || typeof score !== "number") {
+      return error("VALIDATION", "请提供评分", 400);
     }
 
     if (score < 0 || score > 10 || score * 10 !== Math.round(score * 10)) {
-      return error('VALIDATION', '评分必须在 0-10 之间，步长 0.1', 400);
+      return error("VALIDATION", "评分必须在 0-10 之间，步长 0.1", 400);
     }
 
     const result = await db.$transaction(async (tx) => {
       const task = await tx.ratingTask.findUnique({ where: { id: taskId } });
 
       if (!task) {
-        throw { code: 'NOT_FOUND', message: '评分任务不存在', status: 404 };
+        throw { code: "NOT_FOUND", message: "评分任务不存在", status: 404 };
       }
 
       const now = new Date();
 
-      if (task.status === 'COMPLETED') {
+      if (task.status === "COMPLETED") {
         await tx.ratingTask.update({
           where: { id: taskId },
           data: {
@@ -53,12 +53,12 @@ export async function POST(
           where: { userId: task.ratedUserId },
           create: {
             userId: task.ratedUserId,
-            ratingStatus: 'COMPLETED',
+            ratingStatus: "COMPLETED",
             finalScore: score,
             scoreCompletedAt: now,
           },
           update: {
-            ratingStatus: 'COMPLETED',
+            ratingStatus: "COMPLETED",
             finalScore: score,
             scoreCompletedAt: now,
           },
@@ -67,8 +67,8 @@ export async function POST(
         await tx.auditLog.create({
           data: {
             actorUserId: session.id,
-            action: 'ADMIN_OVERRIDE_SCORE',
-            targetType: 'RatingTask',
+            action: "ADMIN_OVERRIDE_SCORE",
+            targetType: "RatingTask",
             targetId: taskId,
             metadata: {
               ratedUserId: task.ratedUserId,
@@ -79,13 +79,13 @@ export async function POST(
         });
 
         return {
-          mode: 'published' as const,
+          mode: "published" as const,
           ratedUserId: task.ratedUserId,
         };
       }
 
-      if (!['PENDING', 'SCORING', 'NEEDS_RESCORE', 'REVIEW'].includes(task.status)) {
-        throw { code: 'INVALID_STATUS', message: '该任务当前不可设定评分', status: 400 };
+      if (task.status !== "REVIEW") {
+        throw { code: "INVALID_STATUS", message: "该任务当前不可设定评分", status: 400 };
       }
 
       const expiresAt = new Date(now.getTime() + SCORE_ACTION_REVOCATION_WINDOW_MS);
@@ -93,9 +93,9 @@ export async function POST(
       await tx.ratingTask.update({
         where: { id: taskId },
         data: {
-          status: 'REVIEW',
+          status: "REVIEW",
           completedAt: task.completedAt ?? now,
-          pendingActionType: 'OVERRIDE',
+          pendingActionType: "OVERRIDE",
           pendingActionValue: score,
           pendingActionExpiresAt: expiresAt,
           pendingActionActorId: session.id,
@@ -106,10 +106,10 @@ export async function POST(
         where: { userId: task.ratedUserId },
         create: {
           userId: task.ratedUserId,
-          ratingStatus: 'REVIEW',
+          ratingStatus: "REVIEW",
         },
         update: {
-          ratingStatus: 'REVIEW',
+          ratingStatus: "REVIEW",
           finalScore: null,
           scoreCompletedAt: null,
         },
@@ -118,8 +118,8 @@ export async function POST(
       await tx.auditLog.create({
         data: {
           actorUserId: session.id,
-          action: 'ADMIN_OVERRIDE_SCORE_PENDING',
-          targetType: 'RatingTask',
+          action: "ADMIN_OVERRIDE_SCORE_PENDING",
+          targetType: "RatingTask",
           targetId: taskId,
           metadata: {
             ratedUserId: task.ratedUserId,
@@ -131,31 +131,31 @@ export async function POST(
       });
 
       return {
-        mode: 'scheduled' as const,
+        mode: "scheduled" as const,
         pendingActionExpiresAt: expiresAt.toISOString(),
       };
     });
 
-    if (result.mode === 'published') {
+    if (result.mode === "published") {
       await notify.scoringComplete(result.ratedUserId, score);
 
       return success({
-        message: '最终评分已直接发布',
+        message: "最终评分已直接发布",
         finalScore: score,
       });
     }
 
     return success({
-      message: '直接设定评分已提交，将在 5 分钟后生效',
+      message: "直接设定评分已提交，将在 5 分钟后生效",
       finalScore: score,
       pendingActionExpiresAt: result.pendingActionExpiresAt,
     });
   } catch (err) {
-    console.error('[admin/scoring/override] POST error:', err);
-    if (err && typeof err === 'object' && 'status' in err) {
+    console.error("[admin/scoring/override] POST error:", err);
+    if (err && typeof err === "object" && "status" in err) {
       const appErr = err as { code: string; message: string; status: number };
       return error(appErr.code, appErr.message, appErr.status);
     }
-    return error('INTERNAL_ERROR', '服务器内部错误', 500);
+    return error("INTERNAL_ERROR", "服务器内部错误", 500);
   }
 }

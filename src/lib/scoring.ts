@@ -7,15 +7,133 @@ export const ACTIVE_SCORING_TASK_STATUSES = [
   "REPORTED",
 ] as const;
 
+const CHINA_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+export type ScoringTimelinePhase =
+  | "WAITING_PENDING"
+  | "PENDING"
+  | "PUBLISHING"
+  | "PUBLISH_CLOSED"
+  | "SCORING_CLOSED"
+  | "REVIEW_OVERDUE";
+
+export interface ScoringTaskTimeline {
+  pendingAt: Date;
+  publishAt: Date;
+  publishEndsAt: Date;
+  scoringDeadlineAt: Date;
+  reviewDeadlineAt: Date;
+  phase: ScoringTimelinePhase;
+  isReleasedForScoring: boolean;
+  isPublishingOpen: boolean;
+  isScoringClosed: boolean;
+  isReviewOverdue: boolean;
+}
+
+export interface SerializedScoringTaskTimeline {
+  pendingAt: string;
+  publishAt: string;
+  publishEndsAt: string;
+  scoringDeadlineAt: string;
+  reviewDeadlineAt: string;
+  phase: ScoringTimelinePhase;
+  isReleasedForScoring: boolean;
+  isPublishingOpen: boolean;
+  isScoringClosed: boolean;
+  isReviewOverdue: boolean;
+}
+
+export function getChinaDayStart(date: Date): Date {
+  const chinaTime = date.getTime() + CHINA_UTC_OFFSET_MS;
+  const chinaDayStart = Math.floor(chinaTime / DAY_MS) * DAY_MS;
+  return new Date(chinaDayStart - CHINA_UTC_OFFSET_MS);
+}
+
+function addHours(date: Date, hours: number): Date {
+  return new Date(date.getTime() + hours * HOUR_MS);
+}
+
+function getNextChinaHourBoundary(date: Date, hour: number): Date {
+  const dayStart = getChinaDayStart(date);
+  const boundary = addHours(dayStart, hour);
+  return date.getTime() <= boundary.getTime() ? boundary : addHours(boundary, 24);
+}
+
+export function getScoringTaskTimeline(
+  createdAt: Date,
+  now = new Date()
+): ScoringTaskTimeline {
+  // 18:00 China time is the intake boundary for the next scoring batch.
+  const pendingAt = getNextChinaHourBoundary(createdAt, 18);
+  const publishAt = addHours(pendingAt, 6);
+  const publishEndsAt = addHours(publishAt, 18);
+  const scoringDeadlineAt = addHours(publishAt, 24);
+  const reviewDeadlineAt = addHours(scoringDeadlineAt, 18);
+  const nowTime = now.getTime();
+
+  let phase: ScoringTimelinePhase = "WAITING_PENDING";
+  if (nowTime >= reviewDeadlineAt.getTime()) {
+    phase = "REVIEW_OVERDUE";
+  } else if (nowTime >= scoringDeadlineAt.getTime()) {
+    phase = "SCORING_CLOSED";
+  } else if (nowTime >= publishEndsAt.getTime()) {
+    phase = "PUBLISH_CLOSED";
+  } else if (nowTime >= publishAt.getTime()) {
+    phase = "PUBLISHING";
+  } else if (nowTime >= pendingAt.getTime()) {
+    phase = "PENDING";
+  }
+
+  return {
+    pendingAt,
+    publishAt,
+    publishEndsAt,
+    scoringDeadlineAt,
+    reviewDeadlineAt,
+    phase,
+    isReleasedForScoring:
+      nowTime >= publishAt.getTime() && nowTime < scoringDeadlineAt.getTime(),
+    isPublishingOpen: nowTime >= publishAt.getTime() && nowTime < publishEndsAt.getTime(),
+    isScoringClosed: nowTime >= scoringDeadlineAt.getTime(),
+    isReviewOverdue: nowTime >= reviewDeadlineAt.getTime(),
+  };
+}
+
+export function serializeScoringTaskTimeline(
+  timeline: ScoringTaskTimeline
+): SerializedScoringTaskTimeline {
+  return {
+    pendingAt: timeline.pendingAt.toISOString(),
+    publishAt: timeline.publishAt.toISOString(),
+    publishEndsAt: timeline.publishEndsAt.toISOString(),
+    scoringDeadlineAt: timeline.scoringDeadlineAt.toISOString(),
+    reviewDeadlineAt: timeline.reviewDeadlineAt.toISOString(),
+    phase: timeline.phase,
+    isReleasedForScoring: timeline.isReleasedForScoring,
+    isPublishingOpen: timeline.isPublishingOpen,
+    isScoringClosed: timeline.isScoringClosed,
+    isReviewOverdue: timeline.isReviewOverdue,
+  };
+}
+
+export function formatChinaDateTime(date: Date): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 export function parseScorerSnapshot(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
 
   return Array.from(
-    new Set(
-      value
-        .map((item) => String(item))
-        .filter((item) => item.length > 0)
-    )
+    new Set(value.map((item) => String(item)).filter((item) => item.length > 0))
   );
 }
 
@@ -30,7 +148,11 @@ export function parsePhotoReports(value: unknown): Array<{
 
   for (const item of value) {
     if (!item || typeof item !== "object") continue;
-    const report = item as { reporterId?: unknown; reason?: unknown; createdAt?: unknown };
+    const report = item as {
+      reporterId?: unknown;
+      reason?: unknown;
+      createdAt?: unknown;
+    };
     if (!report.reporterId) continue;
 
     reports.push({
@@ -65,7 +187,9 @@ export function getAssignedScorerIdsForTask({
   onDutyScorerIds: string[];
 }): string[] {
   const snapshot = parseScorerSnapshot(scorerSnapshot);
-  const source = LIVE_ROSTER_TASK_STATUSES.includes(status as (typeof LIVE_ROSTER_TASK_STATUSES)[number])
+  const source = LIVE_ROSTER_TASK_STATUSES.includes(
+    status as (typeof LIVE_ROSTER_TASK_STATUSES)[number]
+  )
     ? onDutyScorerIds
     : snapshot;
 

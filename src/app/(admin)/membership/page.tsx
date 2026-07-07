@@ -44,10 +44,19 @@ const STATUS_TABS: { value: string; label: string }[] = [
 ];
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  VERIFIED: { label: "已认证", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  VERIFIED: {
+    label: "已认证",
+    cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  },
   PENDING: { label: "待审核", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-  LEFT_PENDING_REVIEW: { label: "退群待审", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
-  LEFT_CONFIRMED: { label: "已退群", cls: "bg-red-600/15 text-red-500 border-red-600/30" },
+  LEFT_PENDING_REVIEW: {
+    label: "退群待审",
+    cls: "bg-red-500/15 text-red-400 border-red-500/30",
+  },
+  LEFT_CONFIRMED: {
+    label: "已退群",
+    cls: "bg-red-600/15 text-red-500 border-red-600/30",
+  },
   RESTORED: { label: "已恢复", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
   REMOVED: { label: "已移除", cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
   REJECTED: { label: "已拒绝", cls: "bg-red-500/15 text-red-400 border-red-500/30" },
@@ -69,7 +78,9 @@ function formatDate(d: string | null) {
 
 function Badge({ label, cls }: { label: string; cls: string }) {
   return (
-    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cls}`}>
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${cls}`}
+    >
       {label}
     </span>
   );
@@ -100,11 +111,11 @@ function PurgeConfirmModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-red-500/30 bg-[hsl(var(--card))] p-6 shadow-2xl">
-        <h3 className="mb-1 text-base font-bold text-red-400">
-          ⚠️ 批量清除确认
-        </h3>
+        <h3 className="mb-1 text-base font-bold text-red-400">⚠️ 批量清除确认</h3>
         <p className="mb-5 text-sm text-[hsl(var(--muted-foreground))]">
-          即将清除 <span className="font-bold text-[hsl(var(--foreground))]">{count}</span> 位已退群成员的认证记录，此操作不可逆。
+          即将清除{" "}
+          <span className="font-bold text-[hsl(var(--foreground))]">{count}</span>{" "}
+          位已退群成员的认证记录，此操作不可逆。
         </p>
         <div className="flex gap-3">
           <button
@@ -139,7 +150,12 @@ export default function MembershipPage() {
 
   /* data */
   const [members, setMembers] = useState<Membership[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({ page: 1, pageSize: 20, total: 0, totalPages: 0 });
+  const [pagination, setPagination] = useState<Pagination>({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -236,7 +252,8 @@ export default function MembershipPage() {
 
   /* selection */
   const selectableMembers = members.filter((m) => SELECTABLE_STATUSES.has(m.status));
-  const allSelectableChecked = selectableMembers.length > 0 && selectableMembers.every((m) => selected.has(m.id));
+  const allSelectableChecked =
+    selectableMembers.length > 0 && selectableMembers.every((m) => selected.has(m.id));
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -253,6 +270,11 @@ export default function MembershipPage() {
     } else {
       setSelected(new Set(selectableMembers.map((m) => m.id)));
     }
+  }
+
+  function openPurgeConfirm(ids: string[]) {
+    setSelected(new Set(ids));
+    setShowPurgeConfirm(true);
   }
 
   /* sync */
@@ -317,7 +339,10 @@ export default function MembershipPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-lg font-bold text-[hsl(var(--foreground))]">
-            <svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue"
+            >
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
             群认证管理
@@ -330,7 +355,9 @@ export default function MembershipPage() {
 
         <div className="flex items-center gap-2">
           {syncMsg && (
-            <span className={`text-xs font-medium ${syncMsg.ok ? "text-emerald-400" : "text-red-400"}`}>
+            <span
+              className={`text-xs font-medium ${syncMsg.ok ? "text-emerald-400" : "text-red-400"}`}
+            >
               {syncMsg.text}
             </span>
           )}
@@ -343,7 +370,10 @@ export default function MembershipPage() {
             {syncing ? (
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
             ) : (
-              <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+              >
                 <polyline points="23 4 23 10 17 10" />
                 <polyline points="1 20 1 14 7 14" />
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
@@ -408,7 +438,9 @@ export default function MembershipPage() {
         </div>
       )}
       {purgeMsg && (
-        <div className={`rounded-lg border px-4 py-3 text-sm ${purgeMsg.ok ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-red-500/30 bg-red-500/10 text-red-400"}`}>
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${purgeMsg.ok ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-red-500/30 bg-red-500/10 text-red-400"}`}
+        >
           {purgeMsg.text}
         </div>
       )}
@@ -422,99 +454,239 @@ export default function MembershipPage() {
 
       {/* ─── Member List ─────────────────────────────── */}
       {!loading && members.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] [-webkit-overflow-scrolling:touch]">
-          <table className="min-w-[760px] table-fixed border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
-                {selectableMembers.length > 0 && (
-                  <th className="w-[56px] px-4 py-3 font-medium">
-                    <input
-                      type="checkbox"
-                      checked={allSelectableChecked}
-                      onChange={toggleSelectAll}
-                      className="h-4 w-4 cursor-pointer rounded border-[hsl(var(--border))] accent-brand-blue"
-                    />
+        <div className="space-y-3">
+          {selectableMembers.length > 0 && (
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3 md:hidden">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-red-500">
+                    {selectableMembers.length} 位退群成员可清除
+                  </p>
+                  <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                    可单独清除，也可勾选后批量清除。
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="shrink-0 rounded-lg border border-red-500/30 px-3 py-1.5 text-xs font-semibold text-red-500"
+                >
+                  {allSelectableChecked ? "取消全选" : "全选退群人"}
+                </button>
+              </div>
+              {selected.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowPurgeConfirm(true)}
+                  className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white"
+                >
+                  清除已选 {selected.size} 人
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="hidden overflow-x-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] [-webkit-overflow-scrolling:touch] md:block">
+            <table className="min-w-[760px] table-fixed border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-[hsl(var(--border))] text-left text-xs text-[hsl(var(--muted-foreground))]">
+                  {selectableMembers.length > 0 && (
+                    <th className="w-[56px] px-4 py-3 font-medium">
+                      <input
+                        type="checkbox"
+                        checked={allSelectableChecked}
+                        onChange={toggleSelectAll}
+                        className="h-4 w-4 cursor-pointer rounded border-[hsl(var(--border))] accent-brand-blue"
+                      />
+                    </th>
+                  )}
+                  <th className="w-[240px] px-4 py-3 font-medium whitespace-nowrap">
+                    成员
                   </th>
-                )}
-                <th className="w-[240px] px-4 py-3 font-medium whitespace-nowrap">成员</th>
-                <th className="w-[150px] px-4 py-3 font-medium whitespace-nowrap">QQ号</th>
-                <th className="w-[140px] px-4 py-3 font-medium whitespace-nowrap">状态</th>
-                <th className="w-[170px] px-4 py-3 font-medium whitespace-nowrap">认证时间</th>
+                  <th className="w-[150px] px-4 py-3 font-medium whitespace-nowrap">
+                    QQ号
+                  </th>
+                  <th className="w-[140px] px-4 py-3 font-medium whitespace-nowrap">
+                    状态
+                  </th>
+                  <th className="w-[170px] px-4 py-3 font-medium whitespace-nowrap">
+                    认证时间
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((m) => {
+                  const badge = STATUS_BADGE[m.status] || {
+                    label: m.status,
+                    cls: "bg-gray-500/15 text-gray-400 border-gray-500/30",
+                  };
+                  const isSelectable = SELECTABLE_STATUSES.has(m.status);
+                  const isSelected = selected.has(m.id);
 
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((m) => {
-                const badge = STATUS_BADGE[m.status] || { label: m.status, cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" };
-                const isSelectable = SELECTABLE_STATUSES.has(m.status);
-                const isSelected = selected.has(m.id);
-
-                return (
-                  <tr
-                    key={m.id}
-                    className={`border-b border-[hsl(var(--border)/0.5)] transition-colors hover:bg-[hsl(var(--secondary)/0.5)] ${
-                      isSelected ? "bg-brand-blue/5" : ""
-                    }`}
-                  >
-                    {selectableMembers.length > 0 && (
-                      <td className="px-4 py-3">
-                        {isSelectable ? (
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleSelect(m.id)}
-                            className="h-4 w-4 cursor-pointer rounded border-[hsl(var(--border))] accent-brand-blue"
-                          />
-                        ) : (
-                          <span className="inline-block h-4 w-4" />
-                        )}
-                      </td>
-                    )}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {m.avatarUrl ? (
-                          <img
-                            src={m.avatarUrl}
-                            alt={m.nickname || m.qqNumber}
-                            className="h-10 w-10 rounded-full object-cover"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              target.style.display = "none";
-                              (target.nextElementSibling as HTMLElement)?.classList.remove("hidden");
-                            }}
-                          />
-                        ) : null}
-                        <div className={m.avatarUrl ? "hidden" : ""}>
-                          <AvatarFallback name={m.nickname || m.qqNumber} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-[hsl(var(--foreground))]">
-                            {m.nickname || (m.userId ? "—" : "已删除账号")}
-                          </div>
-                          {!m.userId && (
-                            <div className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
-                              账号数据已清除，认证记录已保留
-                            </div>
+                  return (
+                    <tr
+                      key={m.id}
+                      className={`border-b border-[hsl(var(--border)/0.5)] transition-colors hover:bg-[hsl(var(--secondary)/0.5)] ${
+                        isSelected ? "bg-brand-blue/5" : ""
+                      }`}
+                    >
+                      {selectableMembers.length > 0 && (
+                        <td className="px-4 py-3">
+                          {isSelectable ? (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleSelect(m.id)}
+                              className="h-4 w-4 cursor-pointer rounded border-[hsl(var(--border))] accent-brand-blue"
+                            />
+                          ) : (
+                            <span className="inline-block h-4 w-4" />
                           )}
+                        </td>
+                      )}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          {m.avatarUrl ? (
+                            <img
+                              src={m.avatarUrl}
+                              alt={m.nickname || m.qqNumber}
+                              className="h-10 w-10 rounded-full object-cover"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                target.style.display = "none";
+                                (
+                                  target.nextElementSibling as HTMLElement
+                                )?.classList.remove("hidden");
+                              }}
+                            />
+                          ) : null}
+                          <div className={m.avatarUrl ? "hidden" : ""}>
+                            <AvatarFallback name={m.nickname || m.qqNumber} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-[hsl(var(--foreground))]">
+                              {m.nickname || (m.userId ? "—" : "已删除账号")}
+                            </div>
+                            {!m.userId && (
+                              <div className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">
+                                账号数据已清除，认证记录已保留
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-[hsl(var(--muted-foreground))]">
-                      {m.qqNumber}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <Badge label={badge.label} cls={badge.cls} />
-                    </td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap text-[hsl(var(--muted-foreground))]">
-                      {formatDate(m.verifiedAt)}
-                    </td>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-[hsl(var(--muted-foreground))]">
+                        {m.qqNumber}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <Badge label={badge.label} cls={badge.cls} />
+                      </td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap text-[hsl(var(--muted-foreground))]">
+                        {formatDate(m.verifiedAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div className="space-y-3 md:hidden">
+            {members.map((m) => {
+              const badge = STATUS_BADGE[m.status] || {
+                label: m.status,
+                cls: "bg-gray-500/15 text-gray-400 border-gray-500/30",
+              };
+              const isSelectable = SELECTABLE_STATUSES.has(m.status);
+              const isSelected = selected.has(m.id);
+
+              return (
+                <article
+                  key={m.id}
+                  className={`rounded-2xl border bg-[hsl(var(--card))] p-4 shadow-sm ${
+                    isSelected
+                      ? "border-brand-blue/50 ring-2 ring-brand-blue/10"
+                      : "border-[hsl(var(--border))]"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {isSelectable && (
+                      <input
+                        type="checkbox"
+                        aria-label={`选择 ${m.nickname || m.qqNumber}`}
+                        checked={isSelected}
+                        onChange={() => toggleSelect(m.id)}
+                        className="mt-3 h-5 w-5 cursor-pointer rounded border-[hsl(var(--border))] accent-brand-blue"
+                      />
+                    )}
+                    {m.avatarUrl ? (
+                      <img
+                        src={m.avatarUrl}
+                        alt={m.nickname || m.qqNumber}
+                        className="h-11 w-11 rounded-full object-cover"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = "none";
+                          (target.nextElementSibling as HTMLElement)?.classList.remove(
+                            "hidden"
+                          );
+                        }}
+                      />
+                    ) : null}
+                    <div className={m.avatarUrl ? "hidden" : ""}>
+                      <AvatarFallback name={m.nickname || m.qqNumber} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="truncate text-sm font-semibold text-[hsl(var(--foreground))]">
+                            {m.nickname || (m.userId ? "—" : "已删除账号")}
+                          </h3>
+                          <p className="mt-1 font-mono text-xs text-[hsl(var(--muted-foreground))]">
+                            QQ {m.qqNumber}
+                          </p>
+                        </div>
+                        <Badge label={badge.label} cls={badge.cls} />
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+                        <div>
+                          <span className="block">认证时间</span>
+                          <span className="mt-0.5 block font-medium text-[hsl(var(--foreground))]">
+                            {formatDate(m.verifiedAt)}
+                          </span>
+                        </div>
+                        {m.leftDetectedAt && (
+                          <div>
+                            <span className="block">退群检测</span>
+                            <span className="mt-0.5 block font-medium text-[hsl(var(--foreground))]">
+                              {formatDate(m.leftDetectedAt)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {!m.userId && (
+                        <div className="mt-3 rounded-lg bg-[hsl(var(--secondary))] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">
+                          账号数据已清除，认证记录已保留
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {isSelectable && (
+                    <button
+                      type="button"
+                      onClick={() => openPurgeConfirm([m.id])}
+                      className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-red-500"
+                    >
+                      清除退群人
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -522,14 +694,19 @@ export default function MembershipPage() {
       {!loading && members.length === 0 && !error && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-16">
           <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--muted-foreground))]">
-            <svg viewBox="0 0 24 24" className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-6 w-6 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+            >
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
               <circle cx="9" cy="7" r="4" />
               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
           </span>
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">未找到匹配的成员记录</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            未找到匹配的成员记录
+          </p>
         </div>
       )}
 
@@ -560,25 +737,28 @@ export default function MembershipPage() {
 
       {/* ─── Batch Action Bar ────────────────────────── */}
       {selected.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 shadow-lg md:bottom-0">
-          <div className="mx-auto flex max-w-4xl items-center justify-between">
+        <div className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-0 right-0 z-40 border-t border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 shadow-lg md:bottom-0">
+          <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
             <span className="text-sm text-[hsl(var(--foreground))]">
               已选择 <span className="font-bold text-brand-blue">{selected.size}</span> 项
             </span>
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setSelected(new Set())}
-                className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))]"
+                className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs font-medium text-[hsl(var(--muted-foreground))] transition-all hover:bg-[hsl(var(--secondary))] sm:text-sm"
               >
                 取消选择
               </button>
               <button
                 type="button"
                 onClick={() => setShowPurgeConfirm(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-1.5 text-sm font-semibold text-white transition-all hover:bg-red-500"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-red-500 sm:px-4 sm:text-sm"
               >
-                <svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round"
+                >
                   <polyline points="3 6 5 6 21 6" />
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                   <line x1="10" y1="11" x2="10" y2="17" />
