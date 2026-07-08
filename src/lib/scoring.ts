@@ -55,18 +55,18 @@ function addHours(date: Date, hours: number): Date {
   return new Date(date.getTime() + hours * HOUR_MS);
 }
 
-function getNextChinaHourBoundary(date: Date, hour: number): Date {
+function getChinaDayHourBoundary(date: Date, hour: number): Date {
   const dayStart = getChinaDayStart(date);
-  const boundary = addHours(dayStart, hour);
-  return date.getTime() <= boundary.getTime() ? boundary : addHours(boundary, 24);
+  return addHours(dayStart, hour);
 }
 
 export function getScoringTaskTimeline(
   createdAt: Date,
   now = new Date()
 ): ScoringTaskTimeline {
-  // 18:00 China time is the intake boundary for the next scoring batch.
-  const pendingAt = getNextChinaHourBoundary(createdAt, 18);
+  // Photos uploaded on the same China calendar day share that day's 18:00
+  // batch anchor, so Wednesday uploads are always handled by Thursday scorers.
+  const pendingAt = getChinaDayHourBoundary(createdAt, 18);
   const publishAt = addHours(pendingAt, 6);
   const publishEndsAt = addHours(publishAt, 18);
   const scoringDeadlineAt = addHours(publishAt, 24);

@@ -58,7 +58,7 @@ export const notify = {
         ? `目前排在你前面的有 ${queuePosition} 位用户，请耐心等待。`
         : `你是当前队列中的第一位，评分将很快开始。`;
     const timelineMsg = timeline
-      ? `照片将于 ${formatChinaDateTime(timeline.pendingAt)} 进入待定，${formatChinaDateTime(timeline.publishAt)} 发布给评分员，${formatChinaDateTime(timeline.publishEndsAt)} 停止新增发布，${formatChinaDateTime(timeline.scoringDeadlineAt)} 前完成打分，${formatChinaDateTime(timeline.reviewDeadlineAt)} 前完成审核。`
+      ? `照片归入 ${formatChinaDateTime(timeline.pendingAt)} 待定批次，${formatChinaDateTime(timeline.publishAt)} 发布给评分员，${formatChinaDateTime(timeline.publishEndsAt)} 停止新增发布，${formatChinaDateTime(timeline.scoringDeadlineAt)} 前完成打分，${formatChinaDateTime(timeline.reviewDeadlineAt)} 前完成审核。`
       : "照片已进入评分队列，评分员将按顺序对你的照片进行评分。";
     await create(
       userId,
