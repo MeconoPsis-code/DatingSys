@@ -24,6 +24,7 @@ import {
   toDraftJson,
 } from "@/lib/profile-draft";
 import { getDataDeleteCooldown } from "@/lib/user-cooldowns";
+import { apiHandler } from "@/lib/api-handler";
 
 const log = createLogger("api:profile-me");
 
@@ -116,7 +117,7 @@ function hasNewPhotoContent(
  *
  * Fetch the current user's profile + preferences + cooldown info + rating info.
  */
-export async function GET() {
+export const GET = apiHandler(async () => {
   // Process any expired revocation windows first
   await commitExpiredActions();
 
@@ -183,7 +184,7 @@ export async function GET() {
         }
       : null,
   });
-}
+});
 
 /**
  * PUT /api/profile/me
@@ -191,7 +192,7 @@ export async function GET() {
  * Create or update the current user's profile + preferences.
  * Enforces cooldown rules. Auto-creates rating task for photo users.
  */
-export async function PUT(req: Request) {
+export const PUT = apiHandler(async (req) => {
   const session = await requireAuth();
   const isSuperAdmin = session.role === "SUPER_ADMIN";
 
@@ -605,14 +606,14 @@ export async function PUT(req: Request) {
   });
 
   return success({ profile, preference });
-}
+});
 
 /**
  * DELETE /api/profile/me
  *
  * Discard saved draft data. Only clears the draftData column.
  */
-export async function DELETE() {
+export const DELETE = apiHandler(async () => {
   const session = await requireAuth();
 
   const profile = await db.profile.findUnique({
@@ -629,4 +630,4 @@ export async function DELETE() {
   });
 
   return success({ message: "草稿已丢弃" });
-}
+});

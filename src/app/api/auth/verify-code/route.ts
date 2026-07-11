@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { validateCodeOnly } from "@/lib/verification";
+import { apiHandler, parseJsonRequest } from "@/lib/api-handler";
 
 /**
  * POST /api/auth/verify-code
@@ -9,8 +10,8 @@ import { validateCodeOnly } from "@/lib/verification";
  * On success, sets a "verified" flag in Redis (15min) to allow passcode setup,
  * and returns the qqNumber to the frontend for the next step.
  */
-export async function POST(req: NextRequest) {
-  const body = await req.json();
+export const POST = apiHandler(async (req) => {
+  const body = await parseJsonRequest<{ code?: unknown }>(req);
   const { code } = body;
 
   if (!code) {
@@ -34,4 +35,4 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     data: { verified: true, qqNumber, message: "验证成功，请设置密码" },
   });
-}
+});

@@ -10,6 +10,14 @@ type HandlerFn = (
   context: RouteContext
 ) => Promise<NextResponse>;
 
+export async function parseJsonRequest<T>(req: Request): Promise<T> {
+  try {
+    return (await req.json()) as T;
+  } catch {
+    throw new AppError("VALIDATION_ERROR", "无效的请求体");
+  }
+}
+
 /**
  * Wraps an API route handler with standardized error handling and logging.
  *

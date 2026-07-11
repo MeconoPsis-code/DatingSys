@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { PhotoLightbox } from "./photo-lightbox";
+import { getUserFacingRequestError, readApiJson } from "@/lib/api-client";
 
 interface PhotoItem {
   id: string;
@@ -127,17 +128,16 @@ export function PhotoUploader({
               body: formData,
             });
 
-            const data = await res.json();
+            const data = await readApiJson<{ data: { photo: PhotoItem } }>(
+              res,
+              "上传失败",
+            );
 
-            if (!res.ok) {
-              throw new Error(data.error?.message || "上传失败");
-            }
-
-            const newPhoto = data.data.photo as PhotoItem;
+            const newPhoto = data.data.photo;
             nextPhotos = [...nextPhotos, newPhoto];
             onPhotosChange(nextPhotos);
           } catch (err) {
-            const message = err instanceof Error ? err.message : "上传失败";
+            const message = getUserFacingRequestError(err, "上传失败");
             failedMessages.push(`${file.name || "未命名照片"}：${message}`);
           } finally {
             processedCount++;
@@ -170,14 +170,11 @@ export function PhotoUploader({
           body: JSON.stringify({ photoId }),
         });
 
-        if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.error?.message || "删除失败");
-        }
+        await readApiJson<unknown>(res, "删除失败");
 
         onPhotosChange(photos.filter((p) => p.id !== photoId));
       } catch (err) {
-        setError(err instanceof Error ? err.message : "删除失败");
+        setError(getUserFacingRequestError(err, "删除失败"));
       } finally {
         setDeletingId(null);
       }

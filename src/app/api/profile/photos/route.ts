@@ -14,6 +14,7 @@ import {
   toDraftJson,
   type DraftPhotoRecord,
 } from "@/lib/profile-draft";
+import { apiHandler } from "@/lib/api-handler";
 
 const MAX_PHOTOS = 6;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -24,7 +25,7 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
  *
  * Returns the current user's photos with signed URLs.
  */
-export async function GET(req: Request) {
+export const GET = apiHandler(async (req) => {
   const session = await requireAuth();
   const mode = new URL(req.url).searchParams.get("mode");
 
@@ -61,7 +62,7 @@ export async function GET(req: Request) {
   }));
 
   return success({ photos: photosWithUrls });
-}
+});
 
 /**
  * POST /api/profile/photos
@@ -69,7 +70,7 @@ export async function GET(req: Request) {
  * Upload a new profile photo. Accepts multipart/form-data with a single "file" field.
  * Max 6 photos per profile. Max 5MB per file. JPEG/PNG/WebP only.
  */
-export async function POST(req: Request) {
+export const POST = apiHandler(async (req) => {
   const session = await requireAuth();
   const mode = new URL(req.url).searchParams.get("mode");
 
@@ -239,14 +240,14 @@ export async function POST(req: Request) {
       source: isActiveDraftMode ? "draft" : "published",
     },
   });
-}
+});
 
 /**
  * DELETE /api/profile/photos
  *
  * Delete a photo by id. Expects JSON body: { photoId: string }
  */
-export async function DELETE(req: Request) {
+export const DELETE = apiHandler(async (req) => {
   const session = await requireAuth();
   const mode = new URL(req.url).searchParams.get("mode");
 
@@ -372,4 +373,4 @@ export async function DELETE(req: Request) {
   });
 
   return success({ message: "照片已删除" });
-}
+});

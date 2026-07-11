@@ -8,6 +8,7 @@ import { LOCATION_TYPE_OPTIONS } from "@/data/location-types";
 import { MBTI_OPTIONS } from "@/data/mbti";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { PhotoUploader } from "@/components/profile/photo-uploader";
+import { ProfileSubmitPreview } from "@/components/profile/profile-submit-preview";
 import { DualRangeSlider } from "@/components/DualRangeSlider";
 import { MeasurementSlider } from "@/components/MeasurementSlider";
 import { AlertModal } from "@/components/ui/alert-modal";
@@ -21,6 +22,12 @@ import {
   WEIGHT_MIN_KG,
 } from "@/lib/profile-limits";
 import { formatBmi } from "@/lib/bmi";
+import {
+  getBirthDayOptions,
+  isValidCalendarDate,
+  keepValidBirthDay,
+} from "@/lib/date-input";
+import { getUserFacingRequestError, readApiJson } from "@/lib/api-client";
 
 interface PhotoItem {
   id: string;
@@ -78,6 +85,45 @@ interface FormState {
   consent: boolean;
 }
 
+interface CooldownState {
+  canPublish: boolean;
+  publishCooldownRemaining: number;
+  canEdit: boolean;
+  editCooldownRemaining: number;
+  editCooldownRemainingText?: string;
+  isPhotoRevokeCooldown?: boolean;
+}
+
+interface DraftProfileData {
+  profile?: Record<string, unknown>;
+  preference?: Record<string, unknown>;
+  deleteAllPhotos?: boolean;
+}
+
+type ProfileApiRecord = Record<string, unknown> & {
+  status?: string;
+  draftData?: DraftProfileData | null;
+};
+
+type PreferenceApiRecord = Record<string, unknown> & {
+  ageMin?: number;
+  ageMax?: number;
+  heightMinCm?: number;
+  heightMaxCm?: number;
+  weightMinKg?: number;
+  weightMaxKg?: number;
+  expectedAttributes?: Attribute[];
+  expectedCustomAttribute?: string | null;
+};
+
+interface ProfileMeApiResponse {
+  data?: {
+    profile?: ProfileApiRecord | null;
+    preference?: PreferenceApiRecord | null;
+    cooldowns?: CooldownState;
+  };
+}
+
 const INITIAL_FORM: FormState = {
   birthYear: "",
   birthMonth: "",
@@ -117,7 +163,6 @@ function range(start: number, end: number): number[] {
 
 const YEARS = range(1960, 2010).reverse();
 const MONTHS = range(1, 12);
-const DAYS = range(1, 31);
 
 function isUnder18(birthYear: number, birthMonth: number, birthDay: number): boolean {
   const today = new Date();
@@ -159,18 +204,17 @@ export default function ProfileEditPage() {
   const [originalProfileStatus, setOriginalProfileStatus] = useState<string>("DRAFT");
 
   // Cooldown state from API
-  const [cooldowns, setCooldowns] = useState<{
-    canPublish: boolean;
-    publishCooldownRemaining: number;
-    canEdit: boolean;
-    editCooldownRemaining: number;
-    editCooldownRemainingText?: string;
-    isPhotoRevokeCooldown?: boolean;
-  }>({ canPublish: true, publishCooldownRemaining: 0, canEdit: true, editCooldownRemaining: 0 });
+  const [cooldowns, setCooldowns] = useState<CooldownState>({
+    canPublish: true,
+    publishCooldownRemaining: 0,
+    canEdit: true,
+    editCooldownRemaining: 0,
+  });
 
   // Confirm modal state
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<"DRAFT" | "ACTIVE">("DRAFT");
+  const [previewingProfile, setPreviewingProfile] = useState(false);
   const [showAgeAlert, setShowAgeAlert] = useState(false);
 
   // Photo state
@@ -185,6 +229,7 @@ export default function ProfileEditPage() {
     () => (form.provinceCode ? getCities(form.provinceCode) : []),
     [form.provinceCode]
   );
+  const birthDays = getBirthDayOptions(form.birthYear, form.birthMonth);
   const bmiValue = useMemo(
     () => formatBmi(Number(form.heightCm), Number(form.weightKg)),
     [form.heightCm, form.weightKg]
@@ -237,14 +282,11 @@ export default function ProfileEditPage() {
     async function load() {
       try {
         const res = await fetch("/api/profile/me");
-        if (!res.ok) {
-          if (res.status === 401) {
-            window.location.href = "/login";
-            return;
-          }
-          throw new Error("加载资料失败");
+        if (res.status === 401) {
+          window.location.href = "/login";
+          return;
         }
-        const data = await res.json();
+        const data = await readApiJson<ProfileMeApiResponse>(res, "加载资料失败");
         const profile = data.data?.profile;
         const pref = data.data?.preference;
         const cd = data.data?.cooldowns;
@@ -272,7 +314,7 @@ export default function ProfileEditPage() {
             }
           } else {
             // Load form from published profile
-            populateForm(profile, pref);
+            populateForm(profile, pref ?? null);
           }
 
           // Always load published preference if not loaded from draft
@@ -312,7 +354,7 @@ export default function ProfileEditPage() {
           }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "加载失败");
+        setError(getUserFacingRequestError(err, "加载失败"));
       } finally {
         setLoading(false);
       }
@@ -323,6 +365,22 @@ export default function ProfileEditPage() {
   /* ── Form updaters ── */
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleBirthYearChange(birthYear: string) {
+    setForm((prev) => ({
+      ...prev,
+      birthYear,
+      birthDay: keepValidBirthDay(prev.birthDay, birthYear, prev.birthMonth),
+    }));
+  }
+
+  function handleBirthMonthChange(birthMonth: string) {
+    setForm((prev) => ({
+      ...prev,
+      birthMonth,
+      birthDay: keepValidBirthDay(prev.birthDay, prev.birthYear, birthMonth),
+    }));
   }
 
   function toggleExpectedAttr(attr: Attribute) {
@@ -345,6 +403,9 @@ export default function ProfileEditPage() {
   /* ── Validation ── */
   function validate(status: "DRAFT" | "ACTIVE"): string | null {
     if (!form.birthYear || !form.birthMonth || !form.birthDay) return "请选择出生日期";
+    if (!isValidCalendarDate(form.birthYear, form.birthMonth, form.birthDay)) {
+      return "请选择有效的出生日期";
+    }
     if (!form.heightCm) return "请输入身高";
     const hVal = Number(form.heightCm);
     if (isNaN(hVal) || hVal < HEIGHT_MIN_CM || hVal > HEIGHT_MAX_CM) {
@@ -449,20 +510,15 @@ export default function ProfileEditPage() {
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || "保存失败");
-      }
+      await readApiJson<unknown>(res, "保存失败");
 
       const refreshRes = await fetch("/api/auth/refresh", { method: "POST", cache: "no-store" });
-      if (!refreshRes.ok) {
-        throw new Error("登录状态刷新失败，请刷新页面后重试");
-      }
+      await readApiJson<unknown>(refreshRes, "登录状态刷新失败，请刷新页面后重试");
       router.refresh();
 
       router.push("/profile");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "保存失败");
+      setError(getUserFacingRequestError(err, "保存失败"));
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setSubmitting(false);
@@ -493,7 +549,9 @@ export default function ProfileEditPage() {
       doSubmit("DRAFT");
     } else {
       setPendingStatus(status);
-      setConfirmOpen(true);
+      setError(null);
+      setPreviewingProfile(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
@@ -524,13 +582,10 @@ export default function ProfileEditPage() {
           body: JSON.stringify({ photoId: photo.id }),
         });
 
-        if (!res.ok) {
-          const data = await res.json().catch(() => null);
-          throw new Error(data?.error?.message || "删除照片失败");
-        }
+        await readApiJson<unknown>(res, "删除照片失败");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "删除照片失败");
+      setError(getUserFacingRequestError(err, "删除照片失败"));
       setPhotos(photosToClear);
       setWantPhotos(photosToClear.length > 0);
     }
@@ -551,6 +606,41 @@ export default function ProfileEditPage() {
       <div className="flex flex-col items-center justify-center py-20">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent" />
         <p className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">加载中...</p>
+      </div>
+    );
+  }
+
+  if (previewingProfile) {
+    return (
+      <div className="pb-24">
+        <ProfileSubmitPreview
+          data={{ ...form, photos }}
+          submitting={submitting}
+          publishLabel={isExisting ? "发布修改" : "发布资料"}
+          hasMobileNavigation
+          onEdit={() => {
+            setPreviewingProfile(false);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          onPublish={() => {
+            setPendingStatus("ACTIVE");
+            setConfirmOpen(true);
+          }}
+        />
+        <ConfirmModal
+          open={confirmOpen}
+          title={isExisting ? "确认修改并发布" : "确认发布"}
+          description={confirmDesc}
+          confirmText={confirmText}
+          buttonLabel="确认发布"
+          variant="primary"
+          loading={submitting}
+          onClose={() => setConfirmOpen(false)}
+          onConfirm={() => {
+            setConfirmOpen(false);
+            void doSubmit("ACTIVE");
+          }}
+        />
       </div>
     );
   }
@@ -635,7 +725,7 @@ export default function ProfileEditPage() {
           <div className="grid grid-cols-3 gap-2">
             <select
               value={form.birthYear}
-              onChange={(e) => updateField("birthYear", e.target.value)}
+              onChange={(e) => handleBirthYearChange(e.target.value)}
               className={form.birthYear ? SELECT_CLS : SELECT_CLS_EMPTY}
             >
               <option value="">年</option>
@@ -645,7 +735,7 @@ export default function ProfileEditPage() {
             </select>
             <select
               value={form.birthMonth}
-              onChange={(e) => updateField("birthMonth", e.target.value)}
+              onChange={(e) => handleBirthMonthChange(e.target.value)}
               className={form.birthMonth ? SELECT_CLS : SELECT_CLS_EMPTY}
             >
               <option value="">月</option>
@@ -659,7 +749,7 @@ export default function ProfileEditPage() {
               className={form.birthDay ? SELECT_CLS : SELECT_CLS_EMPTY}
             >
               <option value="">日</option>
-              {DAYS.map((d) => (
+              {birthDays.map((d) => (
                 <option key={d} value={d}>{d}日</option>
               ))}
             </select>
@@ -1089,22 +1179,6 @@ export default function ProfileEditPage() {
           </div>
         </div>
       </div>
-
-      {/* Confirm modal */}
-      <ConfirmModal
-        open={confirmOpen}
-        title={isExisting ? "确认修改" : "确认提交"}
-        description={confirmDesc}
-        confirmText={confirmText}
-        buttonLabel={pendingStatus === "ACTIVE" ? "确认发布" : "确认提交"}
-        variant="primary"
-        loading={submitting}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          setConfirmOpen(false);
-          doSubmit(pendingStatus);
-        }}
-      />
 
       {/* Age alert modal */}
       <AlertModal

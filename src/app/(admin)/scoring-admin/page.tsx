@@ -1,95 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Image from "next/image";
 import { ArrowDownToLine } from "lucide-react";
-
-/* ─── Lightbox ───────────────────────────────────────── */
-
-function PhotoLightbox({
-  photos,
-  initialIndex,
-  onClose,
-}: {
-  photos: { id: string; url: string; order: number }[];
-  initialIndex: number;
-  onClose: () => void;
-}) {
-  const [idx, setIdx] = useState(initialIndex);
-  const photo = photos[idx];
-
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-      if (e.key === "ArrowLeft" && idx > 0) setIdx(idx - 1);
-      if (e.key === "ArrowRight" && idx < photos.length - 1) setIdx(idx + 1);
-    }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [idx, photos.length, onClose]);
-
-  if (!photo) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="relative max-h-[90vh] max-w-[90vw]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Close */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute -right-2 -top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-[hsl(var(--card))] text-sm text-[hsl(var(--foreground))] shadow-lg border border-[hsl(var(--border))] hover:bg-[hsl(var(--secondary))]"
-        >
-          ✕
-        </button>
-
-        {/* Image */}
-        <div className="relative h-[85vh] w-[85vw]">
-          <Image
-            src={photo.url}
-            alt={`照片 ${photo.order + 1}`}
-            fill
-            unoptimized
-            sizes="85vw"
-            className="rounded-xl object-contain"
-          />
-        </div>
-
-        {/* Nav arrows */}
-        {photos.length > 1 && (
-          <div className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-between px-2">
-            <button
-              type="button"
-              disabled={idx <= 0}
-              onClick={() => setIdx(idx - 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:bg-black/70 disabled:opacity-20"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              disabled={idx >= photos.length - 1}
-              onClick={() => setIdx(idx + 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm transition-all hover:bg-black/70 disabled:opacity-20"
-            >
-              ›
-            </button>
-          </div>
-        )}
-
-        {/* Counter */}
-        <div className="mt-2 text-center text-xs text-gray-400">
-          {idx + 1} / {photos.length}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { PhotoLightbox } from "@/components/profile/photo-lightbox";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -718,6 +632,7 @@ function TaskCard({
 /* ─── Main Page ──────────────────────────────────────── */
 
 export default function ScoringAdminPage() {
+  const pageBottomRef = useRef<HTMLDivElement>(null);
   const [tasks, setTasks] = useState<ScoringTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -918,13 +833,9 @@ export default function ScoringAdminPage() {
   }
 
   function scrollToPageBottom() {
-    const scrollContainer =
-      document.querySelector<HTMLElement>(".ios-webview-scroll") ??
-      document.scrollingElement;
-
-    scrollContainer?.scrollTo({
-      top: scrollContainer.scrollHeight,
+    pageBottomRef.current?.scrollIntoView({
       behavior: "smooth",
+      block: "end",
     });
   }
 
@@ -1103,6 +1014,7 @@ export default function ScoringAdminPage() {
           </form>
         </div>
       )}
+      <div ref={pageBottomRef} aria-hidden="true" />
       <button
         type="button"
         aria-label="跳至页面底部"

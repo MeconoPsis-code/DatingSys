@@ -9,6 +9,7 @@ import { MBTI_OPTIONS } from "@/data/mbti";
 import { DualRangeSlider } from "@/components/DualRangeSlider";
 import { MeasurementSlider } from "@/components/MeasurementSlider";
 import { PhotoUploader } from "@/components/profile/photo-uploader";
+import { ProfileSubmitPreview } from "@/components/profile/profile-submit-preview";
 import { AlertModal } from "@/components/ui/alert-modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import {
@@ -24,6 +25,12 @@ import {
   WEIGHT_MAX_KG,
   WEIGHT_MIN_KG,
 } from "@/lib/profile-limits";
+import {
+  getBirthDayOptions,
+  isValidCalendarDate,
+  keepValidBirthDay,
+} from "@/lib/date-input";
+import { getUserFacingRequestError, readApiJson } from "@/lib/api-client";
 
 interface PhotoItem {
   id: string;
@@ -111,7 +118,6 @@ function range(start: number, end: number): number[] {
 
 const YEARS = range(1960, 2010).reverse();
 const MONTHS = range(1, 12);
-const DAYS = range(1, 31);
 const PUBLISH_CONFIRM_TEXT = "确认提交并发布我的资料";
 const PUBLISH_CONFIRM_DESCRIPTION = "提交后 7 天内不能修改，请确认所有信息无误。";
 
@@ -162,15 +168,33 @@ export default function CompleteProfilePage() {
   const [success, setSuccess] = useState(false);
   const [showAgeAlert, setShowAgeAlert] = useState(false);
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [previewingProfile, setPreviewingProfile] = useState(false);
 
   // Computed cities
   const cities = useMemo(
     () => (profile.provinceCode ? getCities(profile.provinceCode) : []),
     [profile.provinceCode]
   );
+  const birthDays = getBirthDayOptions(profile.birthYear, profile.birthMonth);
 
   function updateProfile<K extends keyof ProfileFormState>(key: K, value: ProfileFormState[K]) {
     setProfile((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleBirthYearChange(birthYear: string) {
+    setProfile((prev) => ({
+      ...prev,
+      birthYear,
+      birthDay: keepValidBirthDay(prev.birthDay, birthYear, prev.birthMonth),
+    }));
+  }
+
+  function handleBirthMonthChange(birthMonth: string) {
+    setProfile((prev) => ({
+      ...prev,
+      birthMonth,
+      birthDay: keepValidBirthDay(prev.birthDay, prev.birthYear, birthMonth),
+    }));
   }
 
   function toggleExpectedAttr(attr: Attribute) {
@@ -195,6 +219,9 @@ export default function CompleteProfilePage() {
     if (!nickname) return "请输入昵称";
     if (nickname.length > 30) return "昵称不能超过30个字符";
     if (!profile.birthYear || !profile.birthMonth || !profile.birthDay) return "请选择出生日期";
+    if (!isValidCalendarDate(profile.birthYear, profile.birthMonth, profile.birthDay)) {
+      return "请选择有效的出生日期";
+    }
     if (!profile.heightCm) return "请输入身高";
     const hVal = Number(profile.heightCm);
     if (isNaN(hVal) || hVal < HEIGHT_MIN_CM || hVal > HEIGHT_MAX_CM) {
@@ -296,22 +323,17 @@ export default function CompleteProfilePage() {
         body: JSON.stringify(body),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || "保存资料失败");
-      }
+      await readApiJson<unknown>(res, "保存资料失败");
 
       // Refresh auth state before navigating; otherwise protected tabs can see the old no-profile session.
       const refreshRes = await fetch("/api/auth/refresh", { method: "POST", cache: "no-store" });
-      if (!refreshRes.ok) {
-        throw new Error("登录状态刷新失败，请刷新页面后重试");
-      }
+      await readApiJson<unknown>(refreshRes, "登录状态刷新失败，请刷新页面后重试");
       router.refresh();
 
       setSuccess(true);
       setTimeout(() => router.push("/profile"), 1500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "保存资料失败");
+      setError(getUserFacingRequestError(err, "保存资料失败"));
       window.scrollTo({ top: 0, behavior: "smooth" });
     } finally {
       setLoading(false);
@@ -337,7 +359,9 @@ export default function CompleteProfilePage() {
       return;
     }
 
-    setPublishConfirmOpen(true);
+    setError(null);
+    setPreviewingProfile(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
@@ -380,19 +404,39 @@ export default function CompleteProfilePage() {
         </div>
       ) : (
         <>
-          <ProfileFormSection
-            profile={profile}
-            cities={cities}
-            loading={loading}
-            photos={photos}
-            wantPhotos={wantPhotos}
-            onPhotosChange={setPhotos}
-            onWantPhotosChange={setWantPhotos}
-            updateProfile={updateProfile}
-            handleProvinceChange={handleProvinceChange}
-            toggleExpectedAttr={toggleExpectedAttr}
-            onSubmit={handleSubmitProfile}
-          />
+          {previewingProfile ? (
+            <ProfileSubmitPreview
+              data={{
+                ...profile,
+                nickname: normalizeNicknameInput(profile.nickname),
+                photos,
+              }}
+              submitting={loading}
+              publishLabel="发布资料"
+              onEdit={() => {
+                setPreviewingProfile(false);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              onPublish={() => setPublishConfirmOpen(true)}
+            />
+          ) : (
+            <ProfileFormSection
+              profile={profile}
+              cities={cities}
+              birthDays={birthDays}
+              loading={loading}
+              photos={photos}
+              wantPhotos={wantPhotos}
+              onPhotosChange={setPhotos}
+              onWantPhotosChange={setWantPhotos}
+              updateProfile={updateProfile}
+              onBirthYearChange={handleBirthYearChange}
+              onBirthMonthChange={handleBirthMonthChange}
+              handleProvinceChange={handleProvinceChange}
+              toggleExpectedAttr={toggleExpectedAttr}
+              onSubmit={handleSubmitProfile}
+            />
+          )}
           {/* Age alert modal */}
           <AlertModal
             open={showAgeAlert}
@@ -405,7 +449,7 @@ export default function CompleteProfilePage() {
           />
           <ConfirmModal
             open={publishConfirmOpen}
-            title="确认提交"
+            title="确认发布"
             description={PUBLISH_CONFIRM_DESCRIPTION}
             confirmText={PUBLISH_CONFIRM_TEXT}
             buttonLabel="确认发布"
@@ -428,24 +472,30 @@ export default function CompleteProfilePage() {
 function ProfileFormSection({
   profile,
   cities,
+  birthDays,
   loading,
   photos,
   wantPhotos,
   onPhotosChange,
   onWantPhotosChange,
   updateProfile,
+  onBirthYearChange,
+  onBirthMonthChange,
   handleProvinceChange,
   toggleExpectedAttr,
   onSubmit,
 }: {
   profile: ProfileFormState;
   cities: { code: string; name: string }[];
+  birthDays: number[];
   loading: boolean;
   photos: PhotoItem[];
   wantPhotos: boolean;
   onPhotosChange: (photos: PhotoItem[]) => void;
   onWantPhotosChange: (v: boolean) => void;
   updateProfile: <K extends keyof ProfileFormState>(key: K, value: ProfileFormState[K]) => void;
+  onBirthYearChange: (birthYear: string) => void;
+  onBirthMonthChange: (birthMonth: string) => void;
   handleProvinceChange: (code: string) => void;
   toggleExpectedAttr: (attr: Attribute) => void;
   onSubmit: () => void;
@@ -504,7 +554,7 @@ function ProfileFormSection({
           <div className="grid grid-cols-3 gap-2">
             <select
               value={profile.birthYear}
-              onChange={(e) => updateProfile("birthYear", e.target.value)}
+              onChange={(e) => onBirthYearChange(e.target.value)}
               className={profile.birthYear ? SELECT_CLS : SELECT_CLS_EMPTY}
             >
               <option value="">年</option>
@@ -514,7 +564,7 @@ function ProfileFormSection({
             </select>
             <select
               value={profile.birthMonth}
-              onChange={(e) => updateProfile("birthMonth", e.target.value)}
+              onChange={(e) => onBirthMonthChange(e.target.value)}
               className={profile.birthMonth ? SELECT_CLS : SELECT_CLS_EMPTY}
             >
               <option value="">月</option>
@@ -528,7 +578,7 @@ function ProfileFormSection({
               className={profile.birthDay ? SELECT_CLS : SELECT_CLS_EMPTY}
             >
               <option value="">日</option>
-              {DAYS.map((d) => (
+              {birthDays.map((d) => (
                 <option key={d} value={d}>{d}日</option>
               ))}
             </select>

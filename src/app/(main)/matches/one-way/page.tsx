@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CollapsibleSelfIntro } from "@/components/profile/collapsible-self-intro";
+import { getProvinceName } from "@/data/regions";
 import { ProvinceFilterSelect } from "../province-filter-select";
 
 /* ─── Types ──────────────────────────────────────────── */
@@ -307,15 +308,20 @@ function OneWayMatchCard({
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-all hover:border-[hsl(var(--primary)/0.3)] sm:p-5">
       {/* Direction badge */}
       <div className="mb-3 flex flex-col items-start gap-2 sm:flex-row sm:items-center">
-        <span
-          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
-            isMeFitsThem
-              ? "border border-blue-500/30 bg-blue-500/15 text-blue-400"
-              : "border border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
-          }`}
-        >
-          {directionLabel}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
+              isMeFitsThem
+                ? "border border-blue-500/30 bg-blue-500/15 text-blue-400"
+                : "border border-emerald-500/30 bg-emerald-500/15 text-emerald-400"
+            }`}
+          >
+            {directionLabel}
+          </span>
+          <span className="inline-flex items-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] px-3 py-1 text-xs font-medium text-[hsl(var(--foreground))]">
+            省份：{getProvinceName(match.provinceCode)}
+          </span>
+        </div>
         <span className="text-[10px] leading-snug text-[hsl(var(--muted-foreground))]">
           {oneWayReasonChecks.length > 0
             ? `单向原因：${oneWayReasonChecks.map((check) => check.label).join("、")}`

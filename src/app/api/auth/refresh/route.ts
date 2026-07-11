@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { createSession } from "@/lib/session";
 import { db } from "@/lib/db";
+import { apiHandler } from "@/lib/api-handler";
 
 /**
  * POST /api/auth/refresh
@@ -10,7 +11,7 @@ import { db } from "@/lib/db";
  * Called after profile creation to update the JWT so middleware
  * stops redirecting to /complete-profile.
  */
-export async function POST() {
+export const POST = apiHandler(async () => {
   const session = await getSession();
   const noStoreHeaders = { "Cache-Control": "no-store" };
 
@@ -38,4 +39,4 @@ export async function POST() {
     },
     { headers: noStoreHeaders }
   );
-}
+});

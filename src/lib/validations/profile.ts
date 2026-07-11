@@ -50,7 +50,7 @@ export const profileSchema = z
   .object({
     birthDate: z
       .string()
-      .date()
+      .date({ error: "请选择有效的出生日期" })
       .transform((s) => new Date(s)),
 
     heightCm: z

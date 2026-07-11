@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { redis } from "@/lib/redis";
 import { consumeVerifiedFlag } from "@/lib/verification";
@@ -6,6 +6,7 @@ import { validatePasscode, hashPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { normalizeNicknameInput } from "@/lib/group-card";
+import { apiHandler, parseJsonRequest } from "@/lib/api-handler";
 
 /**
  * POST /api/auth/set-passcode
@@ -13,11 +14,19 @@ import { normalizeNicknameInput } from "@/lib/group-card";
  * After email verification, user sets their passcode to complete signup.
  * Requires the "verified" flag in Redis (set by verify-code endpoint).
  */
-export async function POST(req: NextRequest) {
-  const body = await req.json();
+export const POST = apiHandler(async (req) => {
+  const body = await parseJsonRequest<{
+    qqNumber?: unknown;
+    passcode?: unknown;
+  }>(req);
   const { qqNumber, passcode } = body;
 
-  if (!qqNumber || !passcode) {
+  if (
+    (typeof qqNumber !== "string" && typeof qqNumber !== "number") ||
+    typeof passcode !== "string" ||
+    !qqNumber ||
+    !passcode
+  ) {
     return NextResponse.json(
       { error: { code: "VALIDATION_ERROR", message: "请输入QQ号和密码" } },
       { status: 422 }
@@ -158,4 +167,4 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     data: { success: true, message: "注册成功", nickname },
   });
-}
+});
