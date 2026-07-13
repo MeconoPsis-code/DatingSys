@@ -105,7 +105,14 @@ export default function AnnouncementsAdminPage() {
   }, [statusFilter]);
 
   useEffect(() => {
-    fetchAnnouncements();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void fetchAnnouncements();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [fetchAnnouncements]);
 
   function resetForm() {

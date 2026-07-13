@@ -1,62 +1,237 @@
-# c:\Users\46343\Documents\date-system\docker-compose.yml
+# Production infrastructure for a 2 vCPU / 4 GiB host.
+#
+# Recovery-safe default: containers do not restart automatically until
+# INFRA_RESTART_POLICY / NAPCAT_RESTART_POLICY are set to unless-stopped.
+# NapCat is opt-in: docker compose --profile bot up -d napcat
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
-  # ── PostgreSQL 16 ─────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.14-alpine3.23
     container_name: date-postgres
-    restart: unless-stopped
+    restart: "${INFRA_RESTART_POLICY:-no}"
+    init: true
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
-      POSTGRES_USER: date_admin
-      POSTGRES_PASSWORD: date_dev_password
-      POSTGRES_DB: date_system
+      POSTGRES_USER: "${POSTGRES_USER:?set POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB:?set POSTGRES_DB}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - infrastructure
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    shm_size: 128m
+    mem_limit: 768m
+    cpus: "1.00"
+    pids_limit: 128
+    stop_grace_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
 
-  # ── Redis 7 ───────────────────────────────────────────
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.9-bookworm
     container_name: date-redis
-    restart: unless-stopped
+    restart: "${INFRA_RESTART_POLICY:-no}"
+    init: true
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/var/lib/redis/data
-
-  # ── MinIO (S3-compatible storage) ─────────────────────
-  minio:
-    image: minio/minio:latest
-    container_name: date-minio
-    restart: unless-stopped
-    ports:
-      - "9000:9000" # S3 API
-      - "9001:9001" # Web console
+      - "127.0.0.1:6379:6379"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+      REDIS_USERNAME: "${REDIS_USERNAME:?set REDIS_USERNAME}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?set REDIS_PASSWORD}"
+    # Generate a private config before handing control back to the official
+    # entrypoint. This keeps the password out of redis-server's argv.
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        umask 077
+        case "$${REDIS_USERNAME}" in
+          ''|[0-9_-]*|*[!A-Za-z0-9_-]*)
+            echo 'REDIS_USERNAME must start with a letter and contain only letters, digits, _ or -' >&2
+            exit 64
+            ;;
+        esac
+        case "$${REDIS_PASSWORD}" in
+          ''|*[!A-Fa-f0-9]*)
+            echo 'REDIS_PASSWORD must be hexadecimal' >&2
+            exit 64
+            ;;
+        esac
+        if [ "$${#REDIS_PASSWORD}" -lt 32 ]; then
+          echo 'REDIS_PASSWORD must contain at least 32 hexadecimal characters' >&2
+          exit 64
+        fi
+        mkdir -p /run/date-redis
+        {
+          printf '%s\n' 'appendonly yes'
+          printf '%s\n' 'appendfsync everysec'
+          printf '%s\n' 'maxmemory 192mb'
+          printf '%s\n' 'maxmemory-policy noeviction'
+          printf '%s\n' 'user default off'
+          printf 'user %s on >%s ~* &* +@all\n' \
+            "$${REDIS_USERNAME}" "$${REDIS_PASSWORD}"
+        } > /run/date-redis/redis.conf
+        chown redis:redis \
+          /run/date-redis \
+          /run/date-redis/redis.conf
+        exec /usr/local/bin/docker-entrypoint.sh \
+          redis-server /run/date-redis/redis.conf
+    volumes:
+      - redis_data:/data
+    tmpfs:
+      - /run/date-redis:size=1m,mode=0700
+    networks:
+      - infrastructure
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli --user "$${REDIS_USERNAME}" ping | grep -qx PONG'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    mem_limit: 256m
+    cpus: "0.50"
+    pids_limit: 64
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: date-minio
+    restart: "${INFRA_RESTART_POLICY:-no}"
+    init: true
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?set MINIO_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}"
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+    networks:
+      - infrastructure
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - http://127.0.0.1:9000/minio/health/live
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    mem_limit: 512m
+    cpus: "0.75"
+    pids_limit: 128
+    stop_grace_period: 60s
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
 
-  # ── NapCat QQ Bot (OneBot v11) ─────────────────────────
   napcat:
-    image: mlikiowa/napcat-docker:latest
+    image: mlikiowa/napcat-docker:v4.18.9
     container_name: date-napcat
-    restart: unless-stopped
+    profiles:
+      - bot
+    restart: "${NAPCAT_RESTART_POLICY:-no}"
+    init: true
     environment:
-      - ACCOUNT=${BOT_QQ_NUMBER:-}
-      - NAPCAT_GID=0
-      - NAPCAT_UID=0
+      ACCOUNT: "${BOT_QQ_NUMBER:-}"
+      NAPCAT_UID: "${NAPCAT_UID:-10001}"
+      NAPCAT_GID: "${NAPCAT_GID:-10001}"
+      WEBUI_TOKEN: "${NAPCAT_WEBUI_TOKEN:-}"
+      WEBUI_PREFIX: "${NAPCAT_WEBUI_PREFIX:-}"
+    # The upstream entrypoint needs root briefly for initialization, then uses
+    # gosu with NAPCAT_UID/GID. Fail closed on an empty token or root UID/GID.
+    entrypoint:
+      - /bin/bash
+      - -ec
+      - |
+        if [[ -z "$${WEBUI_TOKEN}" ]]; then
+          echo 'NAPCAT_WEBUI_TOKEN must be set' >&2
+          exit 64
+        fi
+        if [[ ! "$${NAPCAT_UID}" =~ ^[1-9][0-9]*$$ ]] ||
+           [[ ! "$${NAPCAT_GID}" =~ ^[1-9][0-9]*$$ ]]; then
+          echo 'NAPCAT_UID and NAPCAT_GID must be non-zero integers' >&2
+          exit 64
+        fi
+        exec /app/entrypoint.sh
     ports:
-      - "3001:3001"   # OneBot v11 HTTP API
-      - "6099:6099"   # WebUI (QR code login & network config)
+      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:6099:6099"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
-      - napcat_data:/app/napcat/config
+      - napcat_config:/app/napcat/config
+      - napcat_qq_data:/app/.config/QQ
+      - napcat_plugins:/app/napcat/plugins
+    networks:
+      - bot_egress
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "bash -c '</dev/tcp/127.0.0.1/6099'"
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+    shm_size: 256m
+    mem_limit: 1g
+    cpus: "1.00"
+    pids_limit: 512
+    stop_grace_period: 45s
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+networks:
+  infrastructure:
+    internal: true
+  bot_egress:
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
   minio_data:
-  napcat_data:
+  napcat_config:
+  napcat_qq_data:
+  napcat_plugins:

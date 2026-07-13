@@ -66,7 +66,14 @@ export default function ScorerSchedulePage() {
   }, []);
 
   useEffect(() => {
-    fetchSchedule();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void fetchSchedule();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [fetchSchedule]);
 
   const dirty = useMemo(() => {

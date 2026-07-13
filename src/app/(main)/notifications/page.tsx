@@ -166,7 +166,14 @@ export default function NotificationsPage() {
   }, []);
 
   useEffect(() => {
-    fetchNotifications();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void fetchNotifications();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [fetchNotifications]);
 
   async function handleMarkAllRead() {

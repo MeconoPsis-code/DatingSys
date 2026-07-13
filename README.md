@@ -2,6 +2,10 @@
 
 面向 QQ 群成员的资料匹配 Web 系统。
 
+> 生产环境或事故恢复请只使用
+> [`deploy/README.md`](deploy/README.md)。下方命令仅适用于可随时删除的本地开发数据；
+> 禁止在生产库运行 `migrate dev`、`migrate reset` 或 `db seed`。
+
 完整产品与技术规格见：
 
 - [项目核心架构](docs/PROJECT_SPEC.md)
@@ -14,8 +18,8 @@
 
 ### 前置要求
 
-- [Node.js](https://nodejs.org/) ≥ 18
-- [pnpm](https://pnpm.io/) ≥ 9
+- [Node.js](https://nodejs.org/) 24.x
+- [pnpm](https://pnpm.io/) 11.7.0
 - [Docker](https://www.docker.com/) + Docker Compose
 
 ### 1. 克隆项目
@@ -28,21 +32,23 @@ cd date-system
 ### 2. 安装依赖
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 ```
 
 ### 3. 配置环境变量
 
 ```bash
 cp .env.example .env.local
+cp deploy/infra.env.example deploy/infra.env
 ```
 
-默认值已经匹配 `docker-compose.yml` 中的配置，直接使用即可。如需修改 SMTP 等配置请编辑 `.env.local`。
+分别填写两个文件中的本地开发值，并保证 PostgreSQL、Redis、MinIO 的用户名和密码一致。
+这两个实际环境文件均已被 Git 忽略，不能提交。
 
 ### 4. 启动基础设施
 
 ```bash
-docker compose up -d
+docker compose --env-file deploy/infra.env up -d postgres redis minio
 ```
 
 这将启动以下服务：
@@ -55,27 +61,19 @@ docker compose up -d
 
 ### 5. 初始化数据库
 
-**首次搭建（推荐）：**
+**创建或更新本地开发数据库：**
 
 ```bash
-pnpm prisma migrate reset
+pnpm exec prisma migrate dev
 ```
 
-> 这一条命令会：删除旧数据 → 执行所有迁移 → 自动运行 seed 创建测试账号。
-
-**仅应用迁移（保留现有数据）：**
+**可选：重新填充本地测试数据：**
 
 ```bash
-pnpm prisma migrate dev
+pnpm exec prisma db seed
 ```
 
-**仅重新填充测试数据：**
-
-```bash
-pnpm prisma db seed
-```
-
-> ⚠️ `db seed` 会先 **清空所有表** 再重新创建，现有数据将丢失。
+> ⚠️ `db seed` 会先 **清空所有表**。它只适用于可随时删除的本地开发库。
 
 ### 6. 启动开发服务器
 
@@ -123,31 +121,22 @@ pnpm build                      # 生产构建
 pnpm lint                       # 代码检查
 
 # 数据库
-pnpm prisma migrate dev         # 应用迁移
-pnpm prisma migrate reset       # 重置数据库（删除 → 迁移 → seed）
-pnpm prisma db seed             # 重新填充测试数据
-pnpm prisma studio              # 打开数据库可视化管理界面
+pnpm exec prisma migrate dev    # 仅本地开发迁移
+pnpm exec prisma db seed        # 仅本地清空并填充测试数据
+pnpm exec prisma studio         # 打开数据库可视化管理界面
 
 # Docker
-docker compose up -d            # 启动基础设施
-docker compose down             # 停止基础设施
-docker compose down -v          # 停止并删除所有数据卷
+docker compose --env-file deploy/infra.env up -d postgres redis minio
+docker compose --env-file deploy/infra.env down
 
-# Rebuild on production server
-pnpm install --frozen-lockfile
-pnpm prisma generate
-pnpm prisma migrate deploy
-pnpm build
-
-pm2 restart tenmatch --update-env
-pm2 status
+# 生产部署、数据恢复和 systemd 操作只参考 deploy/README.md
 ```
 
 ---
 
 ## 技术栈
 
-- Next.js 15 + React + TypeScript
+- Next.js 16 + React 19 + TypeScript
 - PostgreSQL + Prisma ORM
 - Redis + BullMQ
 - MinIO (S3 兼容对象存储)

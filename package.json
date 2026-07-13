@@ -2,11 +2,15 @@
   "name": "date-system",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "ts-node --project tsconfig.test.json tests/date-input.test.ts && ts-node --project tsconfig.test.json tests/api-client.test.ts",
+    "test": "ts-node --project tsconfig.test.json tests/date-input.test.ts && ts-node --project tsconfig.test.json tests/api-client.test.ts && ts-node --project tsconfig.test.json tests/redis-connection.test.ts",
     "lint": "eslint",
     "format": "prettier --write ."
   },
@@ -27,7 +31,7 @@
     "minio": "^8.0.7",
     "next": "16.2.6",
     "next-themes": "^0.4.6",
-    "nodemailer": "^8.0.10",
+    "nodemailer": "^9.0.3",
     "pg": "^8.21.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",

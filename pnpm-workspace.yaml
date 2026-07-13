@@ -1,5 +1,5 @@
 allowBuilds:
-  '@prisma/engines': true
+  "@prisma/engines": true
   bcrypt: true
   msgpackr-extract: true
   msw: true
@@ -9,3 +9,11 @@ allowBuilds:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+minimumReleaseAgeExclude:
+  - hono@4.12.30
+  - postcss@8.5.19
+overrides:
+  "@hono/node-server@<1.19.13": 1.19.13
+  "hono@<4.12.25": 4.12.30
+  "js-yaml@<4.2.0": 4.3.0
+  "postcss@<8.5.10": 8.5.19

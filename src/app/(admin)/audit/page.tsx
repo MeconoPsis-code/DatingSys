@@ -188,7 +188,14 @@ export default function AuditLogPage() {
   }, [page, actionFilter, targetTypeFilter, dateFrom, dateTo]);
 
   useEffect(() => {
-    fetchLogs();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void fetchLogs();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [fetchLogs]);
 
   const inputCls =

@@ -1,4 +1,5 @@
 import { Queue } from "bullmq";
+import { redisConnectionFromUrl } from "@/lib/redis-connection";
 
 /**
  * Pre-defined queue names for the Date System
@@ -15,11 +16,7 @@ export const QUEUE_NAMES = {
 export function createQueue(name: string): Queue {
   return new Queue(name, {
     connection: {
-      host: new URL(process.env.REDIS_URL || "redis://localhost:6379").hostname,
-      port: parseInt(
-        new URL(process.env.REDIS_URL || "redis://localhost:6379").port || "6379",
-        10
-      ),
+      ...redisConnectionFromUrl(),
       maxRetriesPerRequest: null,
       lazyConnect: true,
     },

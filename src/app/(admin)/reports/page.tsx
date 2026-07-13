@@ -288,7 +288,14 @@ export default function AdminReportsPage() {
   }, [page, statusFilter]);
 
   useEffect(() => {
-    fetchReports();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void fetchReports();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [fetchReports]);
 
   async function handleOpenResolve(report: AdminReport) {

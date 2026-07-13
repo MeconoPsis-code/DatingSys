@@ -1,0 +1,71 @@
+[Unit]
+Description=TenMatch Next.js application (single instance)
+Documentation=file:/srv/tenmatch/app/deploy/README.md
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=tenmatch
+Group=tenmatch
+WorkingDirectory=/srv/tenmatch/app
+
+# The file is created during deployment and must not be stored in Git.
+EnvironmentFile=/etc/tenmatch/app.env
+
+ExecStartPre=/usr/bin/test -r /srv/tenmatch/app/.next/BUILD_ID
+ExecStartPre=/usr/bin/test -x /usr/bin/node
+ExecStartPre=/usr/bin/node /srv/tenmatch/app/deploy/validate-app-env.mjs
+# Invoke the Next CLI directly: one systemd service, one Next.js application
+# process, and no PM2/cluster wrapper that would duplicate the scheduler. env(1)
+# sets these invariants after EnvironmentFile has been read, so a stale value in
+# that file cannot turn off secure cookies or expose the listener.
+ExecStart=/usr/bin/env NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3000 /usr/bin/node /srv/tenmatch/app/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=60s
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tenmatch
+UMask=0077
+
+# Resource ceilings for the 2-vCPU/4-GiB host. They leave headroom for
+# PostgreSQL, Redis, MinIO, NapCat, Nginx, and the operating system.
+CPUQuota=150%
+MemoryHigh=640M
+MemoryMax=768M
+MemorySwapMax=256M
+TasksMax=256
+LimitNOFILE=65536
+
+# Service sandbox. Next's image/cache path is the only writable application
+# path; business uploads go to MinIO and logs go to journald.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/srv/tenmatch/app/.next/cache
+
+[Install]
+WantedBy=multi-user.target

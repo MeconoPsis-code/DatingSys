@@ -6,12 +6,21 @@ const globalForMinio = globalThis as unknown as {
 };
 
 function createMinioClient(): Client {
+  const accessKey = process.env.MINIO_ACCESS_KEY?.trim();
+  const secretKey = process.env.MINIO_SECRET_KEY?.trim();
+
+  if (!accessKey || !secretKey) {
+    throw new Error(
+      "MINIO_ACCESS_KEY and MINIO_SECRET_KEY must be set; default MinIO credentials are not permitted."
+    );
+  }
+
   return new Client({
     endPoint: process.env.MINIO_ENDPOINT || "localhost",
     port: parseInt(process.env.MINIO_PORT || "9000", 10),
     useSSL: process.env.MINIO_USE_SSL === "true",
-    accessKey: process.env.MINIO_ACCESS_KEY || "minioadmin",
-    secretKey: process.env.MINIO_SECRET_KEY || "minioadmin123",
+    accessKey,
+    secretKey,
   });
 }
 
