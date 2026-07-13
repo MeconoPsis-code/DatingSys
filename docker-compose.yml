@@ -224,7 +224,12 @@ services:
 
 networks:
   infrastructure:
-    internal: true
+    # A gateway-bearing bridge is required for Docker to publish these
+    # services to the host loopback interface. Exposure is still restricted
+    # by each service's explicit 127.0.0.1 port binding and the host firewall.
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "127.0.0.1"
   bot_egress:
     driver: bridge
 
