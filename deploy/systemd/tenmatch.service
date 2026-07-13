@@ -29,6 +29,9 @@ RestartSec=10s
 TimeoutStartSec=60s
 TimeoutStopSec=30s
 KillSignal=SIGTERM
+# Next.js handles SIGTERM and exits with the conventional 128 + SIGTERM code.
+# Treat an operator-initiated stop as clean instead of leaving the unit failed.
+SuccessExitStatus=143
 
 StandardOutput=journal
 StandardError=journal
