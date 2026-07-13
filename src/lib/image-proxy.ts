@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 const IMAGE_PROXY_PATH = "/api/images/proxy";
 const DEFAULT_TTL_SECONDS = 60 * 60;
 const MAX_TTL_SECONDS = 60 * 60 * 2;
+const SIGNATURE_TIME_BUCKET_SECONDS = 10 * 60;
 const MIN_SIZE = 32;
 const MAX_SIZE = 1920;
 const MIN_QUALITY = 40;
@@ -133,7 +134,12 @@ export function buildImageProxyUrl(
     60,
     MAX_TTL_SECONDS
   );
-  const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  // Keep URLs stable across polling responses so browser caching can work.
+  // The extra validity is bounded to less than one cache bucket (10 minutes).
+  const expiresAt =
+    Math.ceil((nowSeconds + ttlSeconds) / SIGNATURE_TIME_BUCKET_SECONDS) *
+    SIGNATURE_TIME_BUCKET_SECONDS;
   const k = encodeStorageKey(storageKey);
   const payload = buildSignaturePayload({
     k,
@@ -177,6 +183,9 @@ export function verifyImageProxyRequest(
   if (!k || !viewerId || !signature || !expiresAt || !width || !quality) return null;
   if (viewerId !== currentUserId) return null;
   if (expiresAt < nowSeconds) return null;
+  if (expiresAt > nowSeconds + MAX_TTL_SECONDS + SIGNATURE_TIME_BUCKET_SECONDS) {
+    return null;
+  }
   if (!isImageProxyFit(fit) || !isImageProxyFormat(format)) return null;
 
   const normalized = {

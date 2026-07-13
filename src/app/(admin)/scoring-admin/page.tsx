@@ -643,6 +643,7 @@ export default function ScoringAdminPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const activeFetchCountRef = useRef(0);
   const pageSize = 20;
 
   // Check role on mount
@@ -686,6 +687,9 @@ export default function ScoringAdminPage() {
 
   const fetchTasks = useCallback(
     async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (silent && activeFetchCountRef.current > 0) return;
+      activeFetchCountRef.current += 1;
+
       if (!silent) setLoading(true);
       setError(null);
       try {
@@ -714,6 +718,7 @@ export default function ScoringAdminPage() {
       } catch (err) {
         setError(err instanceof Error ? err.message : "加载失败");
       } finally {
+        activeFetchCountRef.current = Math.max(0, activeFetchCountRef.current - 1);
         if (!silent) setLoading(false);
       }
     },
@@ -729,8 +734,10 @@ export default function ScoringAdminPage() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      fetchTasks({ silent: true });
-    }, 10000);
+      if (document.visibilityState === "visible") {
+        void fetchTasks({ silent: true });
+      }
+    }, 60000);
     return () => window.clearInterval(interval);
   }, [fetchTasks]);
 

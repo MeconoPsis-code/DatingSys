@@ -8,6 +8,7 @@ interface ReviewPhoto {
   id: string;
   order: number;
   url: string;
+  thumbUrl?: string;
 }
 
 interface ScoreEntry {
@@ -241,10 +242,7 @@ export default function ScoringReviewPage() {
     }
   }
 
-  async function handleRescore(
-    taskId: string,
-    mode?: "reporters_and_unscored"
-  ) {
+  async function handleRescore(taskId: string, mode?: "reporters_and_unscored") {
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/scoring/${taskId}/rescore`, {
@@ -453,8 +451,10 @@ export default function ScoringReviewPage() {
                   {/* Thumbnail */}
                   {task.photos[0] ? (
                     <img
-                      src={task.photos[0].url}
+                      src={task.photos[0].thumbUrl ?? task.photos[0].url}
                       alt=""
+                      loading="lazy"
+                      decoding="async"
                       className="h-14 w-14 shrink-0 rounded-lg object-cover"
                     />
                   ) : (
@@ -639,7 +639,11 @@ export default function ScoringReviewPage() {
                               type="button"
                               disabled={submitting}
                               onClick={() => {
-                                if (confirm("确认照片违规并撤销该用户的照片吗？照片将被删除，用户会收到包含举报原因的通知。")) {
+                                if (
+                                  confirm(
+                                    "确认照片违规并撤销该用户的照片吗？照片将被删除，用户会收到包含举报原因的通知。"
+                                  )
+                                ) {
                                   void handleRevokePhotos(activeTask.id);
                                 }
                               }}
@@ -658,8 +662,15 @@ export default function ScoringReviewPage() {
                               type="button"
                               disabled={submitting}
                               onClick={() => {
-                                if (confirm("确认照片不违规并继续评分吗？举报记录将被清除，仅举报评分员和未评分评分员会收到重新评分任务。")) {
-                                  void handleRescore(activeTask.id, "reporters_and_unscored");
+                                if (
+                                  confirm(
+                                    "确认照片不违规并继续评分吗？举报记录将被清除，仅举报评分员和未评分评分员会收到重新评分任务。"
+                                  )
+                                ) {
+                                  void handleRescore(
+                                    activeTask.id,
+                                    "reporters_and_unscored"
+                                  );
                                 }
                               }}
                               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-400 transition-all hover:bg-emerald-500/20 disabled:opacity-50"
