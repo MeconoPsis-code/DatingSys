@@ -64,9 +64,14 @@ export function getScoringTaskTimeline(
   createdAt: Date,
   now = new Date()
 ): ScoringTaskTimeline {
-  // Photos uploaded on the same China calendar day share that day's 18:00
-  // batch anchor, so Wednesday uploads are always handled by Thursday scorers.
-  const pendingAt = getChinaDayHourBoundary(createdAt, 18);
+  // A scoring batch runs from 18:00 on the previous China calendar day through
+  // 17:59:59 today. Uploads before 18:00 join today's already-published batch;
+  // uploads from 18:00 onward wait for tomorrow's on-duty scorers.
+  const currentDayPendingAt = getChinaDayHourBoundary(createdAt, 18);
+  const pendingAt =
+    createdAt.getTime() < currentDayPendingAt.getTime()
+      ? addHours(currentDayPendingAt, -24)
+      : currentDayPendingAt;
   const publishAt = addHours(pendingAt, 6);
   const publishEndsAt = addHours(publishAt, 18);
   const scoringDeadlineAt = addHours(publishAt, 24);

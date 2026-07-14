@@ -10,7 +10,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "ts-node --project tsconfig.test.json tests/date-input.test.ts && ts-node --project tsconfig.test.json tests/api-client.test.ts && ts-node --project tsconfig.test.json tests/image-proxy.test.ts && ts-node --project tsconfig.test.json tests/image-processing.test.ts && ts-node --project tsconfig.test.json tests/redis-connection.test.ts",
+    "test": "ts-node --project tsconfig.test.json tests/date-input.test.ts && ts-node --project tsconfig.test.json tests/scoring-timeline.test.ts && ts-node --project tsconfig.test.json tests/api-client.test.ts && ts-node --project tsconfig.test.json tests/image-proxy.test.ts && ts-node --project tsconfig.test.json tests/image-processing.test.ts && ts-node --project tsconfig.test.json tests/redis-connection.test.ts",
     "lint": "eslint",
     "format": "prettier --write ."
   },
