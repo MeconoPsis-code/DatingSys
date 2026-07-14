@@ -4,15 +4,23 @@ import { success, error, paginated } from "@/lib/api-response";
 import {
   deleteReportEvidence,
   getReportEvidenceUrls,
+  MAX_REPORT_EVIDENCE_BODY_SIZE,
   ReportEvidenceError,
   uploadReportEvidenceFiles,
 } from "@/lib/report-evidence";
 import { hasReportableContext } from "@/lib/report-targets";
 import { Prisma } from "@prisma/client";
+import {
+  acquireImageProcessingSlot,
+  ImageProcessingUnavailableError,
+} from "@/lib/image-processing";
 
 // ── POST /api/reports — user submits a report ──────────
 
 export async function POST(req: Request) {
+  let releaseReportImageProcessing: (() => void) | undefined;
+  let reportFormData: FormData | null = null;
+
   try {
     const session = await requireAuth();
     const contentType = req.headers.get("content-type") || "";
@@ -22,20 +30,44 @@ export async function POST(req: Request) {
     let evidenceFiles: File[] = [];
 
     if (contentType.includes("multipart/form-data")) {
-      const formData = await req.formData();
-      if (formData.has("targetUserId")) {
+      const contentLength = Number(req.headers.get("content-length"));
+      if (
+        Number.isFinite(contentLength) &&
+        contentLength > MAX_REPORT_EVIDENCE_BODY_SIZE
+      ) {
+        return error("PAYLOAD_TOO_LARGE", "举报图片总大小超出限制", 413);
+      }
+
+      try {
+        // Keep one lease from multipart parsing through conversion and object
+        // storage so queued requests never retain complete image batches.
+        releaseReportImageProcessing = await acquireImageProcessingSlot(req.signal);
+        reportFormData = await req.formData();
+      } catch (err) {
+        if (err instanceof ImageProcessingUnavailableError) {
+          const response = error(err.code, "图片处理服务繁忙，请稍后重试", 503);
+          response.headers.set("Retry-After", "2");
+          return response;
+        }
+        return error("VALIDATION_ERROR", "无效的上传数据", 422);
+      }
+
+      const hasDeprecatedTargetUserId = reportFormData.has("targetUserId");
+      targetQQ = String(reportFormData.get("targetQQ") || "");
+      type = String(reportFormData.get("type") || "");
+      description = String(reportFormData.get("description") || "");
+      evidenceFiles = reportFormData
+        .getAll("evidence")
+        .filter((file): file is File => file instanceof File && file.size > 0);
+      reportFormData = null;
+
+      if (hasDeprecatedTargetUserId) {
         return error(
           "DEPRECATED_FIELD",
           "举报接口不再接受targetUserId，请使用targetQQ",
           400
         );
       }
-      targetQQ = String(formData.get("targetQQ") || "");
-      type = String(formData.get("type") || "");
-      description = String(formData.get("description") || "");
-      evidenceFiles = formData
-        .getAll("evidence")
-        .filter((file): file is File => file instanceof File && file.size > 0);
     } else {
       const body = await req.json();
       const parsed = body as {
@@ -114,7 +146,10 @@ export async function POST(req: Request) {
     }
 
     // Create report
-    const evidenceKeys = await uploadReportEvidenceFiles(evidenceFiles, session.id);
+    const evidenceKeys = await uploadReportEvidenceFiles(evidenceFiles, session.id, {
+      signal: req.signal,
+      releaseHeldImageProcessingSlot: releaseReportImageProcessing,
+    });
     let report;
     try {
       report = await db.report.create({
@@ -165,6 +200,11 @@ export async function POST(req: Request) {
       return error(appErr.code, appErr.message, appErr.status);
     }
     return error("INTERNAL_ERROR", "服务器内部错误", 500);
+  } finally {
+    reportFormData = null;
+    // uploadReportEvidenceFiles releases after storage/cleanup; this idempotent
+    // guard covers validation errors and every earlier return path.
+    releaseReportImageProcessing?.();
   }
 }
 

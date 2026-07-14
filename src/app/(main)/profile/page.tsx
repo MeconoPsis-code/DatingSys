@@ -90,6 +90,7 @@ interface PhotoItem {
   order: number;
   originalName: string | null;
   url: string;
+  thumbUrl?: string;
 }
 
 export default function ProfilePage() {
@@ -369,8 +370,10 @@ export default function ProfilePage() {
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={photo.url}
+                    src={photo.thumbUrl ?? photo.url}
                     alt={photo.originalName || `照片 ${photo.order + 1}`}
+                    loading="lazy"
+                    decoding="async"
                     onClick={() => setLightboxIdx(photos.findIndex((p) => p.id === photo.id))}
                     className="h-full w-full object-cover cursor-pointer transition-transform hover:scale-105"
                   />

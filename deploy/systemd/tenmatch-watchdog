@@ -1,0 +1,255 @@
+#!/bin/sh
+
+# Restart a live-but-unresponsive TenMatch process after repeated evidence.
+# This script intentionally probes a static Next.js asset instead of
+# /api/health: the latter checks PostgreSQL and Redis, and restarting Next.js
+# cannot repair an unavailable dependency.
+
+set -eu
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+umask 077
+
+SERVICE=tenmatch.service
+STATE_DIR=/run/tenmatch-watchdog
+PROBE_URL=http://127.0.0.1:3000/favicon.ico
+
+FAILURE_THRESHOLD=3
+FULL_PRESSURE_THRESHOLD=20
+HIGH_EVENT_DELTA_THRESHOLD=1000
+RESTART_COOLDOWN_SECONDS=900
+RESTART_WINDOW_SECONDS=3600
+MAX_RESTARTS_PER_WINDOW=3
+
+log() {
+  if ! logger -t tenmatch-watchdog -- "$*"; then
+    # Standard error is also connected to journald by the unit.
+    printf 'tenmatch-watchdog: %s\n' "$*" >&2
+  fi
+}
+
+read_uint() {
+  file=$1
+  fallback=$2
+  value=
+
+  if [ -r "$file" ]; then
+    IFS= read -r value <"$file" || value=
+  fi
+
+  case "$value" in
+    '' | *[!0-9]*) printf '%s\n' "$fallback" ;;
+    *) printf '%s\n' "$value" ;;
+  esac
+}
+
+write_uint() {
+  file=$1
+  value=$2
+  temporary="${file}.tmp.$$"
+
+  printf '%s\n' "$value" >"$temporary"
+  mv -f -- "$temporary" "$file"
+}
+
+increment_to_threshold() {
+  value=$1
+
+  if [ "$value" -lt "$FAILURE_THRESHOLD" ]; then
+    value=$((value + 1))
+  fi
+
+  printf '%s\n' "$value"
+}
+
+reset_sample_state() {
+  write_uint "$STATE_DIR/health_failures" 0
+  write_uint "$STATE_DIR/memory_failures" 0
+  write_uint "$STATE_DIR/last_high_events" 0
+}
+
+if [ ! -d "$STATE_DIR" ]; then
+  log "state directory is missing: $STATE_DIR"
+  exit 1
+fi
+
+# A deliberate operator stop must remain stopped. try-restart below closes the
+# smaller race in which an operator stops the unit after this check.
+if ! systemctl is-active --quiet "$SERVICE"; then
+  reset_sample_state
+  exit 0
+fi
+
+health_failures=$(read_uint "$STATE_DIR/health_failures" 0)
+if curl \
+  --fail \
+  --silent \
+  --output /dev/null \
+  --noproxy '*' \
+  --connect-timeout 2 \
+  --max-time 5 \
+  "$PROBE_URL"; then
+  health_failures=0
+else
+  health_failures=$(increment_to_threshold "$health_failures")
+  if [ "$health_failures" -eq 1 ] ||
+    [ "$health_failures" -eq "$FAILURE_THRESHOLD" ]; then
+    log "liveness probe failed ($health_failures/$FAILURE_THRESHOLD)"
+  fi
+fi
+write_uint "$STATE_DIR/health_failures" "$health_failures"
+
+memory_failures=$(read_uint "$STATE_DIR/memory_failures" 0)
+memory_hot=0
+memory_detail="cgroup metrics unavailable"
+
+control_group=$(systemctl show --property=ControlGroup --value "$SERVICE" 2>/dev/null || true)
+if [ "$control_group" = /system.slice/tenmatch.service ]; then
+  cgroup_dir="/sys/fs/cgroup${control_group}"
+  if [ -r "$cgroup_dir/memory.current" ] &&
+    [ -r "$cgroup_dir/memory.high" ] &&
+    [ -r "$cgroup_dir/memory.events" ] &&
+    [ -r "$cgroup_dir/memory.pressure" ]; then
+    memory_current=$(read_uint "$cgroup_dir/memory.current" 0)
+    IFS= read -r memory_high <"$cgroup_dir/memory.high" || memory_high=max
+    high_events=$(awk '$1 == "high" { print $2; exit }' "$cgroup_dir/memory.events")
+    full_avg10=$(awk '
+      $1 == "full" {
+        split($2, value, "=")
+        print value[2]
+        exit
+      }
+    ' "$cgroup_dir/memory.pressure")
+
+    case "$high_events" in
+      '' | *[!0-9]*) high_events=0 ;;
+    esac
+    case "$full_avg10" in
+      '' | *[!0-9.]* | *.*.*) full_avg10=0 ;;
+    esac
+
+    previous_high_events=$(read_uint "$STATE_DIR/last_high_events" "$high_events")
+    if [ "$high_events" -ge "$previous_high_events" ]; then
+      high_event_delta=$((high_events - previous_high_events))
+    else
+      # memory.events resets when the service gets a new cgroup.
+      high_event_delta=0
+    fi
+    write_uint "$STATE_DIR/last_high_events" "$high_events"
+
+    pressure_hot=$(awk \
+      -v value="$full_avg10" \
+      -v threshold="$FULL_PRESSURE_THRESHOLD" \
+      'BEGIN { print ((value + 0) >= threshold) ? 1 : 0 }')
+
+    case "$memory_high" in
+      '' | max | *[!0-9]*) memory_above_high=0 ;;
+      *)
+        if [ "$memory_current" -ge "$memory_high" ]; then
+          memory_above_high=1
+        else
+          memory_above_high=0
+        fi
+        ;;
+    esac
+
+    if [ "$memory_above_high" -eq 1 ] &&
+      { [ "$pressure_hot" -eq 1 ] ||
+        [ "$high_event_delta" -ge "$HIGH_EVENT_DELTA_THRESHOLD" ]; }; then
+      memory_hot=1
+    fi
+
+    memory_detail="current=$memory_current high=$memory_high full_avg10=$full_avg10 high_delta=$high_event_delta"
+  fi
+fi
+
+if [ "$memory_hot" -eq 1 ]; then
+  memory_failures=$(increment_to_threshold "$memory_failures")
+  if [ "$memory_failures" -eq 1 ] ||
+    [ "$memory_failures" -eq "$FAILURE_THRESHOLD" ]; then
+    log "sustained memory pressure ($memory_failures/$FAILURE_THRESHOLD): $memory_detail"
+  fi
+else
+  memory_failures=0
+fi
+write_uint "$STATE_DIR/memory_failures" "$memory_failures"
+
+if [ "$health_failures" -lt "$FAILURE_THRESHOLD" ] &&
+  [ "$memory_failures" -lt "$FAILURE_THRESHOLD" ]; then
+  exit 0
+fi
+
+reason="health_failures=$health_failures memory_failures=$memory_failures $memory_detail"
+now=$(date +%s)
+case "$now" in
+  '' | *[!0-9]*)
+    log "cannot read a numeric wall clock; refusing automatic restart"
+    exit 1
+    ;;
+esac
+
+last_attempt=$(read_uint "$STATE_DIR/last_restart_attempt" 0)
+if [ "$last_attempt" -gt 0 ]; then
+  if [ "$now" -lt "$last_attempt" ]; then
+    cooldown_remaining=$RESTART_COOLDOWN_SECONDS
+  else
+    since_last_attempt=$((now - last_attempt))
+    if [ "$since_last_attempt" -lt "$RESTART_COOLDOWN_SECONDS" ]; then
+      cooldown_remaining=$((RESTART_COOLDOWN_SECONDS - since_last_attempt))
+    else
+      cooldown_remaining=0
+    fi
+  fi
+else
+  cooldown_remaining=0
+fi
+
+if [ "$cooldown_remaining" -gt 0 ]; then
+  cooldown_notice=$(read_uint "$STATE_DIR/cooldown_notice" 0)
+  if [ "$cooldown_notice" -ne "$last_attempt" ]; then
+    log "restart suppressed for ${cooldown_remaining}s by cooldown: $reason"
+    write_uint "$STATE_DIR/cooldown_notice" "$last_attempt"
+  fi
+  exit 0
+fi
+
+window_start=$(read_uint "$STATE_DIR/restart_window_start" 0)
+window_count=$(read_uint "$STATE_DIR/restart_window_count" 0)
+if [ "$window_start" -eq 0 ] ||
+  [ "$now" -lt "$window_start" ] ||
+  [ $((now - window_start)) -ge "$RESTART_WINDOW_SECONDS" ]; then
+  window_start=$now
+  window_count=0
+  write_uint "$STATE_DIR/restart_window_start" "$window_start"
+  write_uint "$STATE_DIR/restart_window_count" "$window_count"
+fi
+
+if [ "$window_count" -ge "$MAX_RESTARTS_PER_WINDOW" ]; then
+  window_notice=$(read_uint "$STATE_DIR/window_notice" 0)
+  if [ "$window_notice" -ne "$window_start" ]; then
+    log "restart suppressed after $window_count attempts in the current ${RESTART_WINDOW_SECONDS}s window: $reason"
+    write_uint "$STATE_DIR/window_notice" "$window_start"
+  fi
+  exit 0
+fi
+
+# Record the attempt before invoking systemctl. A failed restart must be subject
+# to the same cooldown as a successful one.
+window_count=$((window_count + 1))
+write_uint "$STATE_DIR/last_restart_attempt" "$now"
+write_uint "$STATE_DIR/restart_window_count" "$window_count"
+write_uint "$STATE_DIR/cooldown_notice" 0
+
+log "automatic try-restart attempt $window_count/$MAX_RESTARTS_PER_WINDOW: $reason"
+if systemctl try-restart "$SERVICE"; then
+  reset_sample_state
+  if systemctl is-active --quiet "$SERVICE"; then
+    log "automatic try-restart completed; service is active"
+  else
+    log "service became inactive during try-restart; preserving the operator stop"
+  fi
+else
+  log "automatic try-restart failed; inspect tenmatch.service and its journal"
+  exit 1
+fi

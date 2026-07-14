@@ -1,0 +1,13 @@
+[Unit]
+Description=Run the TenMatch watchdog every 30 seconds
+Documentation=file:/srv/tenmatch/app/deploy/README.md
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=30s
+AccuracySec=1s
+RandomizedDelaySec=5s
+Unit=tenmatch-watchdog.service
+
+[Install]
+WantedBy=timers.target

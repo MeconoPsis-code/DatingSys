@@ -9,6 +9,7 @@ interface PreviewPhoto {
   order: number;
   originalName: string | null;
   url: string;
+  thumbUrl?: string;
 }
 
 export interface ProfileSubmitPreviewData {
@@ -48,10 +49,10 @@ interface ProfileSubmitPreviewProps {
 }
 
 const ATTRIBUTE_LABELS = new Map(
-  ATTRIBUTE_OPTIONS.map((option) => [option.value as string, option.label]),
+  ATTRIBUTE_OPTIONS.map((option) => [option.value as string, option.label])
 );
 const LOCATION_TYPE_LABELS = new Map(
-  LOCATION_TYPE_OPTIONS.map((option) => [option.value as string, option.label]),
+  LOCATION_TYPE_OPTIONS.map((option) => [option.value as string, option.label])
 );
 
 function getAttributeSummary(data: ProfileSubmitPreviewData): string {
@@ -113,14 +114,19 @@ export function ProfileSubmitPreview({
   const expectedAttributeSummary = getExpectedAttributeSummary(data);
 
   return (
-    <div data-testid="profile-submit-preview" className="mx-auto flex w-full max-w-4xl flex-col gap-4 pb-8 sm:gap-6">
+    <div
+      data-testid="profile-submit-preview"
+      className="mx-auto flex w-full max-w-4xl flex-col gap-4 pb-8 sm:gap-6"
+    >
       <header className="rounded-2xl border border-brand-blue/25 bg-gradient-to-br from-brand-blue/10 to-[hsl(var(--card))] p-5 sm:p-7">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-blue text-xl text-white shadow-md shadow-brand-blue/20">
             ✓
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-[hsl(var(--foreground))] sm:text-2xl">发布前确认</h1>
+            <h1 className="text-xl font-bold text-[hsl(var(--foreground))] sm:text-2xl">
+              发布前确认
+            </h1>
             <p className="mt-1.5 text-sm leading-6 text-[hsl(var(--muted-foreground))]">
               以下是即将提交发布的资料，仅供检查，无法在此页面编辑。请确认无误后再发布。
             </p>
@@ -156,8 +162,14 @@ export function ProfileSubmitPreview({
       <PreviewSection title="匹配偏好">
         <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <PreviewField label="期望年龄" value={`${data.ageMin}–${data.ageMax} 岁`} />
-          <PreviewField label="期望身高" value={`${data.heightMinCm}–${data.heightMaxCm} cm`} />
-          <PreviewField label="期望体重" value={`${data.weightMinKg}–${data.weightMaxKg} kg`} />
+          <PreviewField
+            label="期望身高"
+            value={`${data.heightMinCm}–${data.heightMaxCm} cm`}
+          />
+          <PreviewField
+            label="期望体重"
+            value={`${data.weightMinKg}–${data.weightMaxKg} kg`}
+          />
           <PreviewField label="期望属性" value={expectedAttributeSummary || "未填写"} />
         </dl>
       </PreviewSection>
@@ -172,8 +184,10 @@ export function ProfileSubmitPreview({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={photo.url}
+                  src={photo.thumbUrl ?? photo.url}
                   alt={photo.originalName || `资料照片 ${photo.order + 1}`}
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover"
                 />
                 <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-3 pb-2 pt-7 text-xs text-white">

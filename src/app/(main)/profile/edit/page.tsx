@@ -34,6 +34,7 @@ interface PhotoItem {
   order: number;
   originalName: string | null;
   url: string;
+  thumbUrl?: string;
 }
 
 /* ─── Types ──────────────────────────────────────────── */

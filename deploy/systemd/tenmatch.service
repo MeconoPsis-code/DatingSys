@@ -14,6 +14,11 @@ WorkingDirectory=/srv/tenmatch/app
 
 # The file is created during deployment and must not be stored in Git.
 EnvironmentFile=/etc/tenmatch/app.env
+# Sharp/libvips allocates outside the V8 heap. Limit glibc arena proliferation
+# and return free native pages more eagerly without imposing an artificially
+# small V8 old-space ceiling.
+Environment=MALLOC_ARENA_MAX=2
+Environment=MALLOC_TRIM_THRESHOLD_=131072
 
 ExecStartPre=/usr/bin/test -r /srv/tenmatch/app/.next/BUILD_ID
 ExecStartPre=/usr/bin/test -x /usr/bin/node
@@ -22,9 +27,12 @@ ExecStartPre=/usr/bin/node /srv/tenmatch/app/deploy/validate-app-env.mjs
 # process, and no PM2/cluster wrapper that would duplicate the scheduler. env(1)
 # sets these invariants after EnvironmentFile has been read, so a stale value in
 # that file cannot turn off secure cookies or expose the listener.
-ExecStart=/usr/bin/env NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3000 /usr/bin/node /srv/tenmatch/app/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+ExecStart=/usr/bin/env NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3000 MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 /usr/bin/node /srv/tenmatch/app/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
 
-Restart=on-failure
+# Restart on an unexpected clean exit as well as a crash. An explicit
+# `systemctl stop tenmatch.service` is never restarted by systemd; the external
+# watchdog follows the same rule and remains idle while this unit is inactive.
+Restart=always
 RestartSec=10s
 TimeoutStartSec=60s
 TimeoutStopSec=30s

@@ -2,89 +2,17 @@ import { NextResponse } from "next/server";
 import sharp from "sharp";
 import { requireAuth } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
-import { getFileBuffer } from "@/lib/storage";
+import { getFileBuffer, StorageOperationError } from "@/lib/storage";
 import { verifyImageProxyRequest } from "@/lib/image-proxy";
+import {
+  acquireImageProcessingSlot,
+  IMAGE_PROCESSING_TIMEOUT_SECONDS,
+  ImageProcessingUnavailableError,
+  MAX_IMAGE_INPUT_PIXELS,
+  MAX_IMAGE_SOURCE_BYTES,
+} from "@/lib/image-processing";
 
 export const runtime = "nodejs";
-
-const MAX_CONCURRENT_IMAGE_TRANSFORMS = 1;
-const MAX_QUEUED_IMAGE_TRANSFORMS = 64;
-const MAX_INPUT_PIXELS = 25_000_000;
-
-// libvips keeps its own native cache and worker pool outside the V8 heap.
-// Keep both deliberately small on the 4 GiB production host.
-sharp.cache({ memory: 16, files: 0, items: 32 });
-sharp.concurrency(1);
-
-type ReleaseImageTransformSlot = () => void;
-
-interface ImageTransformWaiter {
-  resolve: (release: ReleaseImageTransformSlot | null) => void;
-  signal: AbortSignal;
-  onAbort: () => void;
-}
-
-let activeImageTransforms = 0;
-const imageTransformQueue: ImageTransformWaiter[] = [];
-
-function createImageTransformRelease(): ReleaseImageTransformSlot {
-  activeImageTransforms += 1;
-  let released = false;
-
-  return () => {
-    if (released) return;
-    released = true;
-    activeImageTransforms -= 1;
-    dispatchQueuedImageTransforms();
-  };
-}
-
-function dispatchQueuedImageTransforms() {
-  while (
-    activeImageTransforms < MAX_CONCURRENT_IMAGE_TRANSFORMS &&
-    imageTransformQueue.length > 0
-  ) {
-    const waiter = imageTransformQueue.shift();
-    if (!waiter) return;
-
-    waiter.signal.removeEventListener("abort", waiter.onAbort);
-    if (waiter.signal.aborted) {
-      waiter.resolve(null);
-      continue;
-    }
-
-    waiter.resolve(createImageTransformRelease());
-  }
-}
-
-function acquireImageTransformSlot(
-  signal: AbortSignal
-): Promise<ReleaseImageTransformSlot | null> {
-  if (signal.aborted) return Promise.resolve(null);
-
-  if (activeImageTransforms < MAX_CONCURRENT_IMAGE_TRANSFORMS) {
-    return Promise.resolve(createImageTransformRelease());
-  }
-
-  if (imageTransformQueue.length >= MAX_QUEUED_IMAGE_TRANSFORMS) {
-    return Promise.resolve(null);
-  }
-
-  return new Promise((resolve) => {
-    const waiter: ImageTransformWaiter = {
-      resolve,
-      signal,
-      onAbort: () => {
-        const index = imageTransformQueue.indexOf(waiter);
-        if (index >= 0) imageTransformQueue.splice(index, 1);
-        resolve(null);
-      },
-    };
-
-    signal.addEventListener("abort", waiter.onAbort, { once: true });
-    imageTransformQueue.push(waiter);
-  });
-}
 
 const CONTENT_TYPE_BY_FORMAT = {
   webp: "image/webp",
@@ -117,12 +45,15 @@ export async function GET(req: Request) {
     return unauthorized();
   }
 
-  const releaseImageTransform = await acquireImageTransformSlot(req.signal);
-  if (!releaseImageTransform) {
+  let releaseImageTransform: () => void;
+  try {
+    releaseImageTransform = await acquireImageProcessingSlot(req.signal);
+  } catch (err) {
+    if (!(err instanceof ImageProcessingUnavailableError)) throw err;
     return NextResponse.json(
       {
         error: {
-          code: "IMAGE_PROXY_BUSY",
+          code: err.code,
           message: "Image service is busy. Please retry shortly.",
         },
       },
@@ -134,10 +65,13 @@ export async function GET(req: Request) {
   }
 
   try {
-    const sourceBuffer = await getFileBuffer(imageRequest.storageKey);
+    const sourceBuffer = await getFileBuffer(imageRequest.storageKey, undefined, {
+      signal: req.signal,
+      maxBytes: MAX_IMAGE_SOURCE_BYTES,
+    });
     let pipeline = sharp(sourceBuffer, {
       failOn: "none",
-      limitInputPixels: MAX_INPUT_PIXELS,
+      limitInputPixels: MAX_IMAGE_INPUT_PIXELS,
       sequentialRead: true,
     })
       .rotate()
@@ -146,7 +80,8 @@ export async function GET(req: Request) {
         height: imageRequest.height ?? undefined,
         fit: imageRequest.fit,
         withoutEnlargement: true,
-      });
+      })
+      .timeout({ seconds: IMAGE_PROCESSING_TIMEOUT_SECONDS });
 
     switch (imageRequest.format) {
       case "avif":
@@ -188,6 +123,25 @@ export async function GET(req: Request) {
     });
   } catch (err) {
     console.error("[image-proxy] failed to render image:", err);
+
+    if (err instanceof StorageOperationError) {
+      const retryable = err.code !== "STORAGE_OBJECT_TOO_LARGE";
+      return NextResponse.json(
+        {
+          error: {
+            code: err.code,
+            message: retryable
+              ? "Image storage is temporarily unavailable."
+              : "The stored image is too large to process.",
+          },
+        },
+        {
+          status: retryable ? 503 : 422,
+          headers: retryable ? { "Retry-After": "2" } : undefined,
+        }
+      );
+    }
+
     return NextResponse.json(
       { error: { code: "IMAGE_RENDER_FAILED", message: "图片处理失败" } },
       { status: 500 }

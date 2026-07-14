@@ -15,6 +15,8 @@ safe without first moving that scheduler to a distributed job runner.
 | Infrastructure secrets | `/etc/tenmatch/infra.env` (`root:root`, `0600`) |
 | Application secrets    | `/etc/tenmatch/app.env` (`root:root`, `0600`)   |
 | systemd unit           | `/etc/systemd/system/tenmatch.service`          |
+| Watchdog units         | `/etc/systemd/system/tenmatch-watchdog.*`       |
+| Watchdog executable    | `/usr/local/libexec/tenmatch-watchdog`          |
 | Nginx site             | `/etc/nginx/sites-available/10match.date`       |
 | Nginx proxy snippet    | `/etc/nginx/snippets/tenmatch-proxy.conf`       |
 | ACME webroot           | `/var/www/certbot`                              |
@@ -90,6 +92,11 @@ secrets. `DATABASE_URL` and `REDIS_URL` must repeat the corresponding URL-safe
 hex passwords from `infra.env`; all other application secrets must be distinct.
 The systemd unit additionally validates `app.env` before every start and forces
 `NODE_ENV=production`, `HOSTNAME=127.0.0.1`, and `PORT=3000`.
+Because Sharp/libvips uses native allocations outside the V8 heap, the unit
+also sets `MALLOC_ARENA_MAX=2` and `MALLOC_TRIM_THRESHOLD_=131072` to reduce
+glibc arena growth and return unused native pages more eagerly. It deliberately
+does not impose a low V8 old-space limit; `MemoryHigh=640M` and `MemoryMax=768M`
+remain the whole-service cgroup boundaries.
 
 ## 2. Start only recovery-safe infrastructure
 
@@ -138,11 +145,22 @@ sudo systemd-run --wait --pipe --collect --unit=tenmatch-build \
 '
 sudo install -d -o tenmatch -g tenmatch -m 0700 \
   /srv/tenmatch/app/.next/cache
+sudo install -d -o root -g root -m 0755 /usr/local/libexec
 sudo install -o root -g root -m 0644 \
   /srv/tenmatch/app/deploy/systemd/tenmatch.service \
   /etc/systemd/system/tenmatch.service
+sudo install -o root -g root -m 0755 \
+  /srv/tenmatch/app/deploy/systemd/tenmatch-watchdog \
+  /usr/local/libexec/tenmatch-watchdog
+sudo install -o root -g root -m 0644 \
+  /srv/tenmatch/app/deploy/systemd/tenmatch-watchdog.service \
+  /srv/tenmatch/app/deploy/systemd/tenmatch-watchdog.timer \
+  /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemd-analyze verify /etc/systemd/system/tenmatch.service
+sudo systemd-analyze verify \
+  /etc/systemd/system/tenmatch.service \
+  /etc/systemd/system/tenmatch-watchdog.service \
+  /etc/systemd/system/tenmatch-watchdog.timer
 ```
 
 Do not run `prisma migrate dev`, `prisma migrate reset`, or the seed command in
@@ -282,6 +300,7 @@ sudo systemd-run --wait --pipe --collect --unit=tenmatch-env-check \
   --setenv=NODE_ENV=production \
   /usr/bin/node /srv/tenmatch/app/deploy/validate-app-env.mjs
 sudo systemctl enable --now tenmatch.service
+sudo systemctl enable --now tenmatch-watchdog.timer
 ```
 
 Do not change `NAPCAT_RESTART_POLICY` or start its opt-in `bot` profile until
@@ -296,10 +315,84 @@ pgrep -a -f 'next/dist/bin/next start'
 sudo ss -lntp | grep ':3000'
 curl --fail --show-error http://127.0.0.1:3000/api/health
 journalctl -u tenmatch.service -n 100 --no-pager
+systemctl status tenmatch-watchdog.timer --no-pager
+journalctl -u tenmatch-watchdog.service -n 100 --no-pager
 ```
 
 There must be one matching Next process, and port 3000 must be bound only to
 `127.0.0.1`.
+
+### Automatic liveness recovery
+
+`tenmatch.service` uses `Restart=always`, which recovers both crashes and
+unexpected clean exits. systemd does not apply that policy to an explicit
+`systemctl stop`, so maintenance stops remain stopped.
+
+The separate watchdog handles the different failure mode where the Next.js
+process remains active but cannot serve requests. Every approximately 30
+seconds it performs a read-only request for `http://127.0.0.1:3000/favicon.ico`
+and reads only this service's cgroup-v2 memory counters. It does not use
+`/api/health`, because that endpoint checks PostgreSQL and Redis and restarting
+Next.js cannot repair an unavailable dependency.
+
+An automatic `systemctl try-restart` occurs only after three consecutive
+liveness failures, or three consecutive samples where memory is at/above
+`MemoryHigh` and either full cgroup PSI `avg10` is at least 20% or
+`memory.events:high` increased by at least 1,000. Restart attempts have a
+15-minute cooldown and are capped at three in each one-hour accounting window.
+State is root-only under `/run/tenmatch-watchdog` and resets on reboot. If the
+application is inactive, the watchdog resets its sample counters and exits; it
+never starts a deliberately stopped service.
+
+Inspect or temporarily disable it with:
+
+```bash
+systemctl list-timers tenmatch-watchdog.timer
+systemctl cat tenmatch-watchdog.service tenmatch-watchdog.timer
+journalctl -u tenmatch-watchdog.service --since '1 hour ago' --no-pager
+sudo systemctl disable --now tenmatch-watchdog.timer
+```
+
+Disabling the timer does not stop the application. Re-enable it after planned
+maintenance with `sudo systemctl enable --now tenmatch-watchdog.timer`.
+
+The watchdog is root but has an empty capability bounding set,
+`NoNewPrivileges=true`, and `ProtectSystem=strict`. `systemctl` manages units
+over systemd's local `AF_UNIX` D-Bus socket, so those restrictions do not
+prevent a root process from calling `try-restart`. Verify that assumption on
+the target OS without touching TenMatch by restarting a disposable transient
+sleep service under the same relevant restrictions:
+
+```bash
+sudo systemd-run --unit=tenmatch-watchdog-permission-target \
+  /usr/bin/sleep 300
+before=$(systemctl show tenmatch-watchdog-permission-target.service \
+  --property=InvocationID --value)
+
+sudo systemd-run --wait --pipe --collect \
+  --unit=tenmatch-watchdog-permission-test \
+  --property=NoNewPrivileges=yes \
+  --property=ProtectSystem=strict \
+  --property=ProtectHome=yes \
+  --property=ProtectControlGroups=yes \
+  --property=CapabilityBoundingSet= \
+  --property='RestrictAddressFamilies=AF_UNIX AF_INET' \
+  /usr/bin/systemctl try-restart \
+  tenmatch-watchdog-permission-target.service
+
+after=$(systemctl show tenmatch-watchdog-permission-target.service \
+  --property=InvocationID --value)
+test -n "$before" && test -n "$after" && test "$before" != "$after"
+sudo systemctl stop tenmatch-watchdog-permission-target.service
+sudo systemctl reset-failed \
+  tenmatch-watchdog-permission-target.service \
+  tenmatch-watchdog-permission-test.service
+```
+
+The `test` command must return zero, proving the transient target was restarted.
+Then exercise the installed healthy path with
+`sudo systemctl start tenmatch-watchdog.service`; it must exit successfully and
+must not restart a healthy `tenmatch.service`.
 
 ### MinIO residual-risk boundary
 
@@ -399,10 +492,11 @@ sudo docker compose --env-file /etc/tenmatch/infra.env \
 Ports 3001 and 6099 must remain bound to `127.0.0.1`; access the WebUI only
 through an SSH tunnel.
 
-The unit is rate-limited to five failed starts in ten minutes. If it enters a
-failed state, inspect `journalctl` and fix the cause before using
-`sudo systemctl reset-failed tenmatch.service`; do not work around the guard by
-adding another process manager.
+The application unit is rate-limited to five failed starts in ten minutes. The
+watchdog adds its own 15-minute cooldown and three-attempt hourly ceiling. If
+either unit enters a failed state, inspect `journalctl` and fix the cause before
+using `sudo systemctl reset-failed tenmatch.service`; do not work around these
+guards by adding another process manager.
 
 If a CDN or load balancer is introduced later, do not simply change
 `X-Forwarded-For` to `$proxy_add_x_forwarded_for`. First configure Nginx

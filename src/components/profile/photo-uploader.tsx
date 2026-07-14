@@ -9,6 +9,7 @@ interface PhotoItem {
   order: number;
   originalName: string | null;
   url: string;
+  thumbUrl?: string;
 }
 
 interface PhotoUploaderProps {
@@ -35,8 +36,12 @@ export function PhotoUploader({
   mode = "published",
 }: PhotoUploaderProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const mutationInFlightRef = useRef(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
@@ -45,10 +50,14 @@ export function PhotoUploader({
   const [hasConsented, setHasConsented] = useState(photos.length > 0);
   const [showConsentModal, setShowConsentModal] = useState(false);
 
-  const canUpload = photos.length < maxPhotos && !uploading && !readOnly;
-  const endpoint = mode === "draft" ? "/api/profile/photos?mode=draft" : "/api/profile/photos";
+  const isBusy = uploading || deletingId !== null;
+  const showUploadButton = !readOnly && (photos.length < maxPhotos || uploading);
+  const endpoint =
+    mode === "draft" ? "/api/profile/photos?mode=draft" : "/api/profile/photos";
 
   function handleUploadClick() {
+    if (mutationInFlightRef.current || readOnly || photos.length >= maxPhotos) return;
+
     if (!hasConsented) {
       setShowConsentModal(true);
       return;
@@ -57,6 +66,8 @@ export function PhotoUploader({
   }
 
   function handleConsentAgree() {
+    if (mutationInFlightRef.current || readOnly || photos.length >= maxPhotos) return;
+
     setHasConsented(true);
     setShowConsentModal(false);
     // Trigger file picker after consent
@@ -70,6 +81,10 @@ export function PhotoUploader({
 
       // Reset input so same file can be re-selected
       e.target.value = "";
+
+      // React state updates are asynchronous; this lock prevents another
+      // mutation before disabled controls have rendered.
+      if (mutationInFlightRef.current || readOnly) return;
 
       const remainingSlots = maxPhotos - photos.length;
       if (remainingSlots <= 0) {
@@ -109,6 +124,7 @@ export function PhotoUploader({
         return;
       }
 
+      mutationInFlightRef.current = true;
       setError(null);
       setUploading(true);
       setUploadProgress({ done: 0, total: filesToUpload.length });
@@ -130,7 +146,7 @@ export function PhotoUploader({
 
             const data = await readApiJson<{ data: { photo: PhotoItem } }>(
               res,
-              "上传失败",
+              "上传失败"
             );
 
             const newPhoto = data.data.photo;
@@ -147,19 +163,25 @@ export function PhotoUploader({
 
         const resultMessages = [
           ...skippedMessages,
-          ...(failedMessages.length > 0 ? [`${failedMessages.length} 张上传失败：${failedMessages.join("；")}`] : []),
+          ...(failedMessages.length > 0
+            ? [`${failedMessages.length} 张上传失败：${failedMessages.join("；")}`]
+            : []),
         ];
         setError(resultMessages.length > 0 ? resultMessages.join("；") : null);
       } finally {
+        mutationInFlightRef.current = false;
         setUploading(false);
         setUploadProgress(null);
       }
     },
-    [endpoint, maxPhotos, photos, onPhotosChange]
+    [endpoint, maxPhotos, photos, onPhotosChange, readOnly]
   );
 
   const handleDelete = useCallback(
     async (photoId: string) => {
+      if (mutationInFlightRef.current || readOnly) return;
+
+      mutationInFlightRef.current = true;
       setDeletingId(photoId);
       setError(null);
 
@@ -176,10 +198,11 @@ export function PhotoUploader({
       } catch (err) {
         setError(getUserFacingRequestError(err, "删除失败"));
       } finally {
+        mutationInFlightRef.current = false;
         setDeletingId(null);
       }
     },
-    [endpoint, photos, onPhotosChange]
+    [endpoint, photos, onPhotosChange, readOnly]
   );
 
   return (
@@ -201,8 +224,10 @@ export function PhotoUploader({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={photo.url}
+              src={photo.thumbUrl ?? photo.url}
               alt={photo.originalName || "照片"}
+              loading="lazy"
+              decoding="async"
               onClick={() => setLightboxIdx(photos.findIndex((p) => p.id === photo.id))}
               className="h-full w-full object-cover transition-transform group-hover:scale-105 cursor-pointer"
             />
@@ -214,31 +239,31 @@ export function PhotoUploader({
 
             {/* Delete button — hidden when readOnly (ACTIVE profile) */}
             {!readOnly && (
-            <button
-              type="button"
-              aria-label="删除照片"
-              onClick={() => handleDelete(photo.id)}
-              disabled={deletingId === photo.id}
-              className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white opacity-100 backdrop-blur-sm transition-all hover:bg-[hsl(var(--destructive))] disabled:opacity-50 sm:h-7 sm:w-7 sm:opacity-0 sm:group-hover:opacity-100"
-            >
-              {deletingId === photo.id ? (
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              ) : (
-                <svg
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              )}
-            </button>
+              <button
+                type="button"
+                aria-label="删除照片"
+                onClick={() => handleDelete(photo.id)}
+                disabled={isBusy}
+                className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white opacity-100 backdrop-blur-sm transition-all hover:bg-[hsl(var(--destructive))] disabled:opacity-50 sm:h-7 sm:w-7 sm:opacity-0 sm:group-hover:opacity-100"
+              >
+                {deletingId === photo.id ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                )}
+              </button>
             )}
 
             {/* Hover overlay */}
@@ -251,18 +276,21 @@ export function PhotoUploader({
         ))}
 
         {/* Upload button */}
-        {canUpload && (
+        {showUploadButton && (
           <button
             type="button"
             onClick={handleUploadClick}
-            disabled={uploading}
+            disabled={isBusy}
+            aria-busy={uploading}
             className="group flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.5)] text-[hsl(var(--muted-foreground))] transition-all hover:border-[hsl(var(--primary)/0.5)] hover:bg-[hsl(var(--primary)/0.05)] hover:text-[hsl(var(--primary))] disabled:opacity-50"
           >
             {uploading ? (
               <>
                 <span className="h-8 w-8 animate-spin rounded-full border-2 border-current border-t-transparent" />
                 <span className="text-xs">
-                  {uploadProgress ? `上传 ${uploadProgress.done}/${uploadProgress.total}...` : "上传中..."}
+                  {uploadProgress
+                    ? `上传 ${uploadProgress.done}/${uploadProgress.total}...`
+                    : "上传中..."}
                 </span>
               </>
             ) : (
@@ -302,6 +330,7 @@ export function PhotoUploader({
         accept="image/jpeg,image/png,image/webp"
         multiple
         onChange={handleFileSelect}
+        disabled={isBusy || readOnly}
         className="hidden"
       />
 
@@ -311,7 +340,10 @@ export function PhotoUploader({
           <div className="flex max-h-[min(72dvh,640px)] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-xl sm:max-h-[85vh]">
             {/* Header */}
             <div className="shrink-0 flex items-center gap-2 px-4 pb-3 pt-4 sm:px-6 sm:pb-4 sm:pt-6">
-              <svg viewBox="0 0 24 24" className="h-5 w-5 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5 shrink-0 fill-none stroke-current stroke-2 stroke-linecap-round stroke-linejoin-round text-brand-blue"
+              >
                 <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
                 <circle cx="12" cy="13" r="3" />
               </svg>
@@ -329,7 +361,9 @@ export function PhotoUploader({
               {/* Section 1 */}
               <div className="mb-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
                 <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[hsl(var(--foreground))]">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[11px] font-bold text-brand-blue">1</span>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[11px] font-bold text-brand-blue">
+                    1
+                  </span>
                   上传即视为同意接受评分
                 </h4>
                 <div className="space-y-1.5 pl-7 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
@@ -344,26 +378,48 @@ export function PhotoUploader({
               {/* Section 2 */}
               <div className="mb-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
                 <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[hsl(var(--foreground))]">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[11px] font-bold text-brand-blue">2</span>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[11px] font-bold text-brand-blue">
+                    2
+                  </span>
                   照片要求
                 </h4>
                 <p className="mb-2 pl-7 text-xs text-[hsl(var(--muted-foreground))]">
                   为了顺利通过审核，请确保：
                 </p>
                 <ul className="space-y-1.5 pl-7 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
-                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>本人正脸，面部清晰可见，无墨镜、口罩或大面积阴影遮挡</span></li>
-                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>单人照，无多人同框</span></li>
-                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>真实照片，非AI生成、非翻拍、非网图</span></li>
-                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>不过度修图或滤镜过重，保留真实肤质和五官细节</span></li>
-                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>光线自然，不逆光、不过暗</span></li>
-                  <li className="flex gap-2"><span className="mt-px shrink-0 text-brand-blue">·</span><span>内容合规，不涉及色情、暴力、政治敏感等违规内容</span></li>
+                  <li className="flex gap-2">
+                    <span className="mt-px shrink-0 text-brand-blue">·</span>
+                    <span>本人正脸，面部清晰可见，无墨镜、口罩或大面积阴影遮挡</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="mt-px shrink-0 text-brand-blue">·</span>
+                    <span>单人照，无多人同框</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="mt-px shrink-0 text-brand-blue">·</span>
+                    <span>真实照片，非AI生成、非翻拍、非网图</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="mt-px shrink-0 text-brand-blue">·</span>
+                    <span>不过度修图或滤镜过重，保留真实肤质和五官细节</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="mt-px shrink-0 text-brand-blue">·</span>
+                    <span>光线自然，不逆光、不过暗</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="mt-px shrink-0 text-brand-blue">·</span>
+                    <span>内容合规，不涉及色情、暴力、政治敏感等违规内容</span>
+                  </li>
                 </ul>
               </div>
 
               {/* Section 3 */}
               <div className="mb-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary)/0.3)] p-4">
                 <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[hsl(var(--foreground))]">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[11px] font-bold text-brand-blue">3</span>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[11px] font-bold text-brand-blue">
+                    3
+                  </span>
                   评分是为了帮你找到更合适的匹配视角
                 </h4>
                 <div className="space-y-1.5 pl-7 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
@@ -378,6 +434,7 @@ export function PhotoUploader({
               <button
                 type="button"
                 onClick={() => setShowConsentModal(false)}
+                disabled={isBusy}
                 className="flex-1 rounded-lg border border-[hsl(var(--border))] py-2.5 text-sm font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--secondary))]"
               >
                 取消
@@ -385,6 +442,7 @@ export function PhotoUploader({
               <button
                 type="button"
                 onClick={handleConsentAgree}
+                disabled={isBusy || readOnly || photos.length >= maxPhotos}
                 className="flex-1 rounded-lg bg-brand-blue py-2.5 text-sm font-semibold text-white transition-all hover:bg-brand-blue/90"
               >
                 我已了解，继续上传
