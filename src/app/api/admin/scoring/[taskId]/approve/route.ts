@@ -14,6 +14,7 @@ import {
   lockRatingUserTasks,
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
+import { hasCurrentPublishedRatingTaskPhotos } from "@/lib/rating-task-queue";
 
 function canPublishImmediately(status: string) {
   return SCOREABLE_TASK_STATUSES.includes(
@@ -79,6 +80,13 @@ export async function POST(
 
       const published = await db.$transaction(async (tx) => {
         await lockRatingUserTasks(tx, task.ratedUserId);
+        if (!(await hasCurrentPublishedRatingTaskPhotos(tx, task))) {
+          throw {
+            code: "UNPUBLISHED_PHOTOS",
+            message: "任务包含未发布或已撤回的照片，不能发布评分",
+            status: 409,
+          };
+        }
         const updated = await tx.ratingTask.updateMany({
           where: {
             id: taskId,
@@ -152,7 +160,13 @@ export async function POST(
       await lockRatingUserTasks(tx, task.ratedUserId);
       const current = await tx.ratingTask.findUnique({
         where: { id: taskId },
-        select: { status: true, updatedAt: true },
+        select: {
+          status: true,
+          updatedAt: true,
+          ratedUserId: true,
+          photoObjectKey: true,
+          photoObjectKeys: true,
+        },
       });
 
       if (
@@ -162,6 +176,13 @@ export async function POST(
         throw {
           code: "CONFLICT",
           message: "评分任务状态已变化，请刷新后重试",
+          status: 409,
+        };
+      }
+      if (!(await hasCurrentPublishedRatingTaskPhotos(tx, current))) {
+        throw {
+          code: "UNPUBLISHED_PHOTOS",
+          message: "任务包含未发布或已撤回的照片，不能发布评分",
           status: 409,
         };
       }

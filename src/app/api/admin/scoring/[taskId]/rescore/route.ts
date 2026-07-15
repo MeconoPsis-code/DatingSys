@@ -13,6 +13,10 @@ import {
   lockRatingUserTasks,
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
+import {
+  discardOtherUnfinishedRatingTasks,
+  hasCurrentPublishedRatingTaskPhotos,
+} from "@/lib/rating-task-queue";
 
 // ── POST /api/admin/scoring/[taskId]/rescore — super admin rescore ──
 
@@ -96,7 +100,12 @@ export async function POST(
         await lockRatingUserTasks(tx, task.ratedUserId);
         const currentTask = await tx.ratingTask.findUnique({
           where: { id: taskId },
-          select: { updatedAt: true },
+          select: {
+            updatedAt: true,
+            ratedUserId: true,
+            photoObjectKey: true,
+            photoObjectKeys: true,
+          },
         });
         if (
           !currentTask ||
@@ -108,6 +117,17 @@ export async function POST(
             status: 409,
           };
         }
+        if (!(await hasCurrentPublishedRatingTaskPhotos(tx, currentTask))) {
+          throw {
+            code: "UNPUBLISHED_PHOTOS",
+            message: "任务包含未发布或已撤回的照片，不能重新评分",
+            status: 409,
+          };
+        }
+        await discardOtherUnfinishedRatingTasks(tx, {
+          ratedUserId: task.ratedUserId,
+          exceptTaskId: taskId,
+        });
         await tx.ratingScore.deleteMany({
           where: {
             ratingTaskId: taskId,
@@ -177,7 +197,12 @@ export async function POST(
       await lockRatingUserTasks(tx, task.ratedUserId);
       const currentTask = await tx.ratingTask.findUnique({
         where: { id: taskId },
-        select: { updatedAt: true },
+        select: {
+          updatedAt: true,
+          ratedUserId: true,
+          photoObjectKey: true,
+          photoObjectKeys: true,
+        },
       });
       if (!currentTask || currentTask.updatedAt.getTime() !== task.updatedAt.getTime()) {
         throw {
@@ -186,6 +211,17 @@ export async function POST(
           status: 409,
         };
       }
+      if (!(await hasCurrentPublishedRatingTaskPhotos(tx, currentTask))) {
+        throw {
+          code: "UNPUBLISHED_PHOTOS",
+          message: "任务包含未发布或已撤回的照片，不能重新评分",
+          status: 409,
+        };
+      }
+      await discardOtherUnfinishedRatingTasks(tx, {
+        ratedUserId: task.ratedUserId,
+        exceptTaskId: taskId,
+      });
       await tx.ratingScore.deleteMany({ where: { ratingTaskId: taskId } });
       await tx.ratingTask.update({
         where: { id: taskId },

@@ -16,10 +16,11 @@ import { buildGroupCardForProfile, normalizeNicknameInput } from "@/lib/group-ca
 import { createLogger } from "@/lib/logger";
 import { commitExpiredActions } from "@/lib/scoring-revocation";
 import {
+  discardUnfinishedRatingTasksForPublish,
   enqueueRatingTaskPhotos,
-  getRatingTaskQueueAssignment,
+  getRatingTaskQueueAssignmentInTransaction,
+  parseRatingTaskPhotoKeys,
   removePhotoFromRatingTasks,
-  type RatingTaskQueueAssignment,
 } from "@/lib/rating-task-queue";
 import { lockRatingUserTasks } from "@/lib/rating-profile-sync";
 import {
@@ -30,6 +31,7 @@ import {
 } from "@/lib/profile-draft";
 import { getDataDeleteCooldown } from "@/lib/user-cooldowns";
 import { apiHandler } from "@/lib/api-handler";
+import { createProfilePublishScoringBatch, hasSamePhotoKeySet } from "@/lib/scoring";
 
 const log = createLogger("api:profile-me");
 
@@ -109,12 +111,15 @@ function resolveProfileAttribute(
   return Attribute.OTHER;
 }
 
-function hasNewPhotoContent(
+function hasPhotoSetChanged(
   publishedPhotos: Array<{ storageKey: string }>,
   desiredPhotos: Array<{ storageKey: string }>
 ): boolean {
   const publishedStorageKeys = new Set(publishedPhotos.map((photo) => photo.storageKey));
-  return desiredPhotos.some((photo) => !publishedStorageKeys.has(photo.storageKey));
+  return (
+    publishedStorageKeys.size !== desiredPhotos.length ||
+    desiredPhotos.some((photo) => !publishedStorageKeys.has(photo.storageKey))
+  );
 }
 
 /**
@@ -285,6 +290,18 @@ export const PUT = apiHandler(async (req) => {
         photos: deleteAllPhotos ? [] : currentDraft.photos,
       };
 
+      // Draft saves must never affect scoring. Withdraw any draft-only keys
+      // that older versions may already have queued.
+      for (const storageKey of (currentDraft.photos ?? [])
+        .filter((photo) => photo.source === "draft")
+        .map((photo) => photo.storageKey)) {
+        await removePhotoFromRatingTasks(tx, {
+          ratedUserId: session.id,
+          storageKey,
+          deleteContainingTasks: true,
+        });
+      }
+
       return tx.profile.update({
         where: { id: currentProfile.id },
         data: { draftData: toDraftJson(draftPayload) },
@@ -341,6 +358,7 @@ export const PUT = apiHandler(async (req) => {
   }
 
   // 4. Build profile data (no poolType — single pool)
+  const profileMutationAt = new Date();
   const profileFields = {
     birthDate: profileData.birthDate,
     heightCm: profileData.heightCm,
@@ -356,7 +374,7 @@ export const PUT = apiHandler(async (req) => {
     selfIntro: profileData.selfIntro ?? null,
     consentProfileVisibility: profileData.consentProfileVisibility,
     status: profileStatus,
-    lastSubmittedAt: profileStatus === "ACTIVE" ? new Date() : undefined,
+    lastSubmittedAt: profileStatus === "ACTIVE" ? profileMutationAt : undefined,
     photoMatchPref: profileData.photoMatchPref ?? null,
     highScoreOnly: profileData.highScoreOnly ?? false,
     ...(profileData.photoMatchPref ? {} : { matchPrefUpdatedAt: null }),
@@ -378,148 +396,213 @@ export const PUT = apiHandler(async (req) => {
   // 5. Publish profile fields, photo changes, and task cleanup under one user
   // lock. Treating publish as one atomic mutation prevents an upload that starts
   // mid-publish from being erased by an older draft snapshot.
-  const {
-    profile,
-    preference,
-    previousProfile,
-    previousRatingProfile,
-    photoChangeRequiresScoring,
-    addedPhotosToQueue,
-    publishedPhotos,
-    storageKeysToDelete,
-  } = await db.$transaction(async (tx) => {
-    await lockRatingUserTasks(tx, session.id);
-    const [lockedProfile, lockedRatingProfile] = await Promise.all([
-      tx.profile.findUnique({
+  const { profile, preference, storageKeysToDelete, queuedRatingTask } =
+    await db.$transaction(async (tx) => {
+      await lockRatingUserTasks(tx, session.id);
+      const [lockedProfile, lockedRatingProfile] = await Promise.all([
+        tx.profile.findUnique({
+          where: { userId: session.id },
+          include: { photos: { orderBy: { order: "asc" } } },
+        }),
+        tx.ratingProfile.findUnique({ where: { userId: session.id } }),
+      ]);
+      const updatedProfile = await tx.profile.upsert({
         where: { userId: session.id },
-        include: { photos: { orderBy: { order: "asc" } } },
-      }),
-      tx.ratingProfile.findUnique({ where: { userId: session.id } }),
-    ]);
-    const updatedProfile = await tx.profile.upsert({
-      where: { userId: session.id },
-      create: { userId: session.id, ...profileFields },
-      update: profileFields,
-    });
-    const updatedPreference = await tx.preference.upsert({
-      where: { userId: session.id },
-      create: { userId: session.id, ...prefFields },
-      update: prefFields,
-    });
+        create: { userId: session.id, ...profileFields },
+        update: profileFields,
+      });
+      const updatedPreference = await tx.preference.upsert({
+        where: { userId: session.id },
+        create: { userId: session.id, ...prefFields },
+        update: prefFields,
+      });
 
-    let requiresScoring = false;
-    let queuedPhotos: Array<{ storageKey: string; uploadedAt: Date }> = [];
-    const deleteStorageKeys = new Set<string>();
+      let requiresScoring = false;
+      const deleteStorageKeys = new Set<string>();
 
-    if (profileStatus === "ACTIVE") {
-      const existingDraft = readProfileDraftData(lockedProfile?.draftData);
-      const shouldApplyDraftPhotos =
-        lockedProfile?.status === "ACTIVE" &&
-        (existingDraft.photos !== undefined ||
-          existingDraft.deleteAllPhotos ||
-          body.deleteAllPhotos);
+      if (profileStatus === "ACTIVE") {
+        const existingDraft = readProfileDraftData(lockedProfile?.draftData);
+        const shouldApplyDraftPhotos =
+          lockedProfile?.status === "ACTIVE" &&
+          (existingDraft.photos !== undefined ||
+            existingDraft.deleteAllPhotos ||
+            body.deleteAllPhotos);
 
-      if (shouldApplyDraftPhotos) {
-        const currentPhotos = lockedProfile?.photos ?? [];
-        const desiredPhotos = orderDraftPhotos(
-          body.deleteAllPhotos
-            ? []
-            : (existingDraft.photos ?? publishedPhotosToDraftPhotos(currentPhotos))
-        );
-        requiresScoring = hasNewPhotoContent(currentPhotos, desiredPhotos);
+        if (shouldApplyDraftPhotos) {
+          const currentPhotos = lockedProfile?.photos ?? [];
+          const desiredPhotos = orderDraftPhotos(
+            body.deleteAllPhotos
+              ? []
+              : (existingDraft.photos ?? publishedPhotosToDraftPhotos(currentPhotos))
+          );
 
-        const publishedStorageKeys = new Set(
-          currentPhotos.map((photo) => photo.storageKey)
-        );
-        const draftPublishedAt = new Date();
-        queuedPhotos = desiredPhotos
-          .filter((photo) => !publishedStorageKeys.has(photo.storageKey))
-          .map((photo) => {
-            const uploadedAt = photo.uploadedAt
-              ? new Date(photo.uploadedAt)
-              : draftPublishedAt;
-            return {
-              storageKey: photo.storageKey,
-              uploadedAt: Number.isNaN(uploadedAt.getTime())
-                ? draftPublishedAt
-                : uploadedAt,
-            };
-          });
-
-        const desiredStorageKeys = new Set(
-          desiredPhotos.map((photo) => photo.storageKey)
-        );
-        const removedPhotoKeys = currentPhotos
-          .filter((photo) => !desiredStorageKeys.has(photo.storageKey))
-          .map((photo) => photo.storageKey);
-        for (const storageKey of [
-          ...currentPhotos.map((photo) => photo.storageKey),
-          ...(existingDraft.photos ?? [])
+          // A draft key may have been enqueued by a previous deployment. Remove
+          // it (and any stale scores) before publishing, then the normal publish
+          // path below re-enqueues the complete public photo set as one batch.
+          for (const storageKey of (existingDraft.photos ?? [])
             .filter((photo) => photo.source === "draft")
-            .map((photo) => photo.storageKey),
-        ]) {
-          if (!desiredStorageKeys.has(storageKey)) {
-            deleteStorageKeys.add(storageKey);
+            .map((photo) => photo.storageKey)) {
+            await removePhotoFromRatingTasks(tx, {
+              ratedUserId: session.id,
+              storageKey,
+              deleteContainingTasks: true,
+            });
           }
-        }
 
-        await tx.profilePhoto.deleteMany({
-          where: { profileId: updatedProfile.id },
-        });
-        for (const [index, photo] of desiredPhotos.entries()) {
-          await tx.profilePhoto.create({
-            data: {
-              profileId: updatedProfile.id,
-              storageKey: photo.storageKey,
-              order: index,
-              originalName: photo.originalName,
-              mimeType: photo.mimeType,
-              sizeBytes: photo.sizeBytes,
-              ...(photo.uploadedAt ? { createdAt: new Date(photo.uploadedAt) } : {}),
-            },
-          });
-        }
-        for (const storageKey of removedPhotoKeys) {
-          await removePhotoFromRatingTasks(tx, {
-            ratedUserId: session.id,
-            storageKey,
-          });
-        }
-      } else if (body.deleteAllPhotos) {
-        for (const photo of lockedProfile?.photos ?? []) {
-          deleteStorageKeys.add(photo.storageKey);
-        }
-        await tx.profilePhoto.deleteMany({
-          where: { profileId: updatedProfile.id },
-        });
-      }
-    }
+          requiresScoring = hasPhotoSetChanged(currentPhotos, desiredPhotos);
 
-    const currentPublishedPhotos =
-      profileStatus === "ACTIVE"
-        ? await tx.profilePhoto.findMany({
+          const desiredStorageKeys = new Set(
+            desiredPhotos.map((photo) => photo.storageKey)
+          );
+          const removedPhotoKeys = currentPhotos
+            .filter((photo) => !desiredStorageKeys.has(photo.storageKey))
+            .map((photo) => photo.storageKey);
+          for (const storageKey of [
+            ...currentPhotos.map((photo) => photo.storageKey),
+            ...(existingDraft.photos ?? [])
+              .filter((photo) => photo.source === "draft")
+              .map((photo) => photo.storageKey),
+          ]) {
+            if (!desiredStorageKeys.has(storageKey)) {
+              deleteStorageKeys.add(storageKey);
+            }
+          }
+
+          await tx.profilePhoto.deleteMany({
             where: { profileId: updatedProfile.id },
-            orderBy: { order: "asc" },
-            select: { storageKey: true, createdAt: true },
-          })
-        : [];
+          });
+          for (const [index, photo] of desiredPhotos.entries()) {
+            await tx.profilePhoto.create({
+              data: {
+                profileId: updatedProfile.id,
+                storageKey: photo.storageKey,
+                order: index,
+                originalName: photo.originalName,
+                mimeType: photo.mimeType,
+                sizeBytes: photo.sizeBytes,
+                ...(photo.uploadedAt ? { createdAt: new Date(photo.uploadedAt) } : {}),
+              },
+            });
+          }
+          for (const storageKey of removedPhotoKeys) {
+            await removePhotoFromRatingTasks(tx, {
+              ratedUserId: session.id,
+              storageKey,
+              preserveCompletedScores: true,
+            });
+          }
+        } else if (body.deleteAllPhotos) {
+          for (const photo of lockedProfile?.photos ?? []) {
+            deleteStorageKeys.add(photo.storageKey);
+          }
+          await tx.profilePhoto.deleteMany({
+            where: { profileId: updatedProfile.id },
+          });
+        }
+      }
 
-    if (profileStatus === "ACTIVE" && currentPublishedPhotos.length === 0) {
-      await tx.ratingTask.deleteMany({ where: { ratedUserId: session.id } });
-      await tx.ratingProfile.deleteMany({ where: { userId: session.id } });
-    }
+      const currentPublishedPhotos =
+        profileStatus === "ACTIVE"
+          ? await tx.profilePhoto.findMany({
+              where: { profileId: updatedProfile.id },
+              orderBy: { order: "asc" },
+              select: { storageKey: true },
+            })
+          : [];
 
-    return {
-      profile: updatedProfile,
-      preference: updatedPreference,
-      previousProfile: lockedProfile,
-      previousRatingProfile: lockedRatingProfile,
-      photoChangeRequiresScoring: requiresScoring,
-      addedPhotosToQueue: queuedPhotos,
-      publishedPhotos: currentPublishedPhotos,
-      storageKeysToDelete: [...deleteStorageKeys],
-    };
-  });
+      if (profileStatus === "DRAFT") {
+        // A never-published profile has no valid scoring state. This also cleans
+        // tasks created by the previous upload-time enqueue bug.
+        await tx.ratingTask.deleteMany({ where: { ratedUserId: session.id } });
+        await tx.ratingProfile.deleteMany({ where: { userId: session.id } });
+      } else if (profileStatus === "ACTIVE" && currentPublishedPhotos.length === 0) {
+        await tx.ratingTask.deleteMany({ where: { ratedUserId: session.id } });
+        await tx.ratingProfile.deleteMany({ where: { userId: session.id } });
+      }
+
+      let queuedTask: {
+        task: Awaited<ReturnType<typeof enqueueRatingTaskPhotos>>["task"];
+        created: boolean;
+        reset: boolean;
+        timeline: Awaited<
+          ReturnType<typeof getRatingTaskQueueAssignmentInTransaction>
+        >["timeline"];
+      } | null = null;
+      if (profileStatus === "ACTIVE" && currentPublishedPhotos.length > 0) {
+        const isFirstActivePublish = lockedProfile?.status !== "ACTIVE";
+        const needsInitialScoring =
+          !lockedRatingProfile || lockedRatingProfile.ratingStatus === "NOT_SUBMITTED";
+        const currentPhotoKeys = currentPublishedPhotos.map((photo) => photo.storageKey);
+        const existingTasks = await tx.ratingTask.findMany({
+          where: { ratedUserId: session.id },
+          select: {
+            status: true,
+            photoObjectKey: true,
+            photoObjectKeys: true,
+          },
+        });
+        const taskMatchesCurrentPhotos = (task: (typeof existingTasks)[number]) => {
+          const frozenKeys = parseRatingTaskPhotoKeys(task.photoObjectKeys);
+          const taskPhotoKeys =
+            frozenKeys.length > 0 ? frozenKeys : [task.photoObjectKey];
+          return hasSamePhotoKeySet(taskPhotoKeys, currentPhotoKeys);
+        };
+        const unfinishedTasks = existingTasks.filter(
+          (task) => task.status !== "COMPLETED"
+        );
+        const hasCurrentSnapshotTask = existingTasks.some(taskMatchesCurrentPhotos);
+        const hasFragmentedOrDuplicateUnfinishedTasks =
+          unfinishedTasks.length > 1 ||
+          unfinishedTasks.some((task) => !taskMatchesCurrentPhotos(task));
+        const shouldQueueScoring =
+          isFirstActivePublish ||
+          requiresScoring ||
+          needsInitialScoring ||
+          !hasCurrentSnapshotTask ||
+          hasFragmentedOrDuplicateUnfinishedTasks;
+
+        if (shouldQueueScoring) {
+          // Nothing created while a profile was still a draft is valid scoring
+          // history. For an already-published profile, a new formal publish
+          // supersedes every unfinished older snapshot so a scorer can never
+          // receive several different photo sets for the same user.
+          if (isFirstActivePublish) {
+            await tx.ratingTask.deleteMany({ where: { ratedUserId: session.id } });
+            await tx.ratingProfile.deleteMany({ where: { userId: session.id } });
+          } else {
+            await discardUnfinishedRatingTasksForPublish(tx, session.id);
+          }
+
+          const publishBatch = createProfilePublishScoringBatch(
+            currentPhotoKeys,
+            profileMutationAt
+          );
+          const assignment = await getRatingTaskQueueAssignmentInTransaction(tx, {
+            ratedUserId: session.id,
+            queuedAt: publishBatch.queuedAt,
+            now: profileMutationAt,
+          });
+          const queueResult = await enqueueRatingTaskPhotos(tx, {
+            ratedUserId: session.id,
+            photoObjectKeys: publishBatch.photoObjectKeys,
+            assignment,
+            taskCreatedAt: profileMutationAt,
+            forceReset: true,
+          });
+          queuedTask = {
+            ...queueResult,
+            timeline: assignment.timeline,
+          };
+        }
+      }
+
+      return {
+        profile: updatedProfile,
+        preference: updatedPreference,
+        storageKeysToDelete: [...deleteStorageKeys],
+        queuedRatingTask: queuedTask,
+      };
+    });
 
   if (storageKeysToDelete.length > 0) {
     const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
@@ -528,97 +611,15 @@ export const PUT = apiHandler(async (req) => {
     );
   }
 
-  // 7. Auto-create rating task for photo users publishing as ACTIVE
-  if (profileStatus === "ACTIVE") {
-    if (publishedPhotos.length > 0) {
-      const isFirstActivePublish = previousProfile?.status !== "ACTIVE";
-      const needsInitialScoring =
-        !previousRatingProfile || previousRatingProfile.ratingStatus === "NOT_SUBMITTED";
-      const shouldQueueScoring =
-        isFirstActivePublish || photoChangeRequiresScoring || needsInitialScoring;
-
-      if (shouldQueueScoring) {
-        const taskCreatedAt = new Date();
-        const queueCandidates =
-          photoChangeRequiresScoring && addedPhotosToQueue.length > 0
-            ? addedPhotosToQueue
-            : publishedPhotos.map((photo) => ({
-                storageKey: photo.storageKey,
-                uploadedAt: photo.createdAt,
-              }));
-        const queueGroups = new Map<
-          string,
-          {
-            assignment: RatingTaskQueueAssignment;
-            photoObjectKeys: string[];
-          }
-        >();
-
-        for (const candidate of queueCandidates) {
-          const assignment = await getRatingTaskQueueAssignment({
-            ratedUserId: session.id,
-            queuedAt: candidate.uploadedAt,
-            now: taskCreatedAt,
-          });
-          const batchKey = assignment.timeline.publishAt.toISOString();
-          const group = queueGroups.get(batchKey);
-          if (group) {
-            group.photoObjectKeys.push(candidate.storageKey);
-          } else {
-            queueGroups.set(batchKey, {
-              assignment,
-              photoObjectKeys: [candidate.storageKey],
-            });
-          }
-        }
-
-        for (const group of queueGroups.values()) {
-          const groupPhotoKeys = Array.from(new Set(group.photoObjectKeys));
-          const queueResult = await db.$transaction(async (tx) => {
-            await lockRatingUserTasks(tx, session.id);
-
-            // Publishing and this legacy/idempotent queue fallback are separate
-            // transactions because duty assignment is resolved outside Prisma.
-            // Revalidate under the same user lock so a later clear/revoke cannot
-            // be undone by an older publish request.
-            const currentProfile = await tx.profile.findUnique({
-              where: { userId: session.id },
-              select: { id: true, status: true },
-            });
-            if (!currentProfile || currentProfile.status !== "ACTIVE") {
-              return null;
-            }
-            const matchingPhotoCount = await tx.profilePhoto.count({
-              where: {
-                profileId: currentProfile.id,
-                storageKey: { in: groupPhotoKeys },
-              },
-            });
-            if (matchingPhotoCount !== groupPhotoKeys.length) {
-              return null;
-            }
-
-            return enqueueRatingTaskPhotos(tx, {
-              ratedUserId: session.id,
-              photoObjectKeys: groupPhotoKeys,
-              assignment: group.assignment,
-              taskCreatedAt,
-            });
-          });
-
-          if (queueResult && (queueResult.created || queueResult.reset)) {
-            const queueAhead = await db.ratingTask.count({
-              where: {
-                status: { in: ["PENDING", "SCORING"] },
-                ratedUserId: { not: session.id },
-                createdAt: { lt: queueResult.task.createdAt },
-              },
-            });
-            await notify.scoringQueued(session.id, queueAhead, group.assignment.timeline);
-          }
-        }
-      }
-    }
+  if (queuedRatingTask && (queuedRatingTask.created || queuedRatingTask.reset)) {
+    const queueAhead = await db.ratingTask.count({
+      where: {
+        status: { in: ["PENDING", "SCORING"] },
+        ratedUserId: { not: session.id },
+        createdAt: { lt: queuedRatingTask.task.createdAt },
+      },
+    });
+    await notify.scoringQueued(session.id, queueAhead, queuedRatingTask.timeline);
   }
 
   // 7. Sync QQ group card in "age-city-nickname" format
@@ -730,6 +731,7 @@ export const DELETE = apiHandler(async () => {
       await removePhotoFromRatingTasks(tx, {
         ratedUserId: session.id,
         storageKey,
+        deleteContainingTasks: true,
       });
     }
 

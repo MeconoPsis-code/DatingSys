@@ -13,6 +13,7 @@ import {
   lockRatingUserTasks,
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
+import { hasCurrentPublishedRatingTaskPhotos } from "@/lib/rating-task-queue";
 
 function canPublishImmediately(status: string) {
   return (
@@ -75,12 +76,24 @@ export async function POST(
       await lockRatingUserTasks(tx, task.ratedUserId);
       const currentTask = await tx.ratingTask.findUnique({
         where: { id: taskId },
-        select: { updatedAt: true },
+        select: {
+          updatedAt: true,
+          ratedUserId: true,
+          photoObjectKey: true,
+          photoObjectKeys: true,
+        },
       });
       if (!currentTask || currentTask.updatedAt.getTime() !== task.updatedAt.getTime()) {
         throw {
           code: "CONFLICT",
           message: "评分任务已更新，请刷新后重试",
+          status: 409,
+        };
+      }
+      if (!(await hasCurrentPublishedRatingTaskPhotos(tx, currentTask))) {
+        throw {
+          code: "UNPUBLISHED_PHOTOS",
+          message: "任务包含未发布或已撤回的照片，不能设定评分",
           status: 409,
         };
       }

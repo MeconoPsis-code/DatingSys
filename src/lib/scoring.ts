@@ -39,6 +39,34 @@ export interface SerializedScoringTaskTimeline {
   isReviewOverdue: boolean;
 }
 
+export interface ProfilePublishScoringBatch {
+  queuedAt: Date;
+  photoObjectKeys: string[];
+}
+
+export function hasSamePhotoKeySet(
+  leftPhotoObjectKeys: readonly string[],
+  rightPhotoObjectKeys: readonly string[]
+): boolean {
+  const leftKeys = new Set(leftPhotoObjectKeys.filter((key) => key.length > 0));
+  const rightKeys = new Set(rightPhotoObjectKeys.filter((key) => key.length > 0));
+
+  return (
+    leftKeys.size === rightKeys.size &&
+    Array.from(leftKeys).every((key) => rightKeys.has(key))
+  );
+}
+
+export function createProfilePublishScoringBatch(
+  photoObjectKeys: string[],
+  publishedAt: Date
+): ProfilePublishScoringBatch {
+  return {
+    queuedAt: publishedAt,
+    photoObjectKeys: Array.from(new Set(photoObjectKeys.filter((key) => key.length > 0))),
+  };
+}
+
 export function getChinaDayStart(date: Date): Date {
   const chinaTime = date.getTime() + CHINA_UTC_OFFSET_MS;
   const chinaDayStart = Math.floor(chinaTime / DAY_MS) * DAY_MS;
@@ -97,8 +125,9 @@ export function getScoringTaskTimeline(
   now = new Date()
 ): ScoringTaskTimeline {
   // A scoring batch runs from 18:00 on the previous China calendar day through
-  // 17:59:59 today. Uploads before 18:00 join today's already-published batch;
-  // uploads from 18:00 onward wait for tomorrow's on-duty scorers.
+  // 17:59:59 today. A profile published before 18:00 joins today's
+  // already-published batch; one published from 18:00 onward waits for
+  // tomorrow's on-duty scorers.
   const currentDayPendingAt = getChinaDayHourBoundary(createdAt, 18);
   const pendingAt =
     createdAt.getTime() < currentDayPendingAt.getTime()

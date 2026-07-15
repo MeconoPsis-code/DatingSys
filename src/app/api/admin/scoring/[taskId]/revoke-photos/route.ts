@@ -6,12 +6,11 @@ import { notify } from "@/lib/notifications";
 import { PHOTO_REVOKE_REPUBLISH_COOLDOWN_HOURS } from "@/lib/validations/profile";
 import { orderDraftPhotos, readProfileDraftData, toDraftJson } from "@/lib/profile-draft";
 import { NextRequest } from "next/server";
-import { parseRatingTaskPhotoKeys } from "@/lib/rating-task-queue";
-import { removePhotoFromRatingTasks } from "@/lib/rating-task-queue";
 import {
-  lockRatingUserTasks,
-  syncRatingProfileFromTasks,
-} from "@/lib/rating-profile-sync";
+  hasCurrentPublishedRatingTaskPhotos,
+  parseRatingTaskPhotoKeys,
+} from "@/lib/rating-task-queue";
+import { lockRatingUserTasks } from "@/lib/rating-profile-sync";
 
 type PhotoReport = {
   reporterId?: unknown;
@@ -61,6 +60,10 @@ export async function POST(
       return error("NOT_FOUND", "任务不存在", 404);
     }
 
+    if (task.status !== "REPORTED") {
+      return error("INVALID_STATUS", "只能撤销已被举报的照片任务", 409);
+    }
+
     const profile = task.ratedUser.profile;
     const frozenTaskPhotoKeys = parseRatingTaskPhotoKeys(task.photoObjectKeys);
     const photoStorageKeys =
@@ -76,12 +79,33 @@ export async function POST(
       await lockRatingUserTasks(tx, task.ratedUserId);
       const currentTask = await tx.ratingTask.findUnique({
         where: { id: taskId },
-        select: { updatedAt: true },
+        select: {
+          status: true,
+          updatedAt: true,
+          ratedUserId: true,
+          photoObjectKey: true,
+          photoObjectKeys: true,
+        },
       });
       if (!currentTask || currentTask.updatedAt.getTime() !== task.updatedAt.getTime()) {
         throw {
           code: "CONFLICT",
           message: "评分任务已更新，请刷新后重试",
+          status: 409,
+        };
+      }
+
+      if (currentTask.status !== "REPORTED") {
+        throw {
+          code: "INVALID_STATUS",
+          message: "只能撤销已被举报的照片任务",
+          status: 409,
+        };
+      }
+      if (!(await hasCurrentPublishedRatingTaskPhotos(tx, currentTask))) {
+        throw {
+          code: "STALE_PHOTO_TASK",
+          message: "任务照片与用户当前已发布照片不一致，请刷新后重试",
           status: 409,
         };
       }
@@ -93,14 +117,11 @@ export async function POST(
         },
       });
 
-      for (const storageKey of photoStorageKeys) {
-        await removePhotoFromRatingTasks(tx, {
-          ratedUserId: task.ratedUserId,
-          storageKey,
-        });
-      }
-      await tx.ratingTask.deleteMany({ where: { id: taskId } });
-      await syncRatingProfileFromTasks(tx, task.ratedUserId);
+      // The reported current snapshot is the complete published set. Once it
+      // is revoked, no historical task remains scoreable. Delete all rating
+      // state instead of reopening several older tasks with partial photos.
+      await tx.ratingTask.deleteMany({ where: { ratedUserId: task.ratedUserId } });
+      await tx.ratingProfile.deleteMany({ where: { userId: task.ratedUserId } });
 
       await tx.matchSnapshot.deleteMany({
         where: {

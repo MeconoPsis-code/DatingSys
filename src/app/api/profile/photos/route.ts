@@ -15,13 +15,7 @@ import {
   type DraftPhotoRecord,
 } from "@/lib/profile-draft";
 import { apiHandler } from "@/lib/api-handler";
-import { notify } from "@/lib/notifications";
-import {
-  enqueueRatingTaskPhotos,
-  getRatingTaskQueueAssignment,
-  removePhotoFromRatingTasks,
-} from "@/lib/rating-task-queue";
-import type { ScoringTaskTimeline } from "@/lib/scoring";
+import { removePhotoFromRatingTasks } from "@/lib/rating-task-queue";
 import { lockRatingUserTasks } from "@/lib/rating-profile-sync";
 import {
   acquireImageProcessingSlot,
@@ -191,6 +185,17 @@ export const POST = apiHandler(async (req) => {
       });
     });
 
+    if (profile.status === "ACTIVE" && mode !== "draft") {
+      return error(
+        "DRAFT_MODE_REQUIRED",
+        "已发布资料的照片只能先保存为草稿，再通过发布资料进入评分",
+        409
+      );
+    }
+    if (profile.status !== "ACTIVE" && profile.status !== "DRAFT") {
+      return error("PROFILE_NOT_EDITABLE", "当前资料状态不能上传照片", 409);
+    }
+
     const draftData = readProfileDraftData(profile.draftData);
     const initialActiveDraftMode = mode === "draft" && profile.status === "ACTIVE";
     const currentDraftPhotos = initialActiveDraftMode
@@ -292,8 +297,8 @@ export const POST = apiHandler(async (req) => {
     webpSizeBytes = webpBuffer.length;
     webpBuffer = null;
 
-    // 4. Persist the upload and enqueue it for scoring atomically. The upload
-    // window, rather than a later profile-publish action, owns the batch.
+    // 4. Persist the upload only. Photos become eligible for scoring when the
+    // profile is explicitly published, never while merely saving a draft.
     const uploadedAt = new Date();
     const nextOrder = currentPhotoCount;
     const draftPhoto: DraftPhotoRecord = {
@@ -307,11 +312,6 @@ export const POST = apiHandler(async (req) => {
       source: "draft",
     };
 
-    const assignment = await getRatingTaskQueueAssignment({
-      ratedUserId: session.id,
-      queuedAt: uploadedAt,
-    });
-
     const persisted = await db.$transaction(async (tx) => {
       await lockRatingUserTasks(tx, session.id);
       const currentProfile = await tx.profile.findUnique({
@@ -320,6 +320,12 @@ export const POST = apiHandler(async (req) => {
       });
       if (!currentProfile || currentProfile.userId !== session.id) {
         throw new Error("Profile disappeared while persisting a photo upload");
+      }
+      if (currentProfile.status === "ACTIVE" && mode !== "draft") {
+        return { outcome: "draft_mode_required" as const };
+      }
+      if (currentProfile.status !== "ACTIVE" && currentProfile.status !== "DRAFT") {
+        return { outcome: "profile_not_editable" as const };
       }
 
       // Re-read the mutable draft only after acquiring the user lock. A slow
@@ -346,27 +352,37 @@ export const POST = apiHandler(async (req) => {
       };
 
       if (activeDraftMode) {
+        const nextDraftPhotos = orderDraftPhotos([
+          ...lockedDraftPhotos,
+          persistedDraftPhoto,
+        ]);
         await tx.profile.update({
           where: { id: currentProfile.id },
           data: {
             draftData: toDraftJson({
               ...currentProfileDraft,
-              photos: orderDraftPhotos([...lockedDraftPhotos, persistedDraftPhoto]),
+              photos: nextDraftPhotos,
               deleteAllPhotos: false,
             }),
           },
         });
-        const queueResult = await enqueueRatingTaskPhotos(tx, {
-          ratedUserId: session.id,
-          photoObjectKeys: [key],
-          assignment,
-          taskCreatedAt: uploadedAt,
-        });
+
+        // Clean up tasks produced by the previous buggy behavior. Published
+        // photos remain untouched; only draft-only keys are withdrawn.
+        for (const draftStorageKey of nextDraftPhotos
+          .filter((photo) => photo.source === "draft")
+          .map((photo) => photo.storageKey)) {
+          await removePhotoFromRatingTasks(tx, {
+            ratedUserId: session.id,
+            storageKey: draftStorageKey,
+            deleteContainingTasks: true,
+          });
+        }
+
         return {
           outcome: "persisted" as const,
           activeDraftMode,
           photo: persistedDraftPhoto,
-          queueResult,
         };
       }
 
@@ -381,17 +397,16 @@ export const POST = apiHandler(async (req) => {
           createdAt: uploadedAt,
         },
       });
-      const queueResult = await enqueueRatingTaskPhotos(tx, {
-        ratedUserId: session.id,
-        photoObjectKeys: [key],
-        assignment,
-        taskCreatedAt: uploadedAt,
-      });
+
+      // A DRAFT profile is not scoreable. Remove tasks/rating state left by
+      // versions that enqueued photos at upload time.
+      await tx.ratingTask.deleteMany({ where: { ratedUserId: session.id } });
+      await tx.ratingProfile.deleteMany({ where: { userId: session.id } });
+
       return {
         outcome: "persisted" as const,
         activeDraftMode,
         photo: createdPhoto,
-        queueResult,
       };
     });
 
@@ -399,27 +414,25 @@ export const POST = apiHandler(async (req) => {
       await cleanupUnreferencedUpload(true);
       return error("LIMIT_EXCEEDED", `最多上传 ${MAX_PHOTOS} 张照片`, 400);
     }
-    const { activeDraftMode, photo, queueResult } = persisted;
-    const queuedTask: { id: string; createdAt: Date } = queueResult.task;
-    const queuedTimeline: ScoringTaskTimeline = assignment.timeline;
-    const queueChanged = queueResult.created || queueResult.reset;
+    if (persisted.outcome === "draft_mode_required") {
+      await cleanupUnreferencedUpload(true);
+      return error(
+        "DRAFT_MODE_REQUIRED",
+        "已发布资料的照片只能先保存为草稿，再通过发布资料进入评分",
+        409
+      );
+    }
+    if (persisted.outcome === "profile_not_editable") {
+      await cleanupUnreferencedUpload(true);
+      return error("PROFILE_NOT_EDITABLE", "当前资料状态不能上传照片", 409);
+    }
+    const { activeDraftMode, photo } = persisted;
     storageReferenced = true;
 
     // The storage object and DB/draft reference are now consistent. Release
     // the mutation lease before non-critical audit/response work; finally is
     // intentionally a second, idempotent safety net.
     releaseImageProcessing();
-
-    if (queueChanged && queuedTask && queuedTimeline) {
-      const queueAhead = await db.ratingTask.count({
-        where: {
-          status: { in: ["PENDING", "SCORING"] },
-          ratedUserId: { not: session.id },
-          createdAt: { lt: queuedTask.createdAt },
-        },
-      });
-      await notify.scoringQueued(session.id, queueAhead, queuedTimeline);
-    }
 
     // 9. Audit log
     await logAudit({
@@ -536,6 +549,7 @@ export const DELETE = apiHandler(async (req) => {
           await removePhotoFromRatingTasks(tx, {
             ratedUserId: session.id,
             storageKey: photo.storageKey,
+            deleteContainingTasks: true,
           });
         }
 

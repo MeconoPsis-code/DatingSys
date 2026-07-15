@@ -16,6 +16,7 @@ import {
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
 import { isValidRatingTaskRevision } from "@/lib/rating-task-revision";
+import { hasCurrentPublishedRatingTaskPhotos } from "@/lib/rating-task-queue";
 
 // Valid scores: 0, 0.1, 0.2, ..., 10
 function isValidScore(score: number): boolean {
@@ -120,7 +121,13 @@ export async function POST(
     await lockRatingUserTasks(tx, task.ratedUserId);
     const currentTask = await tx.ratingTask.findUnique({
       where: { id: taskId },
-      select: { status: true, revision: true },
+      select: {
+        status: true,
+        revision: true,
+        ratedUserId: true,
+        photoObjectKey: true,
+        photoObjectKeys: true,
+      },
     });
     if (
       !currentTask ||
@@ -130,6 +137,9 @@ export async function POST(
       )
     ) {
       return { error: "STALE_TASK" as const };
+    }
+    if (!(await hasCurrentPublishedRatingTaskPhotos(tx, currentTask))) {
+      return { error: "UNPUBLISHED_TASK" as const };
     }
 
     const duplicateScore = await tx.ratingScore.findUnique({
@@ -189,9 +199,13 @@ export async function POST(
     return { allDone, totalScored };
   });
   if ("error" in scoringResult) {
-    return scoringResult.error === "DUPLICATE_SCORE"
-      ? error("CONFLICT", "你已经评过此任务", 409)
-      : error("CONFLICT", "评分任务已更新，请刷新后重新评分", 409);
+    if (scoringResult.error === "DUPLICATE_SCORE") {
+      return error("CONFLICT", "你已经评过此任务", 409);
+    }
+    if (scoringResult.error === "UNPUBLISHED_TASK") {
+      return error("CONFLICT", "照片尚未发布或任务已撤回，请刷新任务列表", 409);
+    }
+    return error("CONFLICT", "评分任务已更新，请刷新后重新评分", 409);
   }
   const { allDone, totalScored } = scoringResult;
 

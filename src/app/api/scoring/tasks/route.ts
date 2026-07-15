@@ -7,6 +7,7 @@ import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
 import {
   getAssignedScorerIdsForTask,
   getRatingTaskTimeline,
+  hasSamePhotoKeySet,
   SCOREABLE_TASK_STATUSES,
   serializeScoringTaskTimeline,
 } from "@/lib/scoring";
@@ -79,6 +80,10 @@ export async function GET(req: Request) {
     let nextAvailableAt: string | null = null;
 
     for (const task of tasks) {
+      // Unpublished profiles are never scoreable, even if an older deployment
+      // accidentally created a task while the user was saving a draft.
+      if (task.ratedUser.profile?.status !== "ACTIVE") continue;
+
       const timeline = getRatingTaskTimeline(task, now);
       const dutyWeekday = getChinaDutyWeekday(timeline.publishAt);
       let onDutyScorerIds = dutyCache.get(dutyWeekday);
@@ -114,66 +119,78 @@ export async function GET(req: Request) {
     }
 
     // Enrich with photos + signed URLs
-    const enriched = await Promise.all(
-      visibleTasks.map(async ({ task, timeline, eligibleScorerIds }) => {
-        const frozenPhotoKeys = parseRatingTaskPhotoKeys(task.photoObjectKeys);
-        const taskPhotoKeys =
-          frozenPhotoKeys.length > 0 ? frozenPhotoKeys : [task.photoObjectKey];
-        const photos = await db.profilePhoto.findMany({
-          where: {
-            profile: { userId: task.ratedUserId },
-            storageKey: { in: taskPhotoKeys },
-          },
-          orderBy: { order: "asc" },
-        });
-        const photoByStorageKey = new Map(
-          photos.map((photo) => [photo.storageKey, photo])
-        );
-        const taskPhotos = taskPhotoKeys.map((storageKey, index) => {
-          const publishedPhoto = photoByStorageKey.get(storageKey);
+    const enriched = (
+      await Promise.all(
+        visibleTasks.map(async ({ task, timeline, eligibleScorerIds }) => {
+          const frozenPhotoKeys = parseRatingTaskPhotoKeys(task.photoObjectKeys);
+          const taskPhotoKeys =
+            frozenPhotoKeys.length > 0 ? frozenPhotoKeys : [task.photoObjectKey];
+          const photos = await db.profilePhoto.findMany({
+            where: {
+              profile: { userId: task.ratedUserId, status: "ACTIVE" },
+            },
+            orderBy: { order: "asc" },
+          });
+          const photoByStorageKey = new Map(
+            photos.map((photo) => [photo.storageKey, photo])
+          );
+          // The frozen task must be the complete current published photo set.
+          // This hides both draft-only keys and legacy subset tasks immediately,
+          // even before the one-time repair command is applied.
+          if (
+            !hasSamePhotoKeySet(
+              taskPhotoKeys,
+              photos.map((photo) => photo.storageKey)
+            )
+          ) {
+            return null;
+          }
+          const taskPhotos = taskPhotoKeys.map((storageKey, index) => {
+            const publishedPhoto = photoByStorageKey.get(storageKey);
+            return {
+              id: publishedPhoto?.id ?? `${task.id}:${index}`,
+              order: publishedPhoto?.order ?? index,
+              storageKey,
+            };
+          });
+
+          const photosWithUrls = taskPhotos.map((p) => ({
+            id: p.id,
+            order: p.order,
+            url: buildImageProxyUrl(p.storageKey, {
+              viewerId: session.id,
+              variant: "large",
+            }),
+          }));
+
+          const eligibleScorerIdSet = new Set(eligibleScorerIds);
+          const scoredCount = task.scores.filter((score) =>
+            eligibleScorerIdSet.has(score.scorerUserId)
+          ).length;
+          const totalScorers = eligibleScorerIds.length;
+
           return {
-            id: publishedPhoto?.id ?? `${task.id}:${index}`,
-            order: publishedPhoto?.order ?? index,
-            storageKey,
+            id: task.id,
+            status: task.status,
+            createdAt: task.createdAt,
+            revision: task.revision,
+            timeline: serializeScoringTaskTimeline(timeline),
+            progress: { scored: scoredCount, total: totalScorers },
+            profile:
+              task.ratedUser.profile?.status === "ACTIVE"
+                ? {
+                    birthDate: task.ratedUser.profile.birthDate,
+                    heightCm: task.ratedUser.profile.heightCm,
+                    weightKg: task.ratedUser.profile.weightKg,
+                    attribute: task.ratedUser.profile.attribute,
+                    customAttribute: task.ratedUser.profile.customAttribute,
+                  }
+                : null,
+            photos: photosWithUrls,
           };
-        });
-
-        const photosWithUrls = taskPhotos.map((p) => ({
-          id: p.id,
-          order: p.order,
-          url: buildImageProxyUrl(p.storageKey, {
-            viewerId: session.id,
-            variant: "large",
-          }),
-        }));
-
-        const eligibleScorerIdSet = new Set(eligibleScorerIds);
-        const scoredCount = task.scores.filter((score) =>
-          eligibleScorerIdSet.has(score.scorerUserId)
-        ).length;
-        const totalScorers = eligibleScorerIds.length;
-
-        return {
-          id: task.id,
-          status: task.status,
-          createdAt: task.createdAt,
-          revision: task.revision,
-          timeline: serializeScoringTaskTimeline(timeline),
-          progress: { scored: scoredCount, total: totalScorers },
-          profile:
-            task.ratedUser.profile?.status === "ACTIVE"
-              ? {
-                  birthDate: task.ratedUser.profile.birthDate,
-                  heightCm: task.ratedUser.profile.heightCm,
-                  weightKg: task.ratedUser.profile.weightKg,
-                  attribute: task.ratedUser.profile.attribute,
-                  customAttribute: task.ratedUser.profile.customAttribute,
-                }
-              : null,
-          photos: photosWithUrls,
-        };
-      })
-    );
+        })
+      )
+    ).filter((task) => task !== null);
 
     return success({ tasks: enriched, nextAvailableAt });
   }

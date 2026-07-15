@@ -5,6 +5,7 @@ import {
   lockRatingUserTasks,
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
+import { hasCurrentPublishedRatingTaskPhotos } from "@/lib/rating-task-queue";
 
 export const SCORE_ACTION_REVOCATION_WINDOW_MS = 5 * 60 * 1000;
 
@@ -44,6 +45,9 @@ export async function commitExpiredActions() {
           : (task.pendingActionValue ?? 0);
       const committed = await db.$transaction(async (tx) => {
         await lockRatingUserTasks(tx, task.ratedUserId);
+        if (!(await hasCurrentPublishedRatingTaskPhotos(tx, task))) {
+          return null;
+        }
         const updated = await tx.ratingTask.updateMany({
           where: {
             id: task.id,

@@ -5,6 +5,7 @@ import {
   lockRatingUserTasks,
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
+import { hasCurrentPublishedRatingTaskPhotos } from "@/lib/rating-task-queue";
 
 const DEADLINE_MANAGED_STATUSES = ["PENDING", "SCORING", "NEEDS_RESCORE"] as const;
 
@@ -42,6 +43,25 @@ export async function promoteExpiredScoringTasks(now = new Date()): Promise<numb
 
     const promoted = await db.$transaction(async (tx) => {
       await lockRatingUserTasks(tx, task.ratedUserId);
+      const currentTask = await tx.ratingTask.findUnique({
+        where: { id: task.id },
+        select: {
+          status: true,
+          updatedAt: true,
+          ratedUserId: true,
+          photoObjectKey: true,
+          photoObjectKeys: true,
+        },
+      });
+      if (
+        !currentTask ||
+        currentTask.status !== task.status ||
+        currentTask.updatedAt.getTime() !== task.updatedAt.getTime() ||
+        !(await hasCurrentPublishedRatingTaskPhotos(tx, currentTask))
+      ) {
+        return false;
+      }
+
       const updated = await tx.ratingTask.updateMany({
         where: {
           id: task.id,

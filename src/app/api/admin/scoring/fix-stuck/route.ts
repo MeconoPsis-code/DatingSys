@@ -11,6 +11,7 @@ import {
   lockRatingUserTasks,
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
+import { hasCurrentPublishedRatingTaskPhotos } from "@/lib/rating-task-queue";
 
 /**
  * POST /api/admin/scoring/fix-stuck
@@ -82,6 +83,9 @@ export async function POST() {
             currentTask.status !== task.status ||
             currentTask.updatedAt.getTime() !== task.updatedAt.getTime()
           ) {
+            return false;
+          }
+          if (!(await hasCurrentPublishedRatingTaskPhotos(tx, currentTask))) {
             return false;
           }
           const currentScoredCount = currentTask.scores.filter((score) =>

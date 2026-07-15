@@ -8,6 +8,7 @@ import {
   calculateAverageScore,
   getAssignedScorerIdsForTask,
   getRatingTaskTimeline,
+  hasSamePhotoKeySet,
   parsePhotoReports,
   serializeScoringTaskTimeline,
 } from "@/lib/scoring";
@@ -153,14 +154,22 @@ export async function GET(req: Request) {
         const photoByStorageKey = new Map(
           profilePhotos.map((photo) => [photo.storageKey, photo])
         );
-        const photos = taskPhotoKeys.map((storageKey, index) => {
-          const publishedPhoto = photoByStorageKey.get(storageKey);
-          return {
-            id: publishedPhoto?.id ?? `${t.id}:${index}`,
-            order: publishedPhoto?.order ?? index,
-            storageKey,
-          };
-        });
+        const hasCurrentPublishedPhotos =
+          t.ratedUser.profile?.status === "ACTIVE" &&
+          hasSamePhotoKeySet(
+            taskPhotoKeys,
+            profilePhotos.map((photo) => photo.storageKey)
+          );
+        const photos = hasCurrentPublishedPhotos
+          ? taskPhotoKeys.map((storageKey, index) => {
+              const publishedPhoto = photoByStorageKey.get(storageKey);
+              return {
+                id: publishedPhoto?.id ?? `${t.id}:${index}`,
+                order: publishedPhoto?.order ?? index,
+                storageKey,
+              };
+            })
+          : [];
         const timeline = timelinesByTaskId.get(t.id) ?? getRatingTaskTimeline(t, now);
         const taskOnDutyScorerIds = (
           onDutyScorersByWeekday.get(getChinaDutyWeekday(timeline.publishAt)) ?? []
@@ -213,6 +222,7 @@ export async function GET(req: Request) {
           ).length,
           totalScorers: liveAssignedScorerList.length,
           photos: photosWithUrls,
+          invalidPhotoTask: !hasCurrentPublishedPhotos,
           completedAt: t.completedAt,
           createdAt: t.createdAt,
           timeline: serializeScoringTaskTimeline(timeline),

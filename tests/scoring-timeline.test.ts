@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  createProfilePublishScoringBatch,
   getChinaDayStart,
   getRatingTaskTimeline,
   getScoringTaskTimeline,
+  hasSamePhotoKeySet,
 } from "../src/lib/scoring";
 
-test("assigns uploads before the 18:00 China cutoff to today's scoring batch", () => {
+test("assigns a profile published before 18:00 to today's scoring batch", () => {
   const createdAt = new Date("2026-07-14T09:59:59.999Z"); // 17:59:59.999 China time
   const timeline = getScoringTaskTimeline(createdAt, createdAt);
 
@@ -17,7 +19,7 @@ test("assigns uploads before the 18:00 China cutoff to today's scoring batch", (
   assert.equal(timeline.isReleasedForScoring, true);
 });
 
-test("holds uploads from 18:00 China time for tomorrow's scoring batch", () => {
+test("holds a profile published from 18:00 for tomorrow's scoring batch", () => {
   const createdAt = new Date("2026-07-14T10:00:00.000Z"); // 18:00 China time
   const timeline = getScoringTaskTimeline(createdAt, createdAt);
 
@@ -26,6 +28,34 @@ test("holds uploads from 18:00 China time for tomorrow's scoring batch", () => {
   assert.equal(timeline.scoringDeadlineAt.toISOString(), "2026-07-15T16:00:00.000Z");
   assert.equal(timeline.phase, "PENDING");
   assert.equal(timeline.isReleasedForScoring, false);
+});
+
+test("queues one complete photo snapshot at publication time", () => {
+  const publishedAt = new Date("2026-07-14T09:30:00.000Z");
+  const batch = createProfilePublishScoringBatch(
+    ["photos/user/a.webp", "photos/user/b.webp", "photos/user/a.webp"],
+    publishedAt
+  );
+
+  assert.equal(batch.queuedAt, publishedAt);
+  assert.deepEqual(batch.photoObjectKeys, ["photos/user/a.webp", "photos/user/b.webp"]);
+});
+
+test("requires a task snapshot to match the complete published photo set", () => {
+  assert.equal(
+    hasSamePhotoKeySet(
+      ["photos/user/a.webp", "photos/user/b.webp"],
+      ["photos/user/b.webp", "photos/user/a.webp"]
+    ),
+    true
+  );
+  assert.equal(
+    hasSamePhotoKeySet(
+      ["photos/user/a.webp"],
+      ["photos/user/a.webp", "photos/user/b.webp"]
+    ),
+    false
+  );
 });
 
 test("keeps the scoring window open from 00:00 through 23:59 China time", () => {

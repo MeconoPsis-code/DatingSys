@@ -16,6 +16,7 @@ import {
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
 import { isValidRatingTaskRevision } from "@/lib/rating-task-revision";
+import { hasCurrentPublishedRatingTaskPhotos } from "@/lib/rating-task-queue";
 
 /**
  * POST /api/scoring/tasks/[taskId]/report
@@ -99,7 +100,14 @@ export async function POST(
       await lockRatingUserTasks(tx, task.ratedUserId);
       const currentTask = await tx.ratingTask.findUnique({
         where: { id: taskId },
-        select: { status: true, revision: true, photoReports: true },
+        select: {
+          status: true,
+          revision: true,
+          photoReports: true,
+          ratedUserId: true,
+          photoObjectKey: true,
+          photoObjectKeys: true,
+        },
       });
       if (
         !currentTask ||
@@ -109,6 +117,9 @@ export async function POST(
         )
       ) {
         return { error: "STALE_TASK" as const };
+      }
+      if (!(await hasCurrentPublishedRatingTaskPhotos(tx, currentTask))) {
+        return { error: "UNPUBLISHED_TASK" as const };
       }
 
       const currentReports =
@@ -133,6 +144,9 @@ export async function POST(
     }
     if (reportResult.error === "STALE_TASK") {
       return error("CONFLICT", "评分任务已更新，请刷新后重试", 409);
+    }
+    if (reportResult.error === "UNPUBLISHED_TASK") {
+      return error("CONFLICT", "照片尚未发布或任务已撤回，请刷新任务列表", 409);
     }
 
     return success({ message: "举报已提交，管理员将会审核" });
