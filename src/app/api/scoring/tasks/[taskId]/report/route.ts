@@ -15,6 +15,7 @@ import {
   lockRatingUserTasks,
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
+import { isValidRatingTaskRevision } from "@/lib/rating-task-revision";
 
 /**
  * POST /api/scoring/tasks/[taskId]/report
@@ -38,10 +39,7 @@ export async function POST(
     if (!reason || !isPhotoReportReason(reason)) {
       return error("INVALID_REASON", "请选择有效的举报原因", 400);
     }
-    if (
-      taskRevision !== undefined &&
-      (!Number.isInteger(taskRevision) || taskRevision < 1)
-    ) {
+    if (!isValidRatingTaskRevision(taskRevision)) {
       return error("INVALID_TASK_VERSION", "无效的评分任务版本", 422);
     }
 
@@ -49,7 +47,7 @@ export async function POST(
     if (!task) {
       return error("NOT_FOUND", "任务不存在", 404);
     }
-    if (taskRevision !== undefined && task.revision !== taskRevision) {
+    if (task.revision !== taskRevision) {
       return error("CONFLICT", "照片任务已更新，请刷新后重试", 409);
     }
 
@@ -105,7 +103,7 @@ export async function POST(
       });
       if (
         !currentTask ||
-        currentTask.revision !== (taskRevision ?? task.revision) ||
+        currentTask.revision !== taskRevision ||
         !SCOREABLE_TASK_STATUSES.includes(
           currentTask.status as (typeof SCOREABLE_TASK_STATUSES)[number]
         )

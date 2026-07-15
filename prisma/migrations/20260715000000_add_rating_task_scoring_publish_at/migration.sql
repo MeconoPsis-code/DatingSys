@@ -41,15 +41,24 @@ WITH active_batches AS (
       WHEN (task."createdAt" + INTERVAL '8 hours')::time < TIME '18:00'
         THEN date_trunc('day', task."createdAt" + INTERVAL '8 hours') - INTERVAL '8 hours'
       ELSE date_trunc('day', task."createdAt" + INTERVAL '8 hours') + INTERVAL '16 hours'
-    END AS batch_at
+    END AS batch_at,
+    CASE
+      -- A legacy admin rescore is an immediate task for the China calendar
+      -- day on which this migration is deployed, not its original upload day.
+      WHEN task."status" = 'NEEDS_RESCORE'
+        THEN date_trunc('day', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai') - INTERVAL '8 hours'
+      WHEN (task."createdAt" + INTERVAL '8 hours')::time < TIME '18:00'
+        THEN date_trunc('day', task."createdAt" + INTERVAL '8 hours') - INTERVAL '8 hours'
+      ELSE date_trunc('day', task."createdAt" + INTERVAL '8 hours') + INTERVAL '16 hours'
+    END AS scoring_publish_at
   FROM "rating_tasks" AS task
   WHERE task."photoUploadBatchAt" IS NULL
-    AND task."status" IN ('PENDING', 'SCORING', 'NEEDS_RESCORE', 'REPORTED')
+    AND task."status" IN ('PENDING', 'SCORING', 'NEEDS_RESCORE', 'REPORTED', 'REVIEW')
 )
 UPDATE "rating_tasks" AS task
 SET
   "photoUploadBatchAt" = active_batches.batch_at,
-  "scoringPublishAt" = active_batches.batch_at
+  "scoringPublishAt" = active_batches.scoring_publish_at
 FROM active_batches
 WHERE task."id" = active_batches."id";
 
@@ -180,7 +189,7 @@ BEGIN
   END IF;
 
   IF NEW."photoUploadBatchAt" IS NULL
-    AND NEW."status" IN ('PENDING', 'SCORING', 'NEEDS_RESCORE', 'REPORTED') THEN
+    AND NEW."status" IN ('PENDING', 'SCORING', 'NEEDS_RESCORE', 'REPORTED', 'REVIEW') THEN
     NEW."photoUploadBatchAt" := CASE
       WHEN (NEW."createdAt" + INTERVAL '8 hours')::time < TIME '18:00'
         THEN date_trunc('day', NEW."createdAt" + INTERVAL '8 hours') - INTERVAL '8 hours'
@@ -189,7 +198,11 @@ BEGIN
   END IF;
 
   IF NEW."scoringPublishAt" IS NULL AND NEW."photoUploadBatchAt" IS NOT NULL THEN
-    NEW."scoringPublishAt" := NEW."photoUploadBatchAt";
+    NEW."scoringPublishAt" := CASE
+      WHEN NEW."status" = 'NEEDS_RESCORE'
+        THEN date_trunc('day', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai') - INTERVAL '8 hours'
+      ELSE NEW."photoUploadBatchAt"
+    END;
   END IF;
 
   RETURN NEW;

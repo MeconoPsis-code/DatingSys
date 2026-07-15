@@ -166,7 +166,7 @@ export async function removePhotoFromRatingTasks(
   await lockRatingUserTasks(tx, ratedUserId);
 
   const tasks = await tx.ratingTask.findMany({
-    where: { ratedUserId, photoUploadBatchAt: { not: null } },
+    where: { ratedUserId },
     orderBy: { createdAt: "desc" },
   });
   let changed = false;
@@ -177,6 +177,29 @@ export async function removePhotoFromRatingTasks(
     if (!baseKeys.includes(storageKey)) continue;
 
     const remainingKeys = baseKeys.filter((key) => key !== storageKey);
+
+    // Legacy completed tasks predate upload-batch snapshots. Remove stale
+    // object references without rewriting their already-published score or
+    // deleting the underlying scorer records. New batch tasks, and every
+    // unfinished legacy task, must be reset because their displayed photo set
+    // changed before scoring was finalized.
+    if (task.photoUploadBatchAt === null && task.status === "COMPLETED") {
+      if (remainingKeys.length === 0) {
+        await tx.ratingTask.delete({ where: { id: task.id } });
+      } else {
+        await tx.ratingTask.update({
+          where: { id: task.id },
+          data: {
+            photoObjectKey: remainingKeys[0],
+            photoObjectKeys: remainingKeys,
+            revision: { increment: 1 },
+          },
+        });
+      }
+      changed = true;
+      continue;
+    }
+
     await tx.ratingScore.deleteMany({ where: { ratingTaskId: task.id } });
 
     if (remainingKeys.length === 0) {

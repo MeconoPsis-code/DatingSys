@@ -15,6 +15,7 @@ import {
   lockRatingUserTasks,
   syncRatingProfileFromTasks,
 } from "@/lib/rating-profile-sync";
+import { isValidRatingTaskRevision } from "@/lib/rating-task-revision";
 
 // Valid scores: 0, 0.1, 0.2, ..., 10
 function isValidScore(score: number): boolean {
@@ -48,7 +49,7 @@ export async function POST(
 
   const { score, taskRevision } = body as {
     score?: number;
-    taskRevision?: number;
+    taskRevision?: unknown;
   };
 
   if (score === undefined || score === null || typeof score !== "number") {
@@ -59,10 +60,7 @@ export async function POST(
     return error("VALIDATION_ERROR", "评分必须在 0-10 之间，步长 0.1", 422);
   }
 
-  if (
-    taskRevision !== undefined &&
-    (!Number.isInteger(taskRevision) || taskRevision < 1)
-  ) {
+  if (!isValidRatingTaskRevision(taskRevision)) {
     return error("VALIDATION_ERROR", "无效的评分任务版本", 422);
   }
 
@@ -75,7 +73,7 @@ export async function POST(
   if (!task) {
     return error("NOT_FOUND", "评分任务不存在", 404);
   }
-  if (taskRevision !== undefined && task.revision !== taskRevision) {
+  if (task.revision !== taskRevision) {
     return error("CONFLICT", "照片任务已更新，请刷新后重新评分", 409);
   }
 
@@ -126,7 +124,7 @@ export async function POST(
     });
     if (
       !currentTask ||
-      currentTask.revision !== (taskRevision ?? task.revision) ||
+      currentTask.revision !== taskRevision ||
       !SCOREABLE_TASK_STATUSES.includes(
         currentTask.status as (typeof SCOREABLE_TASK_STATUSES)[number]
       )
