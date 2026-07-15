@@ -9,6 +9,7 @@ export interface DraftPhotoRecord {
   originalName: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
+  uploadedAt: string | null;
   source: DraftPhotoSource;
 }
 
@@ -27,10 +28,17 @@ interface PublishedPhotoLike {
   originalName: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
+  createdAt?: Date | string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeDateTime(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function normalizePhoto(value: unknown, fallbackOrder: number): DraftPhotoRecord | null {
@@ -50,6 +58,7 @@ function normalizePhoto(value: unknown, fallbackOrder: number): DraftPhotoRecord
     originalName: typeof value.originalName === "string" ? value.originalName : null,
     mimeType: typeof value.mimeType === "string" ? value.mimeType : null,
     sizeBytes: Number.isInteger(value.sizeBytes) ? Number(value.sizeBytes) : null,
+    uploadedAt: normalizeDateTime(value.uploadedAt),
     source,
   };
 }
@@ -68,16 +77,21 @@ export function readProfileDraftData(value: unknown): ProfileDraftData {
   if (!isRecord(value)) return {};
 
   return {
-    profile: isRecord(value.profile) ? (value.profile as Prisma.InputJsonValue) : undefined,
-    preference: isRecord(value.preference) ? (value.preference as Prisma.InputJsonValue) : undefined,
+    profile: isRecord(value.profile)
+      ? (value.profile as Prisma.InputJsonValue)
+      : undefined,
+    preference: isRecord(value.preference)
+      ? (value.preference as Prisma.InputJsonValue)
+      : undefined,
     deleteAllPhotos: value.deleteAllPhotos === true,
     photos: normalizeDraftPhotos(value.photos),
-    photoRevokedAt: typeof value.photoRevokedAt === "string" ? value.photoRevokedAt : undefined,
+    photoRevokedAt:
+      typeof value.photoRevokedAt === "string" ? value.photoRevokedAt : undefined,
   };
 }
 
 export function publishedPhotosToDraftPhotos(
-  photos: PublishedPhotoLike[],
+  photos: PublishedPhotoLike[]
 ): DraftPhotoRecord[] {
   return photos
     .sort((a, b) => a.order - b.order)
@@ -88,6 +102,7 @@ export function publishedPhotosToDraftPhotos(
       originalName: photo.originalName,
       mimeType: photo.mimeType,
       sizeBytes: photo.sizeBytes,
+      uploadedAt: photo.createdAt ? new Date(photo.createdAt).toISOString() : null,
       source: "published",
     }));
 }

@@ -1,6 +1,10 @@
 import { db } from "@/lib/db";
 import { notify } from "@/lib/notifications";
 import { calculateAverageScore } from "@/lib/scoring";
+import {
+  lockRatingUserTasks,
+  syncRatingProfileFromTasks,
+} from "@/lib/rating-profile-sync";
 
 export const SCORE_ACTION_REVOCATION_WINDOW_MS = 5 * 60 * 1000;
 
@@ -33,102 +37,56 @@ export async function commitExpiredActions() {
         continue;
       }
 
-      // Safely perform double-check and status change with updateMany
-      const updated = await db.ratingTask.updateMany({
-        where: {
-          id: task.id,
-          status: "REVIEW",
-          pendingActionExpiresAt: task.pendingActionExpiresAt,
-        },
-        data: {
-          status: "COMPLETED",
-          completedAt: now,
-          pendingActionType: null,
-          pendingActionValue: null,
-          pendingActionExpiresAt: null,
-          pendingActionActorId: null,
-        },
+      const actorUserId = task.pendingActionActorId || null;
+      const finalScore =
+        task.pendingActionType === "APPROVE"
+          ? (approvedFinalScore as number)
+          : (task.pendingActionValue ?? 0);
+      const committed = await db.$transaction(async (tx) => {
+        await lockRatingUserTasks(tx, task.ratedUserId);
+        const updated = await tx.ratingTask.updateMany({
+          where: {
+            id: task.id,
+            status: "REVIEW",
+            pendingActionExpiresAt: task.pendingActionExpiresAt,
+          },
+          data: {
+            status: "COMPLETED",
+            publishedScore: finalScore,
+            completedAt: now,
+            pendingActionType: null,
+            pendingActionValue: null,
+            pendingActionExpiresAt: null,
+            pendingActionActorId: null,
+          },
+        });
+        if (updated.count === 0) return null;
+
+        const profileState = await syncRatingProfileFromTasks(tx, task.ratedUserId);
+        await tx.auditLog.create({
+          data: {
+            actorUserId,
+            action:
+              task.pendingActionType === "APPROVE"
+                ? "ADMIN_APPROVE_SCORE"
+                : "ADMIN_OVERRIDE_SCORE",
+            targetType: "RatingTask",
+            targetId: task.id,
+            metadata: {
+              ratedUserId: task.ratedUserId,
+              ...(task.pendingActionType === "APPROVE"
+                ? { finalScore }
+                : { overriddenScore: finalScore }),
+              revocationDelayed: true,
+            },
+          },
+        });
+
+        return profileState;
       });
 
-      // If count is 0, task was already processed or revoked
-      if (updated.count === 0) {
-        continue;
-      }
-
-      const actorUserId = task.pendingActionActorId || null;
-
-      if (task.pendingActionType === "APPROVE") {
-        const finalScore = approvedFinalScore as number;
-
-        // Publish to user RatingProfile
-        await db.ratingProfile.upsert({
-          where: { userId: task.ratedUserId },
-          create: {
-            userId: task.ratedUserId,
-            ratingStatus: "COMPLETED",
-            finalScore,
-            scoreCompletedAt: now,
-          },
-          update: {
-            ratingStatus: "COMPLETED",
-            finalScore,
-            scoreCompletedAt: now,
-          },
-        });
-
-        // Send completion notification
-        await notify.scoringComplete(task.ratedUserId, finalScore);
-
-        // Audit logging
-        await db.auditLog.create({
-          data: {
-            actorUserId,
-            action: "ADMIN_APPROVE_SCORE",
-            targetType: "RatingTask",
-            targetId: task.id,
-            metadata: {
-              ratedUserId: task.ratedUserId,
-              finalScore,
-              revocationDelayed: true,
-            },
-          },
-        });
-      } else if (task.pendingActionType === "OVERRIDE") {
-        const score = task.pendingActionValue ?? 0;
-
-        // Publish to user RatingProfile
-        await db.ratingProfile.upsert({
-          where: { userId: task.ratedUserId },
-          create: {
-            userId: task.ratedUserId,
-            ratingStatus: "COMPLETED",
-            finalScore: score,
-            scoreCompletedAt: now,
-          },
-          update: {
-            ratingStatus: "COMPLETED",
-            finalScore: score,
-            scoreCompletedAt: now,
-          },
-        });
-
-        // Send completion notification
-        await notify.scoringComplete(task.ratedUserId, score);
-
-        // Audit logging
-        await db.auditLog.create({
-          data: {
-            actorUserId,
-            action: "ADMIN_OVERRIDE_SCORE",
-            targetType: "RatingTask",
-            targetId: task.id,
-            metadata: {
-              ratedUserId: task.ratedUserId,
-              overriddenScore: score,
-              revocationDelayed: true,
-            },
-          },
-        });
+      if (committed?.shouldNotifyCompletion && committed.finalScore !== null) {
+        await notify.scoringComplete(task.ratedUserId, committed.finalScore);
       }
     } catch (err) {
       console.error(`[commitExpiredActions] failed for task ${task.id}:`, err);

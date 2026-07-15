@@ -15,8 +15,13 @@ import { napcatClient } from "@/server/bot/clients/napcat.client";
 import { buildGroupCardForProfile, normalizeNicknameInput } from "@/lib/group-card";
 import { createLogger } from "@/lib/logger";
 import { commitExpiredActions } from "@/lib/scoring-revocation";
-import { getChinaDutyWeekday, getOnDutyScorers } from "@/lib/scorer-duty";
-import { ACTIVE_SCORING_TASK_STATUSES, getScoringTaskTimeline } from "@/lib/scoring";
+import {
+  enqueueRatingTaskPhotos,
+  getRatingTaskQueueAssignment,
+  removePhotoFromRatingTasks,
+  type RatingTaskQueueAssignment,
+} from "@/lib/rating-task-queue";
+import { lockRatingUserTasks } from "@/lib/rating-profile-sync";
 import {
   orderDraftPhotos,
   publishedPhotosToDraftPhotos,
@@ -258,36 +263,50 @@ export const PUT = apiHandler(async (req) => {
 
   // ─── DRAFT SAVE FOR ACTIVE PROFILES → store in draftData, don't touch published ───
   if (profileStatus === "DRAFT" && user?.profile?.status === "ACTIVE") {
-    const existingDraft = readProfileDraftData(user.profile.draftData);
-    const deleteAllPhotos =
-      body.deleteAllPhotos ?? existingDraft.deleteAllPhotos ?? false;
+    const savedProfile = await db.$transaction(async (tx) => {
+      await lockRatingUserTasks(tx, session.id);
+      const currentProfile = await tx.profile.findUnique({
+        where: { userId: session.id },
+      });
+      if (!currentProfile || currentProfile.status !== "ACTIVE") {
+        return null;
+      }
 
-    // Store draft data without modifying published profile fields or photos.
-    const draftPayload = {
-      ...existingDraft,
-      profile: body.profile as Prisma.InputJsonValue,
-      preference: body.preference as Prisma.InputJsonValue,
-      deleteAllPhotos,
-      photos: deleteAllPhotos ? [] : existingDraft.photos,
-    };
+      // Merge form edits into the current locked draft so a photo uploaded
+      // while the form request was in flight cannot be overwritten.
+      const currentDraft = readProfileDraftData(currentProfile.draftData);
+      const deleteAllPhotos =
+        body.deleteAllPhotos ?? currentDraft.deleteAllPhotos ?? false;
+      const draftPayload = {
+        ...currentDraft,
+        profile: body.profile as Prisma.InputJsonValue,
+        preference: body.preference as Prisma.InputJsonValue,
+        deleteAllPhotos,
+        photos: deleteAllPhotos ? [] : currentDraft.photos,
+      };
 
-    await db.profile.update({
-      where: { userId: session.id },
-      data: { draftData: toDraftJson(draftPayload) },
+      return tx.profile.update({
+        where: { id: currentProfile.id },
+        data: { draftData: toDraftJson(draftPayload) },
+      });
     });
+
+    if (!savedProfile) {
+      return error("CONFLICT", "资料状态已更新，请刷新后重试", 409);
+    }
 
     await logAudit({
       actorId: session.id,
       action: AUDIT_ACTIONS.PROFILE_UPDATE,
       targetType: "Profile",
-      targetId: user.profile.id,
+      targetId: savedProfile.id,
       metadata: { status: "DRAFT_SAVED" } as Prisma.InputJsonValue,
       ip: getClientIp(req),
       userAgent: req.headers.get("user-agent"),
     });
 
     return success({
-      profile: user.profile,
+      profile: savedProfile,
       preference: await db.preference.findUnique({ where: { userId: session.id } }),
       draftSaved: true,
     });
@@ -356,179 +375,249 @@ export const PUT = apiHandler(async (req) => {
     expectedCustomAttribute: prefData.expectedCustomAttribute ?? null,
   };
 
-  // 5. Upsert in transaction
-  const [profile, preference] = await db.$transaction([
-    db.profile.upsert({
+  // 5. Publish profile fields, photo changes, and task cleanup under one user
+  // lock. Treating publish as one atomic mutation prevents an upload that starts
+  // mid-publish from being erased by an older draft snapshot.
+  const {
+    profile,
+    preference,
+    previousProfile,
+    previousRatingProfile,
+    photoChangeRequiresScoring,
+    addedPhotosToQueue,
+    publishedPhotos,
+    storageKeysToDelete,
+  } = await db.$transaction(async (tx) => {
+    await lockRatingUserTasks(tx, session.id);
+    const [lockedProfile, lockedRatingProfile] = await Promise.all([
+      tx.profile.findUnique({
+        where: { userId: session.id },
+        include: { photos: { orderBy: { order: "asc" } } },
+      }),
+      tx.ratingProfile.findUnique({ where: { userId: session.id } }),
+    ]);
+    const updatedProfile = await tx.profile.upsert({
       where: { userId: session.id },
       create: { userId: session.id, ...profileFields },
       update: profileFields,
-    }),
-    db.preference.upsert({
+    });
+    const updatedPreference = await tx.preference.upsert({
       where: { userId: session.id },
       create: { userId: session.id, ...prefFields },
       update: prefFields,
-    }),
-  ]);
+    });
 
-  // 6. Apply draft photo changes only when publishing.
-  let photoChangeRequiresScoring = false;
+    let requiresScoring = false;
+    let queuedPhotos: Array<{ storageKey: string; uploadedAt: Date }> = [];
+    const deleteStorageKeys = new Set<string>();
 
-  if (profileStatus === "ACTIVE") {
-    const existingDraft = readProfileDraftData(user?.profile?.draftData);
-    const shouldApplyDraftPhotos =
-      user?.profile?.status === "ACTIVE" &&
-      (existingDraft.photos !== undefined ||
-        existingDraft.deleteAllPhotos ||
-        body.deleteAllPhotos);
+    if (profileStatus === "ACTIVE") {
+      const existingDraft = readProfileDraftData(lockedProfile?.draftData);
+      const shouldApplyDraftPhotos =
+        lockedProfile?.status === "ACTIVE" &&
+        (existingDraft.photos !== undefined ||
+          existingDraft.deleteAllPhotos ||
+          body.deleteAllPhotos);
 
-    if (shouldApplyDraftPhotos) {
-      const currentPhotos = await db.profilePhoto.findMany({
-        where: { profileId: profile.id },
-        orderBy: { order: "asc" },
-      });
-      const desiredPhotos = orderDraftPhotos(
-        body.deleteAllPhotos
-          ? []
-          : (existingDraft.photos ??
-              publishedPhotosToDraftPhotos(user?.profile?.photos ?? []))
-      );
-      photoChangeRequiresScoring = hasNewPhotoContent(
-        user?.profile?.photos ?? [],
-        desiredPhotos
-      );
-      const desiredStorageKeys = new Set(desiredPhotos.map((p) => p.storageKey));
-      const candidateDeleteKeys = new Set([
-        ...currentPhotos.map((p) => p.storageKey),
-        ...(existingDraft.photos ?? [])
-          .filter((p) => p.source === "draft")
-          .map((p) => p.storageKey),
-      ]);
+      if (shouldApplyDraftPhotos) {
+        const currentPhotos = lockedProfile?.photos ?? [];
+        const desiredPhotos = orderDraftPhotos(
+          body.deleteAllPhotos
+            ? []
+            : (existingDraft.photos ?? publishedPhotosToDraftPhotos(currentPhotos))
+        );
+        requiresScoring = hasNewPhotoContent(currentPhotos, desiredPhotos);
 
-      const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
-      await Promise.all(
-        [...candidateDeleteKeys]
-          .filter((key) => !desiredStorageKeys.has(key))
-          .map((key) => deleteStorageFile(key).catch(() => {}))
-      );
+        const publishedStorageKeys = new Set(
+          currentPhotos.map((photo) => photo.storageKey)
+        );
+        const draftPublishedAt = new Date();
+        queuedPhotos = desiredPhotos
+          .filter((photo) => !publishedStorageKeys.has(photo.storageKey))
+          .map((photo) => {
+            const uploadedAt = photo.uploadedAt
+              ? new Date(photo.uploadedAt)
+              : draftPublishedAt;
+            return {
+              storageKey: photo.storageKey,
+              uploadedAt: Number.isNaN(uploadedAt.getTime())
+                ? draftPublishedAt
+                : uploadedAt,
+            };
+          });
 
-      await db.$transaction([
-        db.profilePhoto.deleteMany({ where: { profileId: profile.id } }),
-        ...desiredPhotos.map((photo, index) =>
-          db.profilePhoto.create({
+        const desiredStorageKeys = new Set(
+          desiredPhotos.map((photo) => photo.storageKey)
+        );
+        const removedPhotoKeys = currentPhotos
+          .filter((photo) => !desiredStorageKeys.has(photo.storageKey))
+          .map((photo) => photo.storageKey);
+        for (const storageKey of [
+          ...currentPhotos.map((photo) => photo.storageKey),
+          ...(existingDraft.photos ?? [])
+            .filter((photo) => photo.source === "draft")
+            .map((photo) => photo.storageKey),
+        ]) {
+          if (!desiredStorageKeys.has(storageKey)) {
+            deleteStorageKeys.add(storageKey);
+          }
+        }
+
+        await tx.profilePhoto.deleteMany({
+          where: { profileId: updatedProfile.id },
+        });
+        for (const [index, photo] of desiredPhotos.entries()) {
+          await tx.profilePhoto.create({
             data: {
-              profileId: profile.id,
+              profileId: updatedProfile.id,
               storageKey: photo.storageKey,
               order: index,
               originalName: photo.originalName,
               mimeType: photo.mimeType,
               sizeBytes: photo.sizeBytes,
+              ...(photo.uploadedAt ? { createdAt: new Date(photo.uploadedAt) } : {}),
             },
-          })
-        ),
-      ]);
-    } else if (body.deleteAllPhotos) {
-      const photosToDelete = await db.profilePhoto.findMany({
-        where: { profileId: profile.id },
-        select: { storageKey: true },
-      });
-
-      const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
-      await Promise.all(
-        photosToDelete.map((p) => deleteStorageFile(p.storageKey).catch(() => {}))
-      );
-
-      await db.profilePhoto.deleteMany({ where: { profileId: profile.id } });
+          });
+        }
+        for (const storageKey of removedPhotoKeys) {
+          await removePhotoFromRatingTasks(tx, {
+            ratedUserId: session.id,
+            storageKey,
+          });
+        }
+      } else if (body.deleteAllPhotos) {
+        for (const photo of lockedProfile?.photos ?? []) {
+          deleteStorageKeys.add(photo.storageKey);
+        }
+        await tx.profilePhoto.deleteMany({
+          where: { profileId: updatedProfile.id },
+        });
+      }
     }
+
+    const currentPublishedPhotos =
+      profileStatus === "ACTIVE"
+        ? await tx.profilePhoto.findMany({
+            where: { profileId: updatedProfile.id },
+            orderBy: { order: "asc" },
+            select: { storageKey: true, createdAt: true },
+          })
+        : [];
+
+    if (profileStatus === "ACTIVE" && currentPublishedPhotos.length === 0) {
+      await tx.ratingTask.deleteMany({ where: { ratedUserId: session.id } });
+      await tx.ratingProfile.deleteMany({ where: { userId: session.id } });
+    }
+
+    return {
+      profile: updatedProfile,
+      preference: updatedPreference,
+      previousProfile: lockedProfile,
+      previousRatingProfile: lockedRatingProfile,
+      photoChangeRequiresScoring: requiresScoring,
+      addedPhotosToQueue: queuedPhotos,
+      publishedPhotos: currentPublishedPhotos,
+      storageKeysToDelete: [...deleteStorageKeys],
+    };
+  });
+
+  if (storageKeysToDelete.length > 0) {
+    const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
+    await Promise.all(
+      storageKeysToDelete.map((key) => deleteStorageFile(key).catch(() => {}))
+    );
   }
 
   // 7. Auto-create rating task for photo users publishing as ACTIVE
   if (profileStatus === "ACTIVE") {
-    const photoCount = await db.profilePhoto.count({
-      where: { profileId: profile.id },
-    });
-
-    if (photoCount > 0) {
-      const isFirstActivePublish = user?.profile?.status !== "ACTIVE";
+    if (publishedPhotos.length > 0) {
+      const isFirstActivePublish = previousProfile?.status !== "ACTIVE";
       const needsInitialScoring =
-        !user?.ratingProfile || user.ratingProfile.ratingStatus === "NOT_SUBMITTED";
+        !previousRatingProfile || previousRatingProfile.ratingStatus === "NOT_SUBMITTED";
       const shouldQueueScoring =
         isFirstActivePublish || photoChangeRequiresScoring || needsInitialScoring;
 
       if (shouldQueueScoring) {
-        // Check if there's already a pending/scoring task
-        const existingTask = await db.ratingTask.findFirst({
-          where: {
+        const taskCreatedAt = new Date();
+        const queueCandidates =
+          photoChangeRequiresScoring && addedPhotosToQueue.length > 0
+            ? addedPhotosToQueue
+            : publishedPhotos.map((photo) => ({
+                storageKey: photo.storageKey,
+                uploadedAt: photo.createdAt,
+              }));
+        const queueGroups = new Map<
+          string,
+          {
+            assignment: RatingTaskQueueAssignment;
+            photoObjectKeys: string[];
+          }
+        >();
+
+        for (const candidate of queueCandidates) {
+          const assignment = await getRatingTaskQueueAssignment({
             ratedUserId: session.id,
-            status: { in: [...ACTIVE_SCORING_TASK_STATUSES] },
-          },
-        });
-
-        if (!existingTask) {
-          const taskCreatedAt = new Date();
-          const timeline = getScoringTaskTimeline(taskCreatedAt);
-          const scorers = await getOnDutyScorers({
-            excludeUserId: session.id,
-            weekday: getChinaDutyWeekday(timeline.publishAt),
+            queuedAt: candidate.uploadedAt,
+            now: taskCreatedAt,
           });
-
-          const firstPhoto = await db.profilePhoto.findFirst({
-            where: { profileId: profile.id },
-            orderBy: { order: "asc" },
-          });
-
-          if (firstPhoto) {
-            const ratingTask = await db.ratingTask.create({
-              data: {
-                ratedUserId: session.id,
-                photoObjectKey: firstPhoto.storageKey,
-                status: "PENDING",
-                scorerSnapshot: scorers.map((s) => s.id),
-                createdAt: taskCreatedAt,
-              },
+          const batchKey = assignment.timeline.publishAt.toISOString();
+          const group = queueGroups.get(batchKey);
+          if (group) {
+            group.photoObjectKeys.push(candidate.storageKey);
+          } else {
+            queueGroups.set(batchKey, {
+              assignment,
+              photoObjectKeys: [candidate.storageKey],
             });
+          }
+        }
 
-            // Upsert RatingProfile
-            await db.ratingProfile.upsert({
+        for (const group of queueGroups.values()) {
+          const groupPhotoKeys = Array.from(new Set(group.photoObjectKeys));
+          const queueResult = await db.$transaction(async (tx) => {
+            await lockRatingUserTasks(tx, session.id);
+
+            // Publishing and this legacy/idempotent queue fallback are separate
+            // transactions because duty assignment is resolved outside Prisma.
+            // Revalidate under the same user lock so a later clear/revoke cannot
+            // be undone by an older publish request.
+            const currentProfile = await tx.profile.findUnique({
               where: { userId: session.id },
-              create: {
-                userId: session.id,
-                ratingStatus: "PENDING",
-                finalScore: null,
-                scoreCompletedAt: null,
-              },
-              update: {
-                ratingStatus: "PENDING",
-                finalScore: null,
-                scoreCompletedAt: null,
+              select: { id: true, status: true },
+            });
+            if (!currentProfile || currentProfile.status !== "ACTIVE") {
+              return null;
+            }
+            const matchingPhotoCount = await tx.profilePhoto.count({
+              where: {
+                profileId: currentProfile.id,
+                storageKey: { in: groupPhotoKeys },
               },
             });
+            if (matchingPhotoCount !== groupPhotoKeys.length) {
+              return null;
+            }
 
-            // Count how many users are ahead in the scoring queue
+            return enqueueRatingTaskPhotos(tx, {
+              ratedUserId: session.id,
+              photoObjectKeys: groupPhotoKeys,
+              assignment: group.assignment,
+              taskCreatedAt,
+            });
+          });
+
+          if (queueResult && (queueResult.created || queueResult.reset)) {
             const queueAhead = await db.ratingTask.count({
               where: {
                 status: { in: ["PENDING", "SCORING"] },
                 ratedUserId: { not: session.id },
-                createdAt: { lt: ratingTask.createdAt },
+                createdAt: { lt: queueResult.task.createdAt },
               },
             });
-            await notify.scoringQueued(session.id, queueAhead, timeline);
+            await notify.scoringQueued(session.id, queueAhead, group.assignment.timeline);
           }
         }
       }
-    } else {
-      // No photos — delete any pending/scoring rating tasks and clean up RatingProfile
-      // Scores are cascade-deleted via onDelete: Cascade
-      await db.ratingTask.deleteMany({
-        where: {
-          ratedUserId: session.id,
-          status: { in: [...ACTIVE_SCORING_TASK_STATUSES] },
-        },
-      });
-
-      // Remove rating profile so user is no longer shown as 待评分
-      await db.ratingProfile.deleteMany({
-        where: { userId: session.id },
-      });
     }
   }
 
@@ -611,23 +700,50 @@ export const PUT = apiHandler(async (req) => {
 /**
  * DELETE /api/profile/me
  *
- * Discard saved draft data. Only clears the draftData column.
+ * Discard saved draft data and withdraw draft-only photos from scoring.
  */
 export const DELETE = apiHandler(async () => {
   const session = await requireAuth();
 
-  const profile = await db.profile.findUnique({
-    where: { userId: session.id },
+  const discardedDraftKeys = await db.$transaction(async (tx) => {
+    await lockRatingUserTasks(tx, session.id);
+    const profile = await tx.profile.findUnique({
+      where: { userId: session.id },
+      select: { id: true, draftData: true },
+    });
+    if (!profile || !profile.draftData) return null;
+
+    const draftData = readProfileDraftData(profile.draftData);
+    const draftOnlyKeys = Array.from(
+      new Set(
+        (draftData.photos ?? [])
+          .filter((photo) => photo.source === "draft")
+          .map((photo) => photo.storageKey)
+      )
+    );
+
+    await tx.profile.update({
+      where: { id: profile.id },
+      data: { draftData: Prisma.DbNull },
+    });
+    for (const storageKey of draftOnlyKeys) {
+      await removePhotoFromRatingTasks(tx, {
+        ratedUserId: session.id,
+        storageKey,
+      });
+    }
+
+    return draftOnlyKeys;
   });
 
-  if (!profile || !profile.draftData) {
+  if (!discardedDraftKeys) {
     return error("NOT_FOUND", "没有待处理的草稿", 404);
   }
 
-  await db.profile.update({
-    where: { userId: session.id },
-    data: { draftData: Prisma.DbNull },
-  });
+  const { deleteFile: deleteStorageFile } = await import("@/lib/storage");
+  await Promise.all(
+    discardedDraftKeys.map((key) => deleteStorageFile(key).catch(() => {}))
+  );
 
   return success({ message: "草稿已丢弃" });
 });

@@ -4,10 +4,15 @@ import { success, error } from "@/lib/api-response";
 import { getChinaDutyWeekday, getOnDutyScorers } from "@/lib/scorer-duty";
 import {
   getAssignedScorerIdsForTask,
-  getScoringTaskTimeline,
+  getChinaDayStart,
+  getRatingTaskTimeline,
   parsePhotoReports,
   parseScorerSnapshot,
 } from "@/lib/scoring";
+import {
+  lockRatingUserTasks,
+  syncRatingProfileFromTasks,
+} from "@/lib/rating-profile-sync";
 
 // ── POST /api/admin/scoring/[taskId]/rescore — super admin rescore ──
 
@@ -31,13 +36,22 @@ export async function POST(
     }
 
     if (mode === "reporters_and_unscored" || mode === "reported_only") {
+      const rescoreRequestedAt = new Date();
+      const scoringPublishAt = getChinaDayStart(rescoreRequestedAt);
+      const timeline = getRatingTaskTimeline(
+        { createdAt: task.createdAt, scoringPublishAt },
+        rescoreRequestedAt
+      );
       const reports = parsePhotoReports(task.photoReports);
       if (reports.length === 0) {
         return error("NO_PHOTO_REPORTS", "该任务没有待处理的照片举报", 400);
       }
 
       const onDutyScorerIds = (
-        await getOnDutyScorers({ excludeUserId: task.ratedUserId })
+        await getOnDutyScorers({
+          excludeUserId: task.ratedUserId,
+          weekday: getChinaDutyWeekday(timeline.publishAt),
+        })
       ).map((s) => s.id);
       const snapshotScorerIds = parseScorerSnapshot(task.scorerSnapshot);
       const previouslyAssignedScorerIds =
@@ -78,21 +92,36 @@ export async function POST(
         return error("NO_TARGET_SCORERS", "没有可重新分配的评分员", 400);
       }
 
-      const rescoreCreatedAt = new Date();
-
-      await db.$transaction([
-        db.ratingScore.deleteMany({
+      await db.$transaction(async (tx) => {
+        await lockRatingUserTasks(tx, task.ratedUserId);
+        const currentTask = await tx.ratingTask.findUnique({
+          where: { id: taskId },
+          select: { updatedAt: true },
+        });
+        if (
+          !currentTask ||
+          currentTask.updatedAt.getTime() !== task.updatedAt.getTime()
+        ) {
+          throw {
+            code: "CONFLICT",
+            message: "评分任务已更新，请刷新后重试",
+            status: 409,
+          };
+        }
+        await tx.ratingScore.deleteMany({
           where: {
             ratingTaskId: taskId,
             scorerUserId: { in: targetScorerIds },
           },
-        }),
-        db.ratingTask.update({
+        });
+        await tx.ratingTask.update({
           where: { id: taskId },
           data: {
             status: "NEEDS_RESCORE",
+            publishedScore: null,
+            revision: { increment: 1 },
             completedAt: null,
-            createdAt: rescoreCreatedAt,
+            scoringPublishAt,
             scorerSnapshot: targetScorerIds,
             photoReports: [],
             pendingActionType: null,
@@ -100,18 +129,9 @@ export async function POST(
             pendingActionExpiresAt: null,
             pendingActionActorId: null,
           },
-        }),
-        db.ratingProfile.updateMany({
-          where: { userId: task.ratedUserId },
-          data: {
-            ratingStatus: "SCORING",
-            finalScore: null,
-            scoreCompletedAt: null,
-            rankingOptIn: false,
-            rankingOptInUpdatedAt: null,
-          },
-        }),
-      ]);
+        });
+        await syncRatingProfileFromTasks(tx, task.ratedUserId);
+      });
 
       await db.auditLog.create({
         data: {
@@ -138,8 +158,12 @@ export async function POST(
       });
     }
 
-    const rescoreCreatedAt = new Date();
-    const timeline = getScoringTaskTimeline(rescoreCreatedAt);
+    const rescoreRequestedAt = new Date();
+    const scoringPublishAt = getChinaDayStart(rescoreRequestedAt);
+    const timeline = getRatingTaskTimeline(
+      { createdAt: task.createdAt, scoringPublishAt },
+      rescoreRequestedAt
+    );
 
     // Rebuild from the publish day's on-duty roster, excluding the rated user.
     const scorers = await getOnDutyScorers({
@@ -148,17 +172,29 @@ export async function POST(
     });
     const newScorerSnapshot = scorers.map((s) => s.id);
 
-    // Transaction: delete scores, reset task, reset rating profile
-    await db.$transaction([
-      // 1. Delete all existing scores
-      db.ratingScore.deleteMany({ where: { ratingTaskId: taskId } }),
-      // 2. Reset task to PENDING with refreshed scorer snapshot
-      db.ratingTask.update({
+    // Transaction: delete scores, reset task, then aggregate every batch.
+    await db.$transaction(async (tx) => {
+      await lockRatingUserTasks(tx, task.ratedUserId);
+      const currentTask = await tx.ratingTask.findUnique({
+        where: { id: taskId },
+        select: { updatedAt: true },
+      });
+      if (!currentTask || currentTask.updatedAt.getTime() !== task.updatedAt.getTime()) {
+        throw {
+          code: "CONFLICT",
+          message: "评分任务已更新，请刷新后重试",
+          status: 409,
+        };
+      }
+      await tx.ratingScore.deleteMany({ where: { ratingTaskId: taskId } });
+      await tx.ratingTask.update({
         where: { id: taskId },
         data: {
           status: "PENDING",
+          publishedScore: null,
+          revision: { increment: 1 },
           completedAt: null,
-          createdAt: rescoreCreatedAt,
+          scoringPublishAt,
           scorerSnapshot: newScorerSnapshot,
           photoReports: [],
           pendingActionType: null,
@@ -166,19 +202,9 @@ export async function POST(
           pendingActionExpiresAt: null,
           pendingActionActorId: null,
         },
-      }),
-      // 3. Reset user's rating profile
-      db.ratingProfile.updateMany({
-        where: { userId: task.ratedUserId },
-        data: {
-          ratingStatus: "PENDING",
-          finalScore: null,
-          scoreCompletedAt: null,
-          rankingOptIn: false,
-          rankingOptInUpdatedAt: null,
-        },
-      }),
-    ]);
+      });
+      await syncRatingProfileFromTasks(tx, task.ratedUserId);
+    });
 
     // Audit log
     await db.auditLog.create({

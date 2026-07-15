@@ -15,6 +15,14 @@ import {
   type DraftPhotoRecord,
 } from "@/lib/profile-draft";
 import { apiHandler } from "@/lib/api-handler";
+import { notify } from "@/lib/notifications";
+import {
+  enqueueRatingTaskPhotos,
+  getRatingTaskQueueAssignment,
+  removePhotoFromRatingTasks,
+} from "@/lib/rating-task-queue";
+import type { ScoringTaskTimeline } from "@/lib/scoring";
+import { lockRatingUserTasks } from "@/lib/rating-profile-sync";
 import {
   acquireImageProcessingSlot,
   IMAGE_PROCESSING_TIMEOUT_SECONDS,
@@ -158,15 +166,17 @@ export const POST = apiHandler(async (req) => {
   try {
     // 1. Find or auto-create a DRAFT profile so photos can be uploaded
     //    during the profile creation flow (before the form is saved).
-    let profile = await db.profile.findUnique({
-      where: { userId: session.id },
-      include: { photos: true },
-    });
+    const profile = await db.$transaction(async (tx) => {
+      await lockRatingUserTasks(tx, session.id);
+      const existingProfile = await tx.profile.findUnique({
+        where: { userId: session.id },
+        include: { photos: true },
+      });
+      if (existingProfile) return existingProfile;
 
-    if (!profile) {
       // Create a minimal DRAFT profile — placeholder values will be
       // overwritten when the user submits the profile form (PUT /api/profile/me).
-      profile = await db.profile.create({
+      return tx.profile.create({
         data: {
           userId: session.id,
           birthDate: new Date("2000-01-01"),
@@ -179,15 +189,15 @@ export const POST = apiHandler(async (req) => {
         },
         include: { photos: true },
       });
-    }
+    });
 
     const draftData = readProfileDraftData(profile.draftData);
-    const isActiveDraftMode = mode === "draft" && profile.status === "ACTIVE";
-    const currentDraftPhotos = isActiveDraftMode
+    const initialActiveDraftMode = mode === "draft" && profile.status === "ACTIVE";
+    const currentDraftPhotos = initialActiveDraftMode
       ? (draftData.photos ??
         (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos)))
       : [];
-    const currentPhotoCount = isActiveDraftMode
+    const currentPhotoCount = initialActiveDraftMode
       ? currentDraftPhotos.length
       : profile.photos.length;
 
@@ -282,7 +292,9 @@ export const POST = apiHandler(async (req) => {
     webpSizeBytes = webpBuffer.length;
     webpBuffer = null;
 
-    // 4. Create photo record. Active-profile drafts keep photos in draftData until publish.
+    // 4. Persist the upload and enqueue it for scoring atomically. The upload
+    // window, rather than a later profile-publish action, owns the batch.
+    const uploadedAt = new Date();
     const nextOrder = currentPhotoCount;
     const draftPhoto: DraftPhotoRecord = {
       id: `draft_${randomUUID()}`,
@@ -291,41 +303,123 @@ export const POST = apiHandler(async (req) => {
       originalName: webpName || null,
       mimeType,
       sizeBytes: webpSizeBytes,
+      uploadedAt: uploadedAt.toISOString(),
       source: "draft",
     };
 
-    let photo: { id: string; order: number; originalName: string | null };
-    if (isActiveDraftMode) {
-      await db.profile.update({
+    const assignment = await getRatingTaskQueueAssignment({
+      ratedUserId: session.id,
+      queuedAt: uploadedAt,
+    });
+
+    const persisted = await db.$transaction(async (tx) => {
+      await lockRatingUserTasks(tx, session.id);
+      const currentProfile = await tx.profile.findUnique({
         where: { id: profile.id },
-        data: {
-          draftData: toDraftJson({
-            ...draftData,
-            photos: orderDraftPhotos([...currentDraftPhotos, draftPhoto]),
-            deleteAllPhotos: false,
-          }),
-        },
+        include: { photos: true },
       });
-      photo = draftPhoto;
-      storageReferenced = true;
-    } else {
-      photo = await db.profilePhoto.create({
+      if (!currentProfile || currentProfile.userId !== session.id) {
+        throw new Error("Profile disappeared while persisting a photo upload");
+      }
+
+      // Re-read the mutable draft only after acquiring the user lock. A slow
+      // storage upload must not overwrite a draft that was discarded or edited
+      // while the object was being processed.
+      const currentProfileDraft = readProfileDraftData(currentProfile.draftData);
+      const activeDraftMode = mode === "draft" && currentProfile.status === "ACTIVE";
+      const lockedDraftPhotos = activeDraftMode
+        ? (currentProfileDraft.photos ??
+          (currentProfileDraft.deleteAllPhotos
+            ? []
+            : publishedPhotosToDraftPhotos(currentProfile.photos)))
+        : [];
+      const lockedPhotoCount = activeDraftMode
+        ? lockedDraftPhotos.length
+        : currentProfile.photos.length;
+      if (lockedPhotoCount >= MAX_PHOTOS) {
+        return { outcome: "limit" as const };
+      }
+
+      const persistedDraftPhoto: DraftPhotoRecord = {
+        ...draftPhoto,
+        order: lockedPhotoCount,
+      };
+
+      if (activeDraftMode) {
+        await tx.profile.update({
+          where: { id: currentProfile.id },
+          data: {
+            draftData: toDraftJson({
+              ...currentProfileDraft,
+              photos: orderDraftPhotos([...lockedDraftPhotos, persistedDraftPhoto]),
+              deleteAllPhotos: false,
+            }),
+          },
+        });
+        const queueResult = await enqueueRatingTaskPhotos(tx, {
+          ratedUserId: session.id,
+          photoObjectKeys: [key],
+          assignment,
+          taskCreatedAt: uploadedAt,
+        });
+        return {
+          outcome: "persisted" as const,
+          activeDraftMode,
+          photo: persistedDraftPhoto,
+          queueResult,
+        };
+      }
+
+      const createdPhoto = await tx.profilePhoto.create({
         data: {
-          profileId: profile.id,
+          profileId: currentProfile.id,
           storageKey: key,
-          order: nextOrder,
+          order: lockedPhotoCount,
           originalName: webpName || null,
           mimeType,
           sizeBytes: webpSizeBytes,
+          createdAt: uploadedAt,
         },
       });
-      storageReferenced = true;
+      const queueResult = await enqueueRatingTaskPhotos(tx, {
+        ratedUserId: session.id,
+        photoObjectKeys: [key],
+        assignment,
+        taskCreatedAt: uploadedAt,
+      });
+      return {
+        outcome: "persisted" as const,
+        activeDraftMode,
+        photo: createdPhoto,
+        queueResult,
+      };
+    });
+
+    if (persisted.outcome === "limit") {
+      await cleanupUnreferencedUpload(true);
+      return error("LIMIT_EXCEEDED", `最多上传 ${MAX_PHOTOS} 张照片`, 400);
     }
+    const { activeDraftMode, photo, queueResult } = persisted;
+    const queuedTask: { id: string; createdAt: Date } = queueResult.task;
+    const queuedTimeline: ScoringTaskTimeline = assignment.timeline;
+    const queueChanged = queueResult.created || queueResult.reset;
+    storageReferenced = true;
 
     // The storage object and DB/draft reference are now consistent. Release
     // the mutation lease before non-critical audit/response work; finally is
     // intentionally a second, idempotent safety net.
     releaseImageProcessing();
+
+    if (queueChanged && queuedTask && queuedTimeline) {
+      const queueAhead = await db.ratingTask.count({
+        where: {
+          status: { in: ["PENDING", "SCORING"] },
+          ratedUserId: { not: session.id },
+          createdAt: { lt: queuedTask.createdAt },
+        },
+      });
+      await notify.scoringQueued(session.id, queueAhead, queuedTimeline);
+    }
 
     // 9. Audit log
     await logAudit({
@@ -334,7 +428,7 @@ export const POST = apiHandler(async (req) => {
       targetType: "ProfilePhoto",
       targetId: photo.id,
       metadata: {
-        action: isActiveDraftMode ? "draft_upload" : "upload",
+        action: activeDraftMode ? "draft_upload" : "upload",
         key,
       } as Prisma.InputJsonValue,
       ip: getClientIp(req),
@@ -357,7 +451,7 @@ export const POST = apiHandler(async (req) => {
           viewerId: session.id,
           variant: "thumb",
         }),
-        source: isActiveDraftMode ? "draft" : "published",
+        source: activeDraftMode ? "draft" : "published",
       },
     });
   } catch (err) {
@@ -406,34 +500,29 @@ export const DELETE = apiHandler(async (req) => {
     }
 
     if (mode === "draft") {
-      const profile = await db.profile.findUnique({
-        where: { userId: session.id },
-        include: { photos: { orderBy: { order: "asc" } } },
-      });
+      const draftDeletion = await db.$transaction(async (tx) => {
+        await lockRatingUserTasks(tx, session.id);
+        const profile = await tx.profile.findUnique({
+          where: { userId: session.id },
+          include: { photos: { orderBy: { order: "asc" } } },
+        });
+        if (!profile || profile.status !== "ACTIVE") {
+          return { outcome: "not_active" as const };
+        }
 
-      if (profile?.status === "ACTIVE") {
         const draftData = readProfileDraftData(profile.draftData);
         const currentDraftPhotos =
           draftData.photos ??
           (draftData.deleteAllPhotos ? [] : publishedPhotosToDraftPhotos(profile.photos));
-        const photo = currentDraftPhotos.find((p) => p.id === photoId);
-
+        const photo = currentDraftPhotos.find((candidate) => candidate.id === photoId);
         if (!photo) {
-          return error("NOT_FOUND", "照片不存在", 404);
-        }
-
-        if (photo.source === "draft") {
-          try {
-            await deleteFile(photo.storageKey);
-          } catch (err) {
-            console.error("[Photo Delete] Draft MinIO error:", err);
-          }
+          return { outcome: "not_found" as const };
         }
 
         const remaining = orderDraftPhotos(
-          currentDraftPhotos.filter((p) => p.id !== photoId)
+          currentDraftPhotos.filter((candidate) => candidate.id !== photoId)
         );
-        await db.profile.update({
+        await tx.profile.update({
           where: { id: profile.id },
           data: {
             draftData: toDraftJson({
@@ -443,6 +532,28 @@ export const DELETE = apiHandler(async (req) => {
             }),
           },
         });
+        if (photo.source === "draft") {
+          await removePhotoFromRatingTasks(tx, {
+            ratedUserId: session.id,
+            storageKey: photo.storageKey,
+          });
+        }
+
+        return { outcome: "deleted" as const, photo };
+      });
+
+      if (draftDeletion.outcome === "not_found") {
+        return error("NOT_FOUND", "照片不存在", 404);
+      }
+      if (draftDeletion.outcome === "deleted") {
+        const { photo } = draftDeletion;
+        if (photo.source === "draft") {
+          try {
+            await deleteFile(photo.storageKey);
+          } catch (err) {
+            console.error("[Photo Delete] Draft MinIO error:", err);
+          }
+        }
 
         await logAudit({
           actorId: session.id,
@@ -461,18 +572,57 @@ export const DELETE = apiHandler(async (req) => {
       }
     }
 
-    // 1. Find photo and verify ownership
-    const photo = await db.profilePhoto.findUnique({
-      where: { id: photoId },
-      include: { profile: true },
+    // Validate and mutate under the same per-user advisory lock used by uploads,
+    // profile clearing, and task queue changes. This prevents a stale pre-lock
+    // lookup from deleting a newly published photo or a newly queued task.
+    const deletion = await db.$transaction(async (tx) => {
+      await lockRatingUserTasks(tx, session.id);
+
+      const photo = await tx.profilePhoto.findUnique({
+        where: { id: photoId },
+        include: { profile: true },
+      });
+      if (!photo || photo.profile.userId !== session.id) {
+        return { outcome: "not_found" as const };
+      }
+      if (photo.profile.status === "ACTIVE") {
+        return { outcome: "active" as const };
+      }
+
+      await tx.profilePhoto.delete({ where: { id: photoId } });
+
+      const remaining = await tx.profilePhoto.findMany({
+        where: { profileId: photo.profileId },
+        orderBy: { order: "asc" },
+      });
+      for (const [index, remainingPhoto] of remaining.entries()) {
+        if (remainingPhoto.order === index) continue;
+        await tx.profilePhoto.update({
+          where: { id: remainingPhoto.id },
+          data: { order: index },
+        });
+      }
+
+      await removePhotoFromRatingTasks(tx, {
+        ratedUserId: session.id,
+        storageKey: photo.storageKey,
+      });
+
+      if (remaining.length === 0) {
+        await tx.ratingTask.deleteMany({ where: { ratedUserId: session.id } });
+        await tx.ratingProfile.deleteMany({ where: { userId: session.id } });
+      }
+
+      return {
+        outcome: "deleted" as const,
+        storageKey: photo.storageKey,
+      };
     });
 
-    if (!photo || photo.profile.userId !== session.id) {
+    if (deletion.outcome === "not_found") {
       return error("NOT_FOUND", "照片不存在", 404);
     }
-
-    // 1b. Block deletion if profile is ACTIVE — must go through publish or clear
-    if (photo.profile.status === "ACTIVE") {
+    if (deletion.outcome === "active") {
       return error(
         "FORBIDDEN",
         "已发布的资料不能直接删除照片。请通过「发布资料」或「清空资料」来修改。",
@@ -480,28 +630,13 @@ export const DELETE = apiHandler(async (req) => {
       );
     }
 
-    // 2. Delete from MinIO
+    // The database is authoritative. Remove the now-unreferenced object only
+    // after the transaction commits so storage failure cannot break a live row.
     try {
-      await deleteFile(photo.storageKey);
+      await deleteFile(deletion.storageKey);
     } catch (err) {
       console.error("[Photo Delete] MinIO error:", err);
-      // Continue even if MinIO delete fails — we still remove the DB record
     }
-
-    // 3. Delete DB record
-    await db.profilePhoto.delete({ where: { id: photoId } });
-
-    // 4. Re-order remaining photos
-    const remaining = await db.profilePhoto.findMany({
-      where: { profileId: photo.profileId },
-      orderBy: { order: "asc" },
-    });
-
-    await db.$transaction(
-      remaining.map((p, idx) =>
-        db.profilePhoto.update({ where: { id: p.id }, data: { order: idx } })
-      )
-    );
 
     // 5. Audit log
     await logAudit({
@@ -509,7 +644,10 @@ export const DELETE = apiHandler(async (req) => {
       action: AUDIT_ACTIONS.PROFILE_UPDATE,
       targetType: "ProfilePhoto",
       targetId: photoId,
-      metadata: { action: "delete", key: photo.storageKey } as Prisma.InputJsonValue,
+      metadata: {
+        action: "delete",
+        key: deletion.storageKey,
+      } as Prisma.InputJsonValue,
       ip: getClientIp(req),
       userAgent: req.headers.get("user-agent"),
     });

@@ -4,9 +4,13 @@ import { success, error } from "@/lib/api-response";
 import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
 import {
   getAssignedScorerIdsForTask,
-  getScoringTaskTimeline,
+  getRatingTaskTimeline,
   parseScorerSnapshot,
 } from "@/lib/scoring";
+import {
+  lockRatingUserTasks,
+  syncRatingProfileFromTasks,
+} from "@/lib/rating-profile-sync";
 
 /**
  * POST /api/admin/scoring/fix-stuck
@@ -40,7 +44,7 @@ export async function POST() {
 
     for (const task of stuckTasks) {
       const scorerIds = parseScorerSnapshot(task.scorerSnapshot);
-      const timeline = getScoringTaskTimeline(task.createdAt);
+      const timeline = getRatingTaskTimeline(task);
       const onDutyScorerIds = await getOnDutyScorerIds({
         weekday: getChinaDutyWeekday(timeline.publishAt),
       });
@@ -67,27 +71,46 @@ export async function POST() {
       });
 
       if (shouldPromote) {
-        await db.ratingTask.update({
-          where: { id: task.id },
-          data: {
-            status: "REVIEW",
-            completedAt: task.completedAt ?? new Date(),
-            scorerSnapshot: eligibleScorerIds,
-          },
+        const promoted = await db.$transaction(async (tx) => {
+          await lockRatingUserTasks(tx, task.ratedUserId);
+          const currentTask = await tx.ratingTask.findUnique({
+            where: { id: task.id },
+            include: { scores: { select: { scorerUserId: true } } },
+          });
+          if (
+            !currentTask ||
+            currentTask.status !== task.status ||
+            currentTask.updatedAt.getTime() !== task.updatedAt.getTime()
+          ) {
+            return false;
+          }
+          const currentScoredCount = currentTask.scores.filter((score) =>
+            eligibleScorerIdSet.has(score.scorerUserId)
+          ).length;
+          if (currentScoredCount < eligibleCount) return false;
+
+          const updated = await tx.ratingTask.updateMany({
+            where: {
+              id: task.id,
+              status: task.status,
+              updatedAt: task.updatedAt,
+            },
+            data: {
+              status: "REVIEW",
+              completedAt: task.completedAt ?? new Date(),
+              scorerSnapshot: eligibleScorerIds,
+            },
+          });
+          if (updated.count === 0) return false;
+          await syncRatingProfileFromTasks(tx, task.ratedUserId);
+          return true;
         });
 
-        await db.ratingProfile.upsert({
-          where: { userId: task.ratedUserId },
-          create: {
-            userId: task.ratedUserId,
-            ratingStatus: "REVIEW",
-          },
-          update: {
-            ratingStatus: "REVIEW",
-          },
-        });
-
-        fixedCount++;
+        if (promoted) {
+          fixedCount++;
+        } else {
+          debugInfo[debugInfo.length - 1].promoted = false;
+        }
       }
     }
 

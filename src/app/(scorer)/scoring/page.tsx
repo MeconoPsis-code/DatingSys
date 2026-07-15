@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { NumberStepperInput } from "@/components/NumberStepperInput";
 import { PhotoLightbox } from "@/components/profile/photo-lightbox";
 import { PHOTO_REPORT_REASONS } from "@/lib/photo-report-reasons";
@@ -30,6 +30,7 @@ interface ScoringTask {
   id: string;
   status: string;
   createdAt: string;
+  revision: number;
   timeline: ScoringTimeline;
   progress: { scored: number; total: number };
   photos: TaskPhoto[];
@@ -117,6 +118,11 @@ export default function ScoringPage() {
   const [error, setError] = useState<string | null>(null);
   const [nextAvailableAt, setNextAvailableAt] = useState<string | null>(null);
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const refreshPromiseRef = useRef<Promise<void> | null>(null);
+  const taskMutationInFlightRef = useRef(false);
+  const taskMutationVersionRef = useRef(0);
+  const activeTaskIdRef = useRef<string | null>(null);
+  const activeTaskRevisionRef = useRef<number | null>(null);
 
   // Current index in the task list (page flipping)
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -143,12 +149,17 @@ export default function ScoringPage() {
 
   async function handleReport() {
     if (!currentTask || !reportReason.trim()) return;
+    taskMutationVersionRef.current += 1;
+    taskMutationInFlightRef.current = true;
     setReportSubmitting(true);
     try {
       const res = await fetch(`/api/scoring/tasks/${currentTask.id}/report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: reportReason.trim() }),
+        body: JSON.stringify({
+          reason: reportReason.trim(),
+          taskRevision: currentTask.revision,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || "举报失败");
@@ -159,39 +170,85 @@ export default function ScoringPage() {
     } catch (err) {
       alert(err instanceof Error ? err.message : "举报失败");
     } finally {
+      taskMutationInFlightRef.current = false;
       setReportSubmitting(false);
     }
   }
 
-  const fetchTasks = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/scoring/tasks?status=${tab}`);
-      if (!res.ok) {
-        if (res.status === 403) {
-          setError("无权访问评分功能");
-          setTasks([]);
-          setNextAvailableAt(null);
-          return;
-        }
-        throw new Error("加载失败");
+  const fetchTasks = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      const pendingRefresh = refreshPromiseRef.current;
+      if (pendingRefresh) {
+        if (silent) return;
+        await pendingRefresh;
       }
-      const data = await res.json();
-      const fetched = data.data?.tasks || [];
-      setTasks(fetched);
-      setNextAvailableAt(data.data?.nextAvailableAt ?? null);
-      setCurrentIndex(0);
-      setPhotoIndex(0);
-      setScores(createInitialScores());
-      setSubmitError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
-      setNextAvailableAt(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [tab]);
+
+      const refresh = (async () => {
+        const mutationVersion = taskMutationVersionRef.current;
+        if (!silent) {
+          setLoading(true);
+          setError(null);
+        }
+        try {
+          const res = await fetch(`/api/scoring/tasks?status=${tab}`);
+          if (!res.ok) {
+            if (res.status === 403) {
+              setError("无权访问评分功能");
+              setTasks([]);
+              setNextAvailableAt(null);
+              return;
+            }
+            throw new Error("加载失败");
+          }
+          const data = await res.json();
+          const fetched: ScoringTask[] = data.data?.tasks || [];
+          if (silent && mutationVersion !== taskMutationVersionRef.current) {
+            return;
+          }
+          setTasks(fetched);
+          setNextAvailableAt(data.data?.nextAvailableAt ?? null);
+          const activeTaskId = silent ? activeTaskIdRef.current : null;
+          const nextActiveIndex = activeTaskId
+            ? fetched.findIndex((task) => task.id === activeTaskId)
+            : -1;
+          const activeTaskChanged =
+            nextActiveIndex >= 0 &&
+            fetched[nextActiveIndex].revision !== activeTaskRevisionRef.current;
+
+          if (!silent || nextActiveIndex < 0) {
+            setCurrentIndex(0);
+            setPhotoIndex(0);
+            setScores(createInitialScores());
+            setSubmitError(null);
+          } else {
+            setCurrentIndex(nextActiveIndex);
+            if (activeTaskChanged) {
+              setPhotoIndex(0);
+              setScores(createInitialScores());
+              setSubmitError("照片任务已更新，请重新评分");
+            }
+          }
+        } catch (err) {
+          if (!silent) {
+            setError(err instanceof Error ? err.message : "加载失败");
+            setNextAvailableAt(null);
+          }
+        } finally {
+          if (!silent) setLoading(false);
+        }
+      })();
+
+      refreshPromiseRef.current = refresh;
+      try {
+        await refresh;
+      } finally {
+        if (refreshPromiseRef.current === refresh) {
+          refreshPromiseRef.current = null;
+        }
+      }
+    },
+    [tab]
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -203,6 +260,29 @@ export default function ScoringPage() {
 
   const currentTask = tasks[currentIndex] ?? null;
   const totalPending = tasks.length;
+
+  useEffect(() => {
+    activeTaskIdRef.current = currentTask?.id ?? null;
+    activeTaskRevisionRef.current = currentTask?.revision ?? null;
+  }, [currentTask?.id, currentTask?.revision]);
+
+  useEffect(() => {
+    const refreshVisibleTasks = () => {
+      if (document.visibilityState === "visible" && !taskMutationInFlightRef.current) {
+        void fetchTasks({ silent: true });
+      }
+    };
+    const handleVisibilityChange = () => refreshVisibleTasks();
+    const interval = window.setInterval(refreshVisibleTasks, 15_000);
+
+    window.addEventListener("focus", refreshVisibleTasks);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshVisibleTasks);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchTasks]);
 
   async function advanceAfterTaskHandled() {
     const remaining = tasks.filter((_, i) => i !== currentIndex);
@@ -220,13 +300,18 @@ export default function ScoringPage() {
 
   async function handleSubmitScore() {
     if (!currentTask) return;
+    taskMutationVersionRef.current += 1;
+    taskMutationInFlightRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
     try {
       const res = await fetch(`/api/scoring/tasks/${currentTask.id}/score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ score: Math.round(scoreValue * 10) / 10 }),
+        body: JSON.stringify({
+          score: Math.round(scoreValue * 10) / 10,
+          taskRevision: currentTask.revision,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -242,6 +327,7 @@ export default function ScoringPage() {
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "提交失败");
     } finally {
+      taskMutationInFlightRef.current = false;
       setSubmitting(false);
     }
   }

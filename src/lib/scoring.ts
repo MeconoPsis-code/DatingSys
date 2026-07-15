@@ -1,11 +1,5 @@
 export const SCOREABLE_TASK_STATUSES = ["PENDING", "SCORING", "NEEDS_RESCORE"] as const;
 export const LIVE_ROSTER_TASK_STATUSES = ["PENDING", "SCORING"] as const;
-export const ACTIVE_SCORING_TASK_STATUSES = [
-  "PENDING",
-  "SCORING",
-  "NEEDS_RESCORE",
-  "REPORTED",
-] as const;
 
 const CHINA_UTC_OFFSET_MS = 8 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -60,19 +54,11 @@ function getChinaDayHourBoundary(date: Date, hour: number): Date {
   return addHours(dayStart, hour);
 }
 
-export function getScoringTaskTimeline(
-  createdAt: Date,
-  now = new Date()
+function buildScoringTaskTimeline(
+  pendingAt: Date,
+  publishAt: Date,
+  now: Date
 ): ScoringTaskTimeline {
-  // A scoring batch runs from 18:00 on the previous China calendar day through
-  // 17:59:59 today. Uploads before 18:00 join today's already-published batch;
-  // uploads from 18:00 onward wait for tomorrow's on-duty scorers.
-  const currentDayPendingAt = getChinaDayHourBoundary(createdAt, 18);
-  const pendingAt =
-    createdAt.getTime() < currentDayPendingAt.getTime()
-      ? addHours(currentDayPendingAt, -24)
-      : currentDayPendingAt;
-  const publishAt = addHours(pendingAt, 6);
   const publishEndsAt = addHours(publishAt, 18);
   const scoringDeadlineAt = addHours(publishAt, 24);
   const reviewDeadlineAt = addHours(scoringDeadlineAt, 18);
@@ -104,6 +90,37 @@ export function getScoringTaskTimeline(
     isScoringClosed: nowTime >= scoringDeadlineAt.getTime(),
     isReviewOverdue: nowTime >= reviewDeadlineAt.getTime(),
   };
+}
+
+export function getScoringTaskTimeline(
+  createdAt: Date,
+  now = new Date()
+): ScoringTaskTimeline {
+  // A scoring batch runs from 18:00 on the previous China calendar day through
+  // 17:59:59 today. Uploads before 18:00 join today's already-published batch;
+  // uploads from 18:00 onward wait for tomorrow's on-duty scorers.
+  const currentDayPendingAt = getChinaDayHourBoundary(createdAt, 18);
+  const pendingAt =
+    createdAt.getTime() < currentDayPendingAt.getTime()
+      ? addHours(currentDayPendingAt, -24)
+      : currentDayPendingAt;
+  const publishAt = addHours(pendingAt, 6);
+  return buildScoringTaskTimeline(pendingAt, publishAt, now);
+}
+
+export function getRatingTaskTimeline(
+  task: { createdAt: Date; scoringPublishAt?: Date | null },
+  now = new Date()
+): ScoringTaskTimeline {
+  if (!task.scoringPublishAt) {
+    return getScoringTaskTimeline(task.createdAt, now);
+  }
+
+  return buildScoringTaskTimeline(
+    addHours(task.scoringPublishAt, -6),
+    task.scoringPublishAt,
+    now
+  );
 }
 
 export function serializeScoringTaskTimeline(

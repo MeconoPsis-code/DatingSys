@@ -6,10 +6,14 @@ import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
 import {
   calculateAverageScore,
   getAssignedScorerIdsForTask,
-  getScoringTaskTimeline,
+  getRatingTaskTimeline,
   SCOREABLE_TASK_STATUSES,
 } from "@/lib/scoring";
 import { SCORE_ACTION_REVOCATION_WINDOW_MS } from "@/lib/scoring-revocation";
+import {
+  lockRatingUserTasks,
+  syncRatingProfileFromTasks,
+} from "@/lib/rating-profile-sync";
 
 function canPublishImmediately(status: string) {
   return SCOREABLE_TASK_STATUSES.includes(
@@ -22,8 +26,9 @@ async function getCurrentAssignedScorerIds(task: {
   ratedUserId: string;
   scorerSnapshot: unknown;
   createdAt: Date;
+  scoringPublishAt: Date | null;
 }) {
-  const timeline = getScoringTaskTimeline(task.createdAt);
+  const timeline = getRatingTaskTimeline(task);
   const onDutyScorerIds = await getOnDutyScorerIds({
     weekday: getChinaDutyWeekday(timeline.publishAt),
   });
@@ -73,10 +78,16 @@ export async function POST(
       const assignedScorerIds = await getCurrentAssignedScorerIds(task);
 
       const published = await db.$transaction(async (tx) => {
+        await lockRatingUserTasks(tx, task.ratedUserId);
         const updated = await tx.ratingTask.updateMany({
-          where: { id: taskId, status: task.status },
+          where: {
+            id: taskId,
+            status: task.status,
+            updatedAt: task.updatedAt,
+          },
           data: {
             status: "COMPLETED",
+            publishedScore: finalScore,
             completedAt: now,
             scorerSnapshot: assignedScorerIds,
             pendingActionType: null,
@@ -94,20 +105,7 @@ export async function POST(
           };
         }
 
-        await tx.ratingProfile.upsert({
-          where: { userId: task.ratedUserId },
-          create: {
-            userId: task.ratedUserId,
-            ratingStatus: "COMPLETED",
-            finalScore,
-            scoreCompletedAt: now,
-          },
-          update: {
-            ratingStatus: "COMPLETED",
-            finalScore,
-            scoreCompletedAt: now,
-          },
-        });
+        const profileState = await syncRatingProfileFromTasks(tx, task.ratedUserId);
 
         await tx.auditLog.create({
           data: {
@@ -126,15 +124,23 @@ export async function POST(
           },
         });
 
-        return { finalScore };
+        return {
+          finalScore,
+          publishedFinalScore: profileState.finalScore,
+          shouldNotifyCompletion: profileState.shouldNotifyCompletion,
+        };
       });
 
-      await notify.scoringComplete(task.ratedUserId, published.finalScore);
+      if (published.shouldNotifyCompletion && published.publishedFinalScore !== null) {
+        await notify.scoringComplete(task.ratedUserId, published.publishedFinalScore);
+      }
 
       return success({
-        message: "已终止打分并按当前均分直接发布",
+        message: published.shouldNotifyCompletion
+          ? "已终止打分并按当前均分直接发布"
+          : "当前批次已完成，仍有其他批次待评分",
         finalScore: published.finalScore,
-        publishedImmediately: true,
+        publishedImmediately: published.shouldNotifyCompletion,
       });
     }
 
@@ -143,12 +149,16 @@ export async function POST(
     }
 
     const scheduled = await db.$transaction(async (tx) => {
+      await lockRatingUserTasks(tx, task.ratedUserId);
       const current = await tx.ratingTask.findUnique({
         where: { id: taskId },
-        select: { status: true },
+        select: { status: true, updatedAt: true },
       });
 
-      if (current?.status !== "REVIEW") {
+      if (
+        current?.status !== "REVIEW" ||
+        current.updatedAt.getTime() !== task.updatedAt.getTime()
+      ) {
         throw {
           code: "CONFLICT",
           message: "评分任务状态已变化，请刷新后重试",
@@ -170,18 +180,7 @@ export async function POST(
         },
       });
 
-      await tx.ratingProfile.upsert({
-        where: { userId: task.ratedUserId },
-        create: {
-          userId: task.ratedUserId,
-          ratingStatus: "REVIEW",
-        },
-        update: {
-          ratingStatus: "REVIEW",
-          finalScore: null,
-          scoreCompletedAt: null,
-        },
-      });
+      await syncRatingProfileFromTasks(tx, task.ratedUserId);
 
       await tx.auditLog.create({
         data: {

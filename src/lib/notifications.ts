@@ -63,8 +63,8 @@ export const notify = {
     await create(
       userId,
       "SCORING_QUEUED",
-      "资料发布成功",
-      `你的资料已成功发布！${timelineMsg}${queueMsg}`
+      "照片已进入评分队列",
+      `${timelineMsg}${queueMsg}`
     );
   },
 

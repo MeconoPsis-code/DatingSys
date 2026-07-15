@@ -336,15 +336,20 @@ model RatingProfile {
 
 /// A rating task assigned to all scorers for one user's photo
 model RatingTask {
-  id             String           @id @default(cuid())
-  ratedUserId    String
-  photoObjectKey String
-  status         RatingTaskStatus @default(PENDING)
-  scorerSnapshot Json // Array of scorer user IDs at task creation
-  photoReports   Json? // Array of { reporterId, reason, createdAt }
-  completedAt    DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id                 String           @id @default(cuid())
+  ratedUserId        String
+  photoObjectKey     String
+  photoObjectKeys    Json? // Frozen photo storage-key list for this scoring batch
+  status             RatingTaskStatus @default(PENDING)
+  scorerSnapshot     Json // Array of scorer user IDs at task creation
+  photoReports       Json? // Array of { reporterId, reason, createdAt }
+  scoringPublishAt   DateTime? // Explicit China-day 00:00 batch; legacy rows fall back to createdAt
+  photoUploadBatchAt DateTime? // Upload-window batch key; null for non-upload/legacy tasks
+  publishedScore     Float? // Task-level published result used for multi-batch aggregation
+  revision           Int              @default(1) // Incremented when photos/assignment are reset
+  completedAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   pendingActionType      String? // "APPROVE" or "OVERRIDE"
   pendingActionValue     Float? // Overridden score value
@@ -354,7 +359,9 @@ model RatingTask {
   ratedUser User          @relation("RatedUser", fields: [ratedUserId], references: [id])
   scores    RatingScore[]
 
+  @@unique([ratedUserId, photoUploadBatchAt])
   @@index([status])
+  @@index([scoringPublishAt])
   @@index([pendingActionExpiresAt])
   @@map("rating_tasks")
 }
@@ -391,13 +398,13 @@ model ScorerDutySchedule {
 
 /// Cached match result (optional for MVP — can compute in real-time)
 model MatchSnapshot {
-  id           String   @id @default(cuid())
-  userId       String
-  targetUserId String
-  matchType    String // "mutual" | "one_way"
-  direction    String // "me_fits_them" | "they_fit_me" | "mutual"
-  score        Float? // relevance score for sorting
-  computedAt   DateTime @default(now())
+  id              String    @id @default(cuid())
+  userId          String
+  targetUserId    String
+  matchType       String // "mutual" | "one_way"
+  direction       String // "me_fits_them" | "they_fit_me" | "mutual"
+  score           Float? // relevance score for sorting
+  computedAt      DateTime  @default(now())
   mutualMatchedAt DateTime?
 
   user   User @relation("MatchUser", fields: [userId], references: [id])

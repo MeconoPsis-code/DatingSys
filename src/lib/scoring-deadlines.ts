@@ -1,6 +1,10 @@
 import { db } from "@/lib/db";
 import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
-import { getAssignedScorerIdsForTask, getScoringTaskTimeline } from "@/lib/scoring";
+import { getAssignedScorerIdsForTask, getRatingTaskTimeline } from "@/lib/scoring";
+import {
+  lockRatingUserTasks,
+  syncRatingProfileFromTasks,
+} from "@/lib/rating-profile-sync";
 
 const DEADLINE_MANAGED_STATUSES = ["PENDING", "SCORING", "NEEDS_RESCORE"] as const;
 
@@ -18,7 +22,7 @@ export async function promoteExpiredScoringTasks(now = new Date()): Promise<numb
   let promotedCount = 0;
 
   for (const task of tasks) {
-    const timeline = getScoringTaskTimeline(task.createdAt, now);
+    const timeline = getRatingTaskTimeline(task, now);
     if (!timeline.isScoringClosed) continue;
 
     const dutyWeekday = getChinaDutyWeekday(timeline.publishAt);
@@ -36,31 +40,27 @@ export async function promoteExpiredScoringTasks(now = new Date()): Promise<numb
       onDutyScorerIds: onDutyScorerIds.filter((id) => id !== task.ratedUserId),
     });
 
-    const updated = await db.ratingTask.updateMany({
-      where: {
-        id: task.id,
-        status: task.status,
-      },
-      data: {
-        status: "REVIEW",
-        completedAt: task.completedAt ?? timeline.scoringDeadlineAt,
-        scorerSnapshot: assignedScorerIds,
-      },
+    const promoted = await db.$transaction(async (tx) => {
+      await lockRatingUserTasks(tx, task.ratedUserId);
+      const updated = await tx.ratingTask.updateMany({
+        where: {
+          id: task.id,
+          status: task.status,
+          updatedAt: task.updatedAt,
+        },
+        data: {
+          status: "REVIEW",
+          completedAt: task.completedAt ?? timeline.scoringDeadlineAt,
+          scorerSnapshot: assignedScorerIds,
+        },
+      });
+      if (updated.count === 0) return false;
+
+      await syncRatingProfileFromTasks(tx, task.ratedUserId);
+      return true;
     });
 
-    if (updated.count === 0) continue;
-
-    await db.ratingProfile.upsert({
-      where: { userId: task.ratedUserId },
-      create: {
-        userId: task.ratedUserId,
-        ratingStatus: "REVIEW",
-      },
-      update: {
-        ratingStatus: "REVIEW",
-      },
-    });
-
+    if (!promoted) continue;
     promotedCount++;
   }
 

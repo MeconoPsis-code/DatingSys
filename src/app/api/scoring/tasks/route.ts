@@ -6,11 +6,12 @@ import { buildImageProxyUrl } from "@/lib/image-proxy";
 import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
 import {
   getAssignedScorerIdsForTask,
-  getScoringTaskTimeline,
+  getRatingTaskTimeline,
   SCOREABLE_TASK_STATUSES,
   serializeScoringTaskTimeline,
 } from "@/lib/scoring";
 import { promoteExpiredScoringTasks } from "@/lib/scoring-deadlines";
+import { parseRatingTaskPhotoKeys } from "@/lib/rating-task-queue";
 
 /**
  * GET /api/scoring/tasks
@@ -52,6 +53,7 @@ export async function GET(req: Request) {
           include: {
             profile: {
               select: {
+                status: true,
                 birthDate: true,
                 heightCm: true,
                 weightKg: true,
@@ -71,13 +73,13 @@ export async function GET(req: Request) {
     const dutyCache = new Map<number, string[]>();
     const visibleTasks: Array<{
       task: (typeof tasks)[number];
-      timeline: ReturnType<typeof getScoringTaskTimeline>;
+      timeline: ReturnType<typeof getRatingTaskTimeline>;
       eligibleScorerIds: string[];
     }> = [];
     let nextAvailableAt: string | null = null;
 
     for (const task of tasks) {
-      const timeline = getScoringTaskTimeline(task.createdAt, now);
+      const timeline = getRatingTaskTimeline(task, now);
       const dutyWeekday = getChinaDutyWeekday(timeline.publishAt);
       let onDutyScorerIds = dutyCache.get(dutyWeekday);
 
@@ -114,14 +116,29 @@ export async function GET(req: Request) {
     // Enrich with photos + signed URLs
     const enriched = await Promise.all(
       visibleTasks.map(async ({ task, timeline, eligibleScorerIds }) => {
+        const frozenPhotoKeys = parseRatingTaskPhotoKeys(task.photoObjectKeys);
+        const taskPhotoKeys =
+          frozenPhotoKeys.length > 0 ? frozenPhotoKeys : [task.photoObjectKey];
         const photos = await db.profilePhoto.findMany({
           where: {
             profile: { userId: task.ratedUserId },
+            storageKey: { in: taskPhotoKeys },
           },
           orderBy: { order: "asc" },
         });
+        const photoByStorageKey = new Map(
+          photos.map((photo) => [photo.storageKey, photo])
+        );
+        const taskPhotos = taskPhotoKeys.map((storageKey, index) => {
+          const publishedPhoto = photoByStorageKey.get(storageKey);
+          return {
+            id: publishedPhoto?.id ?? `${task.id}:${index}`,
+            order: publishedPhoto?.order ?? index,
+            storageKey,
+          };
+        });
 
-        const photosWithUrls = photos.map((p) => ({
+        const photosWithUrls = taskPhotos.map((p) => ({
           id: p.id,
           order: p.order,
           url: buildImageProxyUrl(p.storageKey, {
@@ -140,17 +157,19 @@ export async function GET(req: Request) {
           id: task.id,
           status: task.status,
           createdAt: task.createdAt,
+          revision: task.revision,
           timeline: serializeScoringTaskTimeline(timeline),
           progress: { scored: scoredCount, total: totalScorers },
-          profile: task.ratedUser.profile
-            ? {
-                birthDate: task.ratedUser.profile.birthDate,
-                heightCm: task.ratedUser.profile.heightCm,
-                weightKg: task.ratedUser.profile.weightKg,
-                attribute: task.ratedUser.profile.attribute,
-                customAttribute: task.ratedUser.profile.customAttribute,
-              }
-            : null,
+          profile:
+            task.ratedUser.profile?.status === "ACTIVE"
+              ? {
+                  birthDate: task.ratedUser.profile.birthDate,
+                  heightCm: task.ratedUser.profile.heightCm,
+                  weightKg: task.ratedUser.profile.weightKg,
+                  attribute: task.ratedUser.profile.attribute,
+                  customAttribute: task.ratedUser.profile.customAttribute,
+                }
+              : null,
           photos: photosWithUrls,
         };
       })

@@ -5,10 +5,14 @@ import { notify } from "@/lib/notifications";
 import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
 import {
   getAssignedScorerIdsForTask,
-  getScoringTaskTimeline,
+  getRatingTaskTimeline,
   SCOREABLE_TASK_STATUSES,
 } from "@/lib/scoring";
 import { SCORE_ACTION_REVOCATION_WINDOW_MS } from "@/lib/scoring-revocation";
+import {
+  lockRatingUserTasks,
+  syncRatingProfileFromTasks,
+} from "@/lib/rating-profile-sync";
 
 function canPublishImmediately(status: string) {
   return (
@@ -22,8 +26,9 @@ async function getCurrentAssignedScorerIds(task: {
   ratedUserId: string;
   scorerSnapshot: unknown;
   createdAt: Date;
+  scoringPublishAt: Date | null;
 }) {
-  const timeline = getScoringTaskTimeline(task.createdAt);
+  const timeline = getRatingTaskTimeline(task);
   const onDutyScorerIds = await getOnDutyScorerIds({
     weekday: getChinaDutyWeekday(timeline.publishAt),
   });
@@ -67,6 +72,18 @@ export async function POST(
         throw { code: "NOT_FOUND", message: "评分任务不存在", status: 404 };
       }
 
+      await lockRatingUserTasks(tx, task.ratedUserId);
+      const currentTask = await tx.ratingTask.findUnique({
+        where: { id: taskId },
+        select: { updatedAt: true },
+      });
+      if (!currentTask || currentTask.updatedAt.getTime() !== task.updatedAt.getTime()) {
+        throw {
+          code: "CONFLICT",
+          message: "评分任务已更新，请刷新后重试",
+          status: 409,
+        };
+      }
       const now = new Date();
 
       if (canPublishImmediately(task.status)) {
@@ -79,6 +96,7 @@ export async function POST(
           where: { id: taskId },
           data: {
             status: "COMPLETED",
+            publishedScore: score,
             completedAt: now,
             ...(scorerSnapshot ? { scorerSnapshot } : {}),
             pendingActionType: null,
@@ -88,20 +106,7 @@ export async function POST(
           },
         });
 
-        await tx.ratingProfile.upsert({
-          where: { userId: task.ratedUserId },
-          create: {
-            userId: task.ratedUserId,
-            ratingStatus: "COMPLETED",
-            finalScore: score,
-            scoreCompletedAt: now,
-          },
-          update: {
-            ratingStatus: "COMPLETED",
-            finalScore: score,
-            scoreCompletedAt: now,
-          },
-        });
+        const profileState = await syncRatingProfileFromTasks(tx, task.ratedUserId);
 
         await tx.auditLog.create({
           data: {
@@ -121,6 +126,8 @@ export async function POST(
         return {
           mode: "published" as const,
           ratedUserId: task.ratedUserId,
+          publishedFinalScore: profileState.finalScore,
+          shouldNotifyCompletion: profileState.shouldNotifyCompletion,
         };
       }
 
@@ -142,18 +149,7 @@ export async function POST(
         },
       });
 
-      await tx.ratingProfile.upsert({
-        where: { userId: task.ratedUserId },
-        create: {
-          userId: task.ratedUserId,
-          ratingStatus: "REVIEW",
-        },
-        update: {
-          ratingStatus: "REVIEW",
-          finalScore: null,
-          scoreCompletedAt: null,
-        },
-      });
+      await syncRatingProfileFromTasks(tx, task.ratedUserId);
 
       await tx.auditLog.create({
         data: {
@@ -177,10 +173,14 @@ export async function POST(
     });
 
     if (result.mode === "published") {
-      await notify.scoringComplete(result.ratedUserId, score);
+      if (result.shouldNotifyCompletion && result.publishedFinalScore !== null) {
+        await notify.scoringComplete(result.ratedUserId, result.publishedFinalScore);
+      }
 
       return success({
-        message: "最终评分已直接发布",
+        message: result.shouldNotifyCompletion
+          ? "最终评分已直接发布"
+          : "当前批次已完成，仍有其他批次待评分",
         finalScore: score,
       });
     }

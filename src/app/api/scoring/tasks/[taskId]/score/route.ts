@@ -8,9 +8,13 @@ import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
 import {
   formatChinaDateTime,
   getAssignedScorerIdsForTask,
-  getScoringTaskTimeline,
+  getRatingTaskTimeline,
   SCOREABLE_TASK_STATUSES,
 } from "@/lib/scoring";
+import {
+  lockRatingUserTasks,
+  syncRatingProfileFromTasks,
+} from "@/lib/rating-profile-sync";
 
 // Valid scores: 0, 0.1, 0.2, ..., 10
 function isValidScore(score: number): boolean {
@@ -42,7 +46,10 @@ export async function POST(
     return error("VALIDATION_ERROR", "无效的请求体", 422);
   }
 
-  const { score } = body as { score?: number };
+  const { score, taskRevision } = body as {
+    score?: number;
+    taskRevision?: number;
+  };
 
   if (score === undefined || score === null || typeof score !== "number") {
     return error("VALIDATION_ERROR", "请提供评分", 422);
@@ -50,6 +57,13 @@ export async function POST(
 
   if (!isValidScore(score)) {
     return error("VALIDATION_ERROR", "评分必须在 0-10 之间，步长 0.1", 422);
+  }
+
+  if (
+    taskRevision !== undefined &&
+    (!Number.isInteger(taskRevision) || taskRevision < 1)
+  ) {
+    return error("VALIDATION_ERROR", "无效的评分任务版本", 422);
   }
 
   // Find the task
@@ -61,6 +75,9 @@ export async function POST(
   if (!task) {
     return error("NOT_FOUND", "评分任务不存在", 404);
   }
+  if (taskRevision !== undefined && task.revision !== taskRevision) {
+    return error("CONFLICT", "照片任务已更新，请刷新后重新评分", 409);
+  }
 
   if (
     !SCOREABLE_TASK_STATUSES.includes(
@@ -71,7 +88,7 @@ export async function POST(
   }
 
   const now = new Date();
-  const timeline = getScoringTaskTimeline(task.createdAt, now);
+  const timeline = getRatingTaskTimeline(task, now);
   if (!timeline.isReleasedForScoring) {
     const message =
       now.getTime() < timeline.publishAt.getTime()
@@ -100,67 +117,85 @@ export async function POST(
     return error("CONFLICT", "你已经评过此任务", 409);
   }
 
-  // Create the score
-  await db.ratingScore.create({
-    data: {
-      ratingTaskId: taskId,
-      scorerUserId: session.id,
-      score,
-    },
-  });
-
-  // Normal queue tasks move into SCORING after the first score. Focused
-  // rescore tasks keep NEEDS_RESCORE so assignment stays on the snapshot.
-  if (task.status === "PENDING") {
-    await db.ratingTask.update({
-      where: { id: taskId },
-      data: { status: "SCORING" },
-    });
-
-    await db.ratingProfile.upsert({
-      where: { userId: task.ratedUserId },
-      create: {
-        userId: task.ratedUserId,
-        ratingStatus: "SCORING",
-      },
-      update: {
-        ratingStatus: "SCORING",
-      },
-    });
-  }
-
-  // Check if all currently on-duty eligible scorers have scored.
   const eligibleCount = eligibleScorerIds.length;
-  const totalScored = await db.ratingScore.count({
-    where: {
-      ratingTaskId: taskId,
-      scorerUserId: { in: eligibleScorerIds },
-    },
-  });
-  const allDone = totalScored >= eligibleCount;
-
-  if (allDone) {
-    // All scorers done — move to REVIEW for super admin approval
-    await db.ratingTask.update({
+  const scoringResult = await db.$transaction(async (tx) => {
+    await lockRatingUserTasks(tx, task.ratedUserId);
+    const currentTask = await tx.ratingTask.findUnique({
       where: { id: taskId },
+      select: { status: true, revision: true },
+    });
+    if (
+      !currentTask ||
+      currentTask.revision !== (taskRevision ?? task.revision) ||
+      !SCOREABLE_TASK_STATUSES.includes(
+        currentTask.status as (typeof SCOREABLE_TASK_STATUSES)[number]
+      )
+    ) {
+      return { error: "STALE_TASK" as const };
+    }
+
+    const duplicateScore = await tx.ratingScore.findUnique({
+      where: {
+        ratingTaskId_scorerUserId: {
+          ratingTaskId: taskId,
+          scorerUserId: session.id,
+        },
+      },
+      select: { id: true },
+    });
+    if (duplicateScore) {
+      return { error: "DUPLICATE_SCORE" as const };
+    }
+
+    await tx.ratingScore.create({
       data: {
-        status: "REVIEW",
-        completedAt: now,
-        scorerSnapshot: eligibleScorerIds,
+        ratingTaskId: taskId,
+        scorerUserId: session.id,
+        score,
       },
     });
 
-    await db.ratingProfile.upsert({
-      where: { userId: task.ratedUserId },
-      create: {
-        userId: task.ratedUserId,
-        ratingStatus: "REVIEW",
-      },
-      update: {
-        ratingStatus: "REVIEW",
+    const totalScored = await tx.ratingScore.count({
+      where: {
+        ratingTaskId: taskId,
+        scorerUserId: { in: eligibleScorerIds },
       },
     });
+    const allDone = totalScored >= eligibleCount;
+
+    if (allDone) {
+      await tx.ratingTask.update({
+        where: { id: taskId },
+        data: {
+          status: "REVIEW",
+          completedAt: now,
+          scorerSnapshot: eligibleScorerIds,
+        },
+      });
+    } else if (currentTask.status === "PENDING") {
+      // Focused rescore tasks retain NEEDS_RESCORE until all assignees finish.
+      await tx.ratingTask.updateMany({
+        where: { id: taskId, status: "PENDING" },
+        data: { status: "SCORING" },
+      });
+    } else {
+      // Touch the task so admin actions that were prepared from an older score
+      // set fail their updatedAt compare instead of publishing a stale average.
+      await tx.ratingTask.update({
+        where: { id: taskId },
+        data: { updatedAt: now },
+      });
+    }
+
+    await syncRatingProfileFromTasks(tx, task.ratedUserId);
+    return { allDone, totalScored };
+  });
+  if ("error" in scoringResult) {
+    return scoringResult.error === "DUPLICATE_SCORE"
+      ? error("CONFLICT", "你已经评过此任务", 409)
+      : error("CONFLICT", "评分任务已更新，请刷新后重新评分", 409);
   }
+  const { allDone, totalScored } = scoringResult;
 
   // Audit log
   await logAudit({

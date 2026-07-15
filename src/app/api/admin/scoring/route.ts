@@ -7,11 +7,12 @@ import { getChinaDutyWeekday, getOnDutyScorers } from "@/lib/scorer-duty";
 import {
   calculateAverageScore,
   getAssignedScorerIdsForTask,
-  getScoringTaskTimeline,
+  getRatingTaskTimeline,
   parsePhotoReports,
   serializeScoringTaskTimeline,
 } from "@/lib/scoring";
 import { promoteExpiredScoringTasks } from "@/lib/scoring-deadlines";
+import { parseRatingTaskPhotoKeys } from "@/lib/rating-task-queue";
 
 // ── GET /api/admin/scoring — admin scoring management ──
 
@@ -87,13 +88,13 @@ export async function GET(req: Request) {
     ]);
 
     const timelinesByTaskId = new Map(
-      tasks.map((task) => [task.id, getScoringTaskTimeline(task.createdAt, now)])
+      tasks.map((task) => [task.id, getRatingTaskTimeline(task, now)])
     );
     const dutyWeekdays = Array.from(
       new Set(
         tasks.map((task) => {
           const timeline =
-            timelinesByTaskId.get(task.id) ?? getScoringTaskTimeline(task.createdAt, now);
+            timelinesByTaskId.get(task.id) ?? getRatingTaskTimeline(task, now);
           return getChinaDutyWeekday(timeline.publishAt);
         })
       )
@@ -145,9 +146,22 @@ export async function GET(req: Request) {
 
     const data = await Promise.all(
       tasks.map(async (t) => {
-        const photos = t.ratedUser.profile?.photos ?? [];
-        const timeline =
-          timelinesByTaskId.get(t.id) ?? getScoringTaskTimeline(t.createdAt, now);
+        const frozenPhotoKeys = parseRatingTaskPhotoKeys(t.photoObjectKeys);
+        const taskPhotoKeys =
+          frozenPhotoKeys.length > 0 ? frozenPhotoKeys : [t.photoObjectKey];
+        const profilePhotos = t.ratedUser.profile?.photos ?? [];
+        const photoByStorageKey = new Map(
+          profilePhotos.map((photo) => [photo.storageKey, photo])
+        );
+        const photos = taskPhotoKeys.map((storageKey, index) => {
+          const publishedPhoto = photoByStorageKey.get(storageKey);
+          return {
+            id: publishedPhoto?.id ?? `${t.id}:${index}`,
+            order: publishedPhoto?.order ?? index,
+            storageKey,
+          };
+        });
+        const timeline = timelinesByTaskId.get(t.id) ?? getRatingTaskTimeline(t, now);
         const taskOnDutyScorerIds = (
           onDutyScorersByWeekday.get(getChinaDutyWeekday(timeline.publishAt)) ?? []
         ).map((scorer) => scorer.id);
@@ -202,7 +216,11 @@ export async function GET(req: Request) {
           completedAt: t.completedAt,
           createdAt: t.createdAt,
           timeline: serializeScoringTaskTimeline(timeline),
-          finalScore: t.ratedUser.ratingProfile?.finalScore ?? null,
+          finalScore:
+            t.publishedScore ??
+            (t.status === "COMPLETED"
+              ? (t.ratedUser.ratingProfile?.finalScore ?? null)
+              : null),
           liveScore,
           photoReports: parsePhotoReports(t.photoReports),
           pendingActionType: t.pendingActionType,

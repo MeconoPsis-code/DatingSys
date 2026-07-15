@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { success, error } from "@/lib/api-response";
 import { CLEAR_COOLDOWN_DAYS } from "@/lib/validations/profile";
-import { ACTIVE_SCORING_TASK_STATUSES } from "@/lib/scoring";
+import { lockRatingUserTasks } from "@/lib/rating-profile-sync";
 
 /**
  * POST /api/profile/clear
@@ -26,23 +26,18 @@ export async function POST(req: Request) {
   }
 
   // 2. Delete profile + preference + rating data, set clear timestamp on User
-  await db.$transaction([
-    // Clean up any pending/scoring rating tasks (scores cascade-deleted)
-    db.ratingTask.deleteMany({
-      where: {
-        ratedUserId: session.id,
-        status: { in: [...ACTIVE_SCORING_TASK_STATUSES] },
-      },
-    }),
-    // Remove rating profile
-    db.ratingProfile.deleteMany({ where: { userId: session.id } }),
-    db.preference.deleteMany({ where: { userId: session.id } }),
-    db.profile.delete({ where: { userId: session.id } }),
-    db.user.update({
+  await db.$transaction(async (tx) => {
+    await lockRatingUserTasks(tx, session.id);
+    // All task batches are invalid once every profile photo is cleared.
+    await tx.ratingTask.deleteMany({ where: { ratedUserId: session.id } });
+    await tx.ratingProfile.deleteMany({ where: { userId: session.id } });
+    await tx.preference.deleteMany({ where: { userId: session.id } });
+    await tx.profile.delete({ where: { userId: session.id } });
+    await tx.user.update({
       where: { id: session.id },
       data: { lastProfileClearedAt: isSuperAdmin ? null : new Date() },
-    }),
-  ]);
+    });
+  });
 
   // 3. Audit log
   await logAudit({

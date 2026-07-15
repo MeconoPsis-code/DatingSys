@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getScoringTaskTimeline } from "../src/lib/scoring";
+import {
+  getChinaDayStart,
+  getRatingTaskTimeline,
+  getScoringTaskTimeline,
+} from "../src/lib/scoring";
 
 test("assigns uploads before the 18:00 China cutoff to today's scoring batch", () => {
   const createdAt = new Date("2026-07-14T09:59:59.999Z"); // 17:59:59.999 China time
@@ -29,6 +33,25 @@ test("keeps the scoring window open from 00:00 through 23:59 China time", () => 
   const beforeMidnight = new Date("2026-07-14T15:59:59.999Z");
   const atMidnight = new Date("2026-07-14T16:00:00.000Z");
 
-  assert.equal(getScoringTaskTimeline(createdAt, beforeMidnight).isReleasedForScoring, true);
+  assert.equal(
+    getScoringTaskTimeline(createdAt, beforeMidnight).isReleasedForScoring,
+    true
+  );
   assert.equal(getScoringTaskTimeline(createdAt, atMidnight).isReleasedForScoring, false);
+});
+
+test("puts an admin rescore requested after 18:00 into today's open batch", () => {
+  const requestedAt = new Date("2026-07-14T14:00:00.000Z"); // 22:00 China time
+  const originalCreatedAt = new Date("2026-07-10T02:00:00.000Z");
+  const scoringPublishAt = getChinaDayStart(requestedAt);
+  const timeline = getRatingTaskTimeline(
+    { createdAt: originalCreatedAt, scoringPublishAt },
+    requestedAt
+  );
+
+  assert.equal(originalCreatedAt.toISOString(), "2026-07-10T02:00:00.000Z");
+  assert.equal(scoringPublishAt.toISOString(), "2026-07-13T16:00:00.000Z");
+  assert.equal(timeline.publishAt.toISOString(), "2026-07-13T16:00:00.000Z");
+  assert.equal(timeline.scoringDeadlineAt.toISOString(), "2026-07-14T16:00:00.000Z");
+  assert.equal(timeline.isReleasedForScoring, true);
 });

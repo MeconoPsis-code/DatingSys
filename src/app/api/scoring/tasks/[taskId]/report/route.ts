@@ -7,10 +7,14 @@ import { getChinaDutyWeekday, getOnDutyScorerIds } from "@/lib/scorer-duty";
 import {
   formatChinaDateTime,
   getAssignedScorerIdsForTask,
-  getScoringTaskTimeline,
+  getRatingTaskTimeline,
   SCOREABLE_TASK_STATUSES,
 } from "@/lib/scoring";
 import { isPhotoReportReason } from "@/lib/photo-report-reasons";
+import {
+  lockRatingUserTasks,
+  syncRatingProfileFromTasks,
+} from "@/lib/rating-profile-sync";
 
 /**
  * POST /api/scoring/tasks/[taskId]/report
@@ -29,14 +33,24 @@ export async function POST(
     const { taskId } = await params;
     const body = await req.json();
     const reason = (body.reason as string)?.trim();
+    const taskRevision = body.taskRevision;
 
     if (!reason || !isPhotoReportReason(reason)) {
       return error("INVALID_REASON", "请选择有效的举报原因", 400);
+    }
+    if (
+      taskRevision !== undefined &&
+      (!Number.isInteger(taskRevision) || taskRevision < 1)
+    ) {
+      return error("INVALID_TASK_VERSION", "无效的评分任务版本", 422);
     }
 
     const task = await db.ratingTask.findUnique({ where: { id: taskId } });
     if (!task) {
       return error("NOT_FOUND", "任务不存在", 404);
+    }
+    if (taskRevision !== undefined && task.revision !== taskRevision) {
+      return error("CONFLICT", "照片任务已更新，请刷新后重试", 409);
     }
 
     if (
@@ -48,7 +62,7 @@ export async function POST(
     }
 
     const now = new Date();
-    const timeline = getScoringTaskTimeline(task.createdAt, now);
+    const timeline = getRatingTaskTimeline(task, now);
     if (!timeline.isReleasedForScoring) {
       const message =
         now.getTime() < timeline.publishAt.getTime()
@@ -83,14 +97,45 @@ export async function POST(
       createdAt: new Date().toISOString(),
     };
 
-    await db.ratingTask.update({
-      where: { id: taskId },
-      data: {
-        photoReports: [...existing, newReport],
-        scorerSnapshot: assignedScorerIds,
-        status: "REPORTED",
-      },
+    const reportResult = await db.$transaction(async (tx) => {
+      await lockRatingUserTasks(tx, task.ratedUserId);
+      const currentTask = await tx.ratingTask.findUnique({
+        where: { id: taskId },
+        select: { status: true, revision: true, photoReports: true },
+      });
+      if (
+        !currentTask ||
+        currentTask.revision !== (taskRevision ?? task.revision) ||
+        !SCOREABLE_TASK_STATUSES.includes(
+          currentTask.status as (typeof SCOREABLE_TASK_STATUSES)[number]
+        )
+      ) {
+        return { error: "STALE_TASK" as const };
+      }
+
+      const currentReports =
+        (currentTask.photoReports as Array<{ reporterId: string }>) || [];
+      if (currentReports.some((report) => report.reporterId === session.id)) {
+        return { error: "ALREADY_REPORTED" as const };
+      }
+
+      await tx.ratingTask.update({
+        where: { id: taskId },
+        data: {
+          photoReports: [...currentReports, newReport],
+          scorerSnapshot: assignedScorerIds,
+          status: "REPORTED",
+        },
+      });
+      await syncRatingProfileFromTasks(tx, task.ratedUserId);
+      return { error: null };
     });
+    if (reportResult.error === "ALREADY_REPORTED") {
+      return error("ALREADY_REPORTED", "你已经举报过此任务的照片", 400);
+    }
+    if (reportResult.error === "STALE_TASK") {
+      return error("CONFLICT", "评分任务已更新，请刷新后重试", 409);
+    }
 
     return success({ message: "举报已提交，管理员将会审核" });
   } catch (err) {
