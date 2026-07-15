@@ -73,7 +73,12 @@ export async function lockRatingUserTasks(
   tx: Prisma.TransactionClient,
   ratedUserId: string
 ) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${ratedUserId}))`;
+  // PostgreSQL exposes advisory locks as a void-returning function. Prisma's
+  // PostgreSQL adapter cannot deserialize `void`, so cast the result while
+  // keeping the lock acquisition itself inside this transaction.
+  await tx.$queryRaw<Array<{ lockResult: string }>>`
+    SELECT pg_advisory_xact_lock(hashtext(${ratedUserId}))::text AS "lockResult"
+  `;
 }
 
 export async function syncRatingProfileFromTasks(
