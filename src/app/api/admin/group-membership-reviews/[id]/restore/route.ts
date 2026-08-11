@@ -12,7 +12,7 @@ const log = createLogger('admin:group-review-restore');
  * POST /api/admin/group-membership-reviews/[id]/restore
  *
  * Restore a user whose membership is in LEFT_PENDING_REVIEW.
- * Updates GroupMembership status to RESTORED and resolves the AdminReview.
+ * Updates GroupMembership status to VERIFIED and resolves the AdminReview.
  *
  * Requires ADMIN+ role.
  */
@@ -32,7 +32,9 @@ export async function POST(
       );
     }
 
-    // Restore user's group membership
+    const now = new Date();
+
+    // Restore user's group membership to the canonical usable status.
     if (review.userId) {
       await db.groupMembership.updateMany({
         where: {
@@ -40,8 +42,13 @@ export async function POST(
           status: MembershipStatus.LEFT_PENDING_REVIEW,
         },
         data: {
-          status: MembershipStatus.RESTORED,
-          restoredAt: new Date(),
+          status: MembershipStatus.VERIFIED,
+          verifiedAt: now,
+          restoredAt: now,
+          leftDetectedAt: null,
+          leftConfirmedAt: null,
+          leaveType: null,
+          reviewReason: null,
           reviewedBy: session.id,
           reviewRemark: 'Admin restored',
         },
@@ -55,7 +62,7 @@ export async function POST(
         status: 'resolved',
         resolution: 'restored',
         handledBy: session.id,
-        handledAt: new Date(),
+        handledAt: now,
       },
     });
 

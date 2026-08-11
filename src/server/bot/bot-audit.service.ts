@@ -47,6 +47,7 @@ export const BOT_AUDIT_ACTIONS = {
   BOT_MEMBER_LEFT_DETECTED: 'BOT_MEMBER_LEFT_DETECTED',
   BOT_MEMBER_LEFT_PENDING_REVIEW: 'BOT_MEMBER_LEFT_PENDING_REVIEW',
   BOT_MEMBER_LEFT_UNBOUND_USER: 'BOT_MEMBER_LEFT_UNBOUND_USER',
+  BOT_MEMBER_RESTORED: 'BOT_MEMBER_RESTORED',
 
   // 群名片
   BOT_GROUP_CARD_CHECKED: 'BOT_GROUP_CARD_CHECKED',
@@ -61,8 +62,7 @@ export const BOT_AUDIT_ACTIONS = {
   BOT_ERROR: 'BOT_ERROR',
 } as const;
 
-export type BotAuditAction =
-  (typeof BOT_AUDIT_ACTIONS)[keyof typeof BOT_AUDIT_ACTIONS];
+export type BotAuditAction = (typeof BOT_AUDIT_ACTIONS)[keyof typeof BOT_AUDIT_ACTIONS];
 
 // ── Raw Event Logging ───────────────────────────────────
 
@@ -144,9 +144,7 @@ export async function logBotAction(params: {
         groupId: params.groupId ?? null,
         qqNumber: params.qqNumber ?? null,
         status: params.status,
-        request: params.request
-          ? (params.request as Prisma.InputJsonValue)
-          : undefined,
+        request: params.request ? (params.request as Prisma.InputJsonValue) : undefined,
         response: params.response
           ? (params.response as Prisma.InputJsonValue)
           : undefined,

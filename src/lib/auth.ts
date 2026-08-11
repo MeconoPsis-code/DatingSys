@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { getSessionPayload } from "@/lib/session";
 import { hasRole } from "@/lib/rbac";
 import { AppError } from "@/lib/errors";
+import { normalizeUsableMembershipStatus } from "@/lib/group-membership-sync";
 import type { UserRole, UserStatus, MembershipStatus } from "@prisma/client";
 
 /**
@@ -46,7 +47,9 @@ export async function getSession(): Promise<SessionUser | null> {
     qqNumber: user.qqNumber ?? null,
     nickname: user.authIdentities[0]?.nickname ?? null,
     avatarUrl: user.authIdentities[0]?.avatarUrl ?? null,
-    membershipStatus: user.groupMembership?.status ?? null,
+    membershipStatus: normalizeUsableMembershipStatus(
+      user.groupMembership?.status ?? null
+    ),
   };
 }
 

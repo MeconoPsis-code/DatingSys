@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { PhotoLightbox } from "@/components/profile/photo-lightbox";
 import { ATTRIBUTE_OPTIONS } from "@/data/attributes";
 import { LOCATION_TYPE_OPTIONS } from "@/data/location-types";
 import { getCityName, getProvinceName } from "@/data/regions";
@@ -109,6 +111,7 @@ export function ProfileSubmitPreview({
   publishLabel = "确认发布",
   hasMobileNavigation = false,
 }: ProfileSubmitPreviewProps) {
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const provinceName = getProvinceName(data.provinceCode);
   const cityName = getCityName(data.provinceCode, data.cityCode);
   const expectedAttributeSummary = getExpectedAttributeSummary(data);
@@ -177,10 +180,14 @@ export function ProfileSubmitPreview({
       <PreviewSection title={`照片（${data.photos.length} 张）`}>
         {data.photos.length > 0 ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {data.photos.map((photo) => (
-              <figure
+            {data.photos.map((photo, index) => (
+              <button
                 key={photo.id}
-                className="relative aspect-[4/3] overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary))]"
+                type="button"
+                aria-label={`打开照片 ${photo.order + 1} 详情`}
+                title="打开照片详情"
+                onClick={() => setLightboxIdx(index)}
+                className="group relative aspect-[4/3] cursor-zoom-in overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--secondary))] text-left"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -188,12 +195,12 @@ export function ProfileSubmitPreview({
                   alt={photo.originalName || `资料照片 ${photo.order + 1}`}
                   loading="lazy"
                   decoding="async"
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
                 />
-                <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-3 pb-2 pt-7 text-xs text-white">
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent px-3 pb-2 pt-7 text-xs text-white">
                   照片 {photo.order + 1}
-                </figcaption>
-              </figure>
+                </span>
+              </button>
             ))}
           </div>
         ) : (
@@ -246,6 +253,14 @@ export function ProfileSubmitPreview({
           </button>
         </div>
       </div>
+
+      {lightboxIdx !== null && (
+        <PhotoLightbox
+          photos={data.photos}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
     </div>
   );
 }

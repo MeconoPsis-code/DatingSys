@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
         await handleGroupMemberJoined(normalized.event, napcatClient);
         break;
       case 'group_member_left':
-        await handleGroupMemberLeft(normalized.event, napcatClient);
+        await handleGroupMemberLeft(normalized.event);
         break;
       case 'group_card_changed':
         await handleGroupCardChanged(normalized.event, napcatClient);

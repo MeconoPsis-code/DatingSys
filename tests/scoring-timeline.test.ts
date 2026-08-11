@@ -1,12 +1,55 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  calculateAverageScore,
   createProfilePublishScoringBatch,
   getChinaDayStart,
   getRatingTaskTimeline,
   getScoringTaskTimeline,
   hasSamePhotoKeySet,
 } from "../src/lib/scoring";
+
+test("keeps the arithmetic mean when there are five scores", () => {
+  const score = calculateAverageScore([
+    { score: 1 },
+    { score: 5 },
+    { score: 5 },
+    { score: 5 },
+    { score: 10 },
+  ]);
+
+  assert.equal(score, 5.2);
+});
+
+test("drops one lowest and one highest score when there are more than five scores", () => {
+  const score = calculateAverageScore([
+    { score: 10 },
+    { score: 4 },
+    { score: 1 },
+    { score: 7 },
+    { score: 5 },
+    { score: 6 },
+  ]);
+
+  assert.equal(score, 5.5);
+});
+
+test("drops only one score from each tied extreme", () => {
+  const score = calculateAverageScore([
+    { score: 1 },
+    { score: 9 },
+    { score: 2 },
+    { score: 9 },
+    { score: 4 },
+    { score: 1 },
+  ]);
+
+  assert.equal(score, 4);
+});
+
+test("returns null when no score has been submitted", () => {
+  assert.equal(calculateAverageScore([]), null);
+});
 
 test("assigns a profile published before 18:00 to today's scoring batch", () => {
   const createdAt = new Date("2026-07-14T09:59:59.999Z"); // 17:59:59.999 China time

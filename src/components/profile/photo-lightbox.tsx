@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { FlipHorizontal2, FlipVertical2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface LightboxPhoto {
   id: string;
@@ -26,11 +28,15 @@ function clampScale(scale: number): number {
 function ControlButton({
   label,
   disabled = false,
+  pressed,
+  testId,
   onClick,
   children,
 }: {
   label: string;
   disabled?: boolean;
+  pressed?: boolean;
+  testId?: string;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -38,10 +44,15 @@ function ControlButton({
     <button
       type="button"
       aria-label={label}
+      aria-pressed={pressed}
       title={label}
+      data-testid={testId}
       disabled={disabled}
       onClick={onClick}
-      className="flex h-10 min-w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 px-2 text-white shadow-sm backdrop-blur-sm transition-all hover:bg-white/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:active:scale-100"
+      className={cn(
+        "flex h-10 min-w-10 items-center justify-center rounded-xl border border-white/10 bg-white/10 px-2 text-white shadow-sm backdrop-blur-sm transition-all hover:bg-white/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:active:scale-100",
+        pressed && "border-brand-blue/70 bg-brand-blue/45 hover:bg-brand-blue/55"
+      )}
     >
       {children}
     </button>
@@ -52,6 +63,8 @@ export function PhotoLightbox({ photos, initialIndex, onClose }: PhotoLightboxPr
   const [idx, setIdx] = useState(initialIndex);
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [flipHorizontal, setFlipHorizontal] = useState(false);
+  const [flipVertical, setFlipVertical] = useState(false);
   const [loadedPhotoId, setLoadedPhotoId] = useState<string | null>(null);
   const [failedPhotoId, setFailedPhotoId] = useState<string | null>(null);
   const photo = photos[idx];
@@ -63,6 +76,8 @@ export function PhotoLightbox({ photos, initialIndex, onClose }: PhotoLightboxPr
   const resetTransform = useCallback(() => {
     setScale(1);
     setRotation(0);
+    setFlipHorizontal(false);
+    setFlipVertical(false);
   }, []);
 
   const showPhoto = useCallback((nextIndex: number) => {
@@ -85,6 +100,8 @@ export function PhotoLightbox({ photos, initialIndex, onClose }: PhotoLightboxPr
       if (event.key === "+" || event.key === "=") zoomBy(SCALE_STEP);
       if (event.key === "-") zoomBy(-SCALE_STEP);
       if (event.key === "0") resetTransform();
+      if (event.key.toLowerCase() === "h") setFlipHorizontal((current) => !current);
+      if (event.key.toLowerCase() === "v") setFlipVertical((current) => !current);
     }
 
     window.addEventListener("keydown", handleKey);
@@ -140,6 +157,10 @@ export function PhotoLightbox({ photos, initialIndex, onClose }: PhotoLightboxPr
               <img
                 key={photo.id}
                 data-testid="photo-lightbox-image"
+                data-flip-horizontal={flipHorizontal}
+                data-flip-vertical={flipVertical}
+                data-rotation={rotation}
+                data-scale={scale}
                 src={photo.url}
                 alt={photo.originalName || `照片 ${photo.order + 1}`}
                 draggable={false}
@@ -155,7 +176,9 @@ export function PhotoLightbox({ photos, initialIndex, onClose }: PhotoLightboxPr
                 className={`max-h-full max-w-full select-none rounded-xl border border-white/10 object-contain shadow-2xl transition-[transform,opacity] duration-200 ${
                   imageLoading || imageFailed ? "opacity-0" : "opacity-100"
                 }`}
-                style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
+                style={{
+                  transform: `rotate(${rotation}deg) scale(${flipHorizontal ? -scale : scale}, ${flipVertical ? -scale : scale})`,
+                }}
               />
             </div>
           </div>
@@ -218,6 +241,22 @@ export function PhotoLightbox({ photos, initialIndex, onClose }: PhotoLightboxPr
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v6h6M5.5 16a8 8 0 1 0 1-9.5L3 10" />
             </svg>
+          </ControlButton>
+          <ControlButton
+            label="水平镜像翻转 (H)"
+            pressed={flipHorizontal}
+            testId="photo-flip-horizontal"
+            onClick={() => setFlipHorizontal((current) => !current)}
+          >
+            <FlipHorizontal2 className="h-5 w-5" aria-hidden="true" />
+          </ControlButton>
+          <ControlButton
+            label="垂直镜像翻转 (V)"
+            pressed={flipVertical}
+            testId="photo-flip-vertical"
+            onClick={() => setFlipVertical((current) => !current)}
+          >
+            <FlipVertical2 className="h-5 w-5" aria-hidden="true" />
           </ControlButton>
           <ControlButton
             label="缩小"

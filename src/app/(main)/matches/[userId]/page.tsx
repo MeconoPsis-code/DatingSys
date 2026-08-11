@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, use } from "react";
 import { getProvinceName, getCityName } from "@/data/regions";
 import { ATTRIBUTE_LABELS } from "@/data/attributes";
 import { formatBmi } from "@/lib/bmi";
+import { PhotoLightbox } from "@/components/profile/photo-lightbox";
 import Link from "next/link";
 
 /* ─── Types ──────────────────────────────────────────── */
@@ -105,6 +106,7 @@ export default function MatchDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
   const fetchDetail = useCallback(async () => {
@@ -118,6 +120,8 @@ export default function MatchDetailPage({
       }
       const data = await res.json();
       setDetail(data.data);
+      setPhotoIndex(0);
+      setLightboxIdx(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载失败");
     } finally {
@@ -214,12 +218,20 @@ export default function MatchDetailPage({
         {/* Photos */}
         {sortedPhotos.length > 0 && (
           <div className="relative bg-black/30">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={sortedPhotos[photoIndex]?.url}
-              alt="用户照片"
-              className="mx-auto h-[18rem] w-full object-contain sm:h-[24rem]"
-            />
+            <button
+              type="button"
+              aria-label={`打开照片 ${photoIndex + 1} 详情`}
+              title="打开照片详情"
+              onClick={() => setLightboxIdx(photoIndex)}
+              className="block w-full cursor-zoom-in"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={sortedPhotos[photoIndex]?.url}
+                alt="用户照片"
+                className="mx-auto h-[18rem] w-full object-contain sm:h-[24rem]"
+              />
+            </button>
             {sortedPhotos.length > 1 && (
               <>
                 <button
@@ -332,6 +344,14 @@ export default function MatchDetailPage({
           )}
         </div>
       </div>
+
+      {lightboxIdx !== null && (
+        <PhotoLightbox
+          photos={sortedPhotos}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
+      )}
     </div>
   );
 }

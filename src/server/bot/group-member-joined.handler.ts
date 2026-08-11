@@ -2,6 +2,7 @@ import type { BotGroupMemberJoinedEvent } from './bot.types';
 import type { QQBotClient } from './clients/qqbot-client.interface';
 import { logBotAudit, BOT_AUDIT_ACTIONS } from './bot-audit.service';
 import { createLogger } from '@/lib/logger';
+import { restoreGroupMemberIfNeeded } from './group-sync.service';
 
 const log = createLogger('bot:member-joined');
 
@@ -34,7 +35,15 @@ export async function handleGroupMemberJoined(
     groupId,
   });
 
-  // 2. Send welcome message with @mention
+  // 2. Restore an existing website account immediately when a former member rejoins.
+  try {
+    await restoreGroupMemberIfNeeded({ qqNumber, groupId });
+  } catch (err) {
+    // Welcome delivery should not be blocked; the daily full sync will retry restoration.
+    log.error({ err, qqNumber, groupId }, 'Failed to restore returning group member');
+  }
+
+  // 3. Send welcome message with @mention
   try {
     await botClient.sendGroupMessage(groupId, {
       type: 'at',

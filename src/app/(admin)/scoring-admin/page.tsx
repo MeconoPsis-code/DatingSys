@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Image from "next/image";
 import { ArrowDownToLine } from "lucide-react";
 import { PhotoLightbox } from "@/components/profile/photo-lightbox";
+import { calculateAverageScore, shouldTrimScoreExtremes } from "@/lib/scoring";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -236,24 +237,22 @@ function TaskCard({
   // Map scored user IDs
   const scoredUserIds = new Set(task.scores.map((s) => s.scorerUserId));
 
-  const calculatedAvg =
-    task.liveScore ??
-    (task.scores.length > 0
-      ? Math.round(
-          (task.scores.reduce((sum, s) => sum + s.score, 0) / task.scores.length) * 10
-        ) / 10
-      : null);
+  const calculatedAvg = task.liveScore ?? calculateAverageScore(task.scores);
+  const trimsExtremeScores = shouldTrimScoreExtremes(task.scores.length);
+  const liveScoreLabel = trimsExtremeScores ? "实时去极值均分" : "实时均分";
   const displayScore =
     task.status === "COMPLETED" && task.finalScore !== null
       ? task.finalScore
       : calculatedAvg;
-  const scoreLabel = task.status === "COMPLETED" ? "已发布评分" : "实时均分";
+  const scoreLabel = task.status === "COMPLETED" ? "已发布评分" : liveScoreLabel;
   const scoreFootnote =
     task.status === "COMPLETED" &&
     task.finalScore !== null &&
     calculatedAvg !== task.finalScore
       ? "手动设定"
-      : `基于 ${task.scores.length} 个评分`;
+      : trimsExtremeScores
+        ? `基于 ${task.scores.length} 个评分，已去掉 1 个最低分和 1 个最高分`
+        : `基于 ${task.scores.length} 个评分`;
   const canForcePublish =
     isSuperAdmin && task.photoReports.length === 0 && canForcePublishStatus(task.status);
 
@@ -571,14 +570,14 @@ function TaskCard({
                 disabled={calculatedAvg === null}
                 title={
                   calculatedAvg === null
-                    ? "当前还没有评分，无法按实时均分发布"
-                    : "终止当前打分并按实时均分直接发布"
+                    ? `当前还没有评分，无法按${liveScoreLabel}发布`
+                    : `终止当前打分并按${liveScoreLabel}直接发布`
                 }
                 onClick={() => {
                   if (calculatedAvg === null) return;
                   if (
                     confirm(
-                      `确定要终止当前打分，并按实时均分 ${calculatedAvg.toFixed(
+                      `确定要终止当前打分，并按${liveScoreLabel} ${calculatedAvg.toFixed(
                         1
                       )} 分直接发布吗？未评分的评分员将不再继续评分。`
                     )
@@ -594,7 +593,7 @@ function TaskCard({
                 >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-                终止并发布均分
+                终止并发布{trimsExtremeScores ? "去极值均分" : "均分"}
               </button>
               <OverrideScoreInput onSubmit={(score) => onOverride(task.id, score)} />
             </>

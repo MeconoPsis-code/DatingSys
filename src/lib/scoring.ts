@@ -220,9 +220,19 @@ export function roundScore(score: number): number {
   return Math.round(score * 10) / 10;
 }
 
+export function shouldTrimScoreExtremes(scoreCount: number): boolean {
+  return scoreCount > 5;
+}
+
 export function calculateAverageScore(scores: Array<{ score: number }>): number | null {
   if (scores.length === 0) return null;
-  const avg = scores.reduce((sum, item) => sum + item.score, 0) / scores.length;
+
+  const scoreValues = scores.map((item) => item.score);
+  const scoresToAverage = shouldTrimScoreExtremes(scoreValues.length)
+    ? scoreValues.sort((left, right) => left - right).slice(1, -1)
+    : scoreValues;
+  const avg =
+    scoresToAverage.reduce((sum, score) => sum + score, 0) / scoresToAverage.length;
   return roundScore(avg);
 }
 

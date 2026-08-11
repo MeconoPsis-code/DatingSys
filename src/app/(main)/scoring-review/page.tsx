@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { PhotoLightbox } from "@/components/profile/photo-lightbox";
+import { calculateAverageScore, shouldTrimScoreExtremes } from "@/lib/scoring";
 
 /* ─── Types ──────────────────────────────────────────── */
 
@@ -102,6 +104,7 @@ export default function ScoringReviewPage() {
   // Active review card state
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [overrideMode, setOverrideMode] = useState(false);
   const [overrideScore, setOverrideScore] = useState(5.0);
   const [submitting, setSubmitting] = useState(false);
@@ -139,12 +142,6 @@ export default function ScoringReviewPage() {
     return () => window.clearTimeout(timeout);
   }, [fetchTasks]);
 
-  function computeAverage(scores: ScoreEntry[]): number {
-    if (scores.length === 0) return 0;
-    const avg = scores.reduce((sum, s) => sum + s.score, 0) / scores.length;
-    return Math.round(avg * 10) / 10;
-  }
-
   function getPublishScore(task: ReviewTask, avg: number): number {
     if (task.pendingActionType === "OVERRIDE" && task.pendingActionValue !== null) {
       return task.pendingActionValue;
@@ -160,7 +157,9 @@ export default function ScoringReviewPage() {
   function getPublishScoreLabel(task: ReviewTask) {
     if (task.pendingActionType === "OVERRIDE") return "待发布最终分";
     if (task.finalScore !== null) return "最终分";
-    return "将发布均分";
+    return shouldTrimScoreExtremes(task.scores.length)
+      ? "将发布去极值均分"
+      : "将发布均分";
   }
 
   function goToPhoto(direction: -1 | 1) {
@@ -423,10 +422,11 @@ export default function ScoringReviewPage() {
       {!loading && tasks.length > 0 && (
         <div className="space-y-3">
           {tasks.map((task) => {
-            const avg = computeAverage(task.scores);
+            const avg = calculateAverageScore(task.scores) ?? 0;
             const publishScore = getPublishScore(task, avg);
             const publishScoreLabel = getPublishScoreLabel(task);
             const isActive = activeTaskId === task.id;
+            const trimsExtremeScores = shouldTrimScoreExtremes(task.scores.length);
 
             return (
               <div
@@ -497,7 +497,9 @@ export default function ScoringReviewPage() {
                     <div className="mt-0.5 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
                       <span>{task.scoredCount} 人评分</span>
                       <span>·</span>
-                      <span>均分 {avg}</span>
+                      <span>
+                        {trimsExtremeScores ? "去极值均分" : "均分"} {avg}
+                      </span>
                       {(task.pendingActionType === "OVERRIDE" ||
                         task.finalScore !== null) && (
                         <>
@@ -536,12 +538,21 @@ export default function ScoringReviewPage() {
                           onTouchEnd={handlePhotoTouchEnd}
                           onTouchCancel={handlePhotoTouchCancel}
                         >
-                          <img
-                            src={activeTask.photos[photoIndex]?.url}
-                            alt={`Photo ${photoIndex + 1}`}
-                            className="mx-auto max-h-80 select-none object-contain"
-                            draggable={false}
-                          />
+                          <button
+                            type="button"
+                            aria-label={`打开照片 ${photoIndex + 1} 详情`}
+                            title="打开照片详情"
+                            onClick={() => setLightboxIdx(photoIndex)}
+                            className="block w-full cursor-zoom-in"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={activeTask.photos[photoIndex]?.url}
+                              alt={`照片 ${photoIndex + 1}`}
+                              className="mx-auto max-h-80 select-none object-contain"
+                              draggable={false}
+                            />
+                          </button>
                           {activeTask.photos.length > 1 && (
                             <>
                               <button
@@ -719,10 +730,17 @@ export default function ScoringReviewPage() {
                           </div>
                         ))}
                       </div>
-                      <div className="mt-2 flex items-center justify-between rounded-lg bg-[hsl(var(--primary)/0.1)] px-3 py-2">
-                        <span className="text-xs font-medium text-[hsl(var(--primary))]">
-                          平均分
-                        </span>
+                      <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-[hsl(var(--primary)/0.1)] px-3 py-2">
+                        <div>
+                          <span className="text-xs font-medium text-[hsl(var(--primary))]">
+                            {trimsExtremeScores ? "去极值均分" : "平均分"}
+                          </span>
+                          {trimsExtremeScores && (
+                            <p className="mt-0.5 text-[10px] text-[hsl(var(--muted-foreground))]">
+                              已去掉 1 个最低分和 1 个最高分
+                            </p>
+                          )}
+                        </div>
                         <span className="text-sm font-bold text-[hsl(var(--primary))]">
                           {avg}
                         </span>
@@ -863,6 +881,14 @@ export default function ScoringReviewPage() {
             );
           })}
         </div>
+      )}
+
+      {lightboxIdx !== null && activeTask && (
+        <PhotoLightbox
+          photos={activeTask.photos}
+          initialIndex={lightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+        />
       )}
     </div>
   );
