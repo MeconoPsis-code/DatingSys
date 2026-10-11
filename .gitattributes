@@ -1,0 +1,6 @@
+# Keep checkout and release archive bytes stable on Windows and Linux.
+* text=auto eol=lf
+
+# These migrations were first deployed with CRLF; preserve their applied checksums.
+prisma/migrations/20261002000000_platform_v2/migration.sql text eol=crlf
+prisma/migrations/20261011000000_group_card_sync/migration.sql text eol=crlf
