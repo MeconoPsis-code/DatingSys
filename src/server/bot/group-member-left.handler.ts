@@ -5,8 +5,22 @@ import { createLogger } from '@/lib/logger';
 import { MembershipStatus } from '@prisma/client';
 import type { Prisma } from '@prisma/client';
 import { getGroupMembershipSyncAction } from '@/lib/group-membership-sync';
+import { syncMembershipGroupCardsInTransaction } from './group-card-sync.service';
+import { lockRatingUserTasks } from '@/lib/rating-profile-sync';
 
 const log = createLogger('bot:member-left');
+
+async function markSyncMembershipLeft(userId: string, groupId: string): Promise<void> {
+  await db.$transaction(async (tx) => {
+    await lockRatingUserTasks(tx, userId);
+    const workspace = await tx.workspace.findUnique({ where: { qqGroupId: groupId }, select: { id: true } });
+    if (workspace) await tx.workspaceMember.updateMany({
+      where: { workspaceId: workspace.id, userId, leftAt: null }, data: { leftAt: new Date() },
+    });
+    await syncMembershipGroupCardsInTransaction(tx, userId, { groupId, left: true });
+  });
+}
+
 
 /**
  * Handle a member leaving or being kicked from the target QQ group.
@@ -40,6 +54,7 @@ export async function handleGroupMemberLeft(
   });
 
   if (!user || !user.groupMembership) {
+    if (user) await markSyncMembershipLeft(user.id, groupId);
     // Unbound user — just log
     await logBotAudit({
       action: BOT_AUDIT_ACTIONS.BOT_MEMBER_LEFT_UNBOUND_USER,
@@ -54,6 +69,7 @@ export async function handleGroupMemberLeft(
 
   // 3. Check if already in review (prevent duplicate processing)
   if (membership.status === MembershipStatus.LEFT_PENDING_REVIEW) {
+    await markSyncMembershipLeft(user.id, groupId);
     log.info({ qqNumber }, 'User already in LEFT_PENDING_REVIEW, skipping duplicate');
     return;
   }
@@ -61,6 +77,7 @@ export async function handleGroupMemberLeft(
   // Rejected/revoked/expired users must never pass through a restorable leave
   // status, otherwise a later join event could accidentally re-verify them.
   if (getGroupMembershipSyncAction(membership.status, false) !== 'MARK_LEFT') {
+    await markSyncMembershipLeft(user.id, groupId);
     log.info(
       { qqNumber, membershipStatus: membership.status },
       'Non-active membership left group, keeping its current status'
@@ -71,6 +88,7 @@ export async function handleGroupMemberLeft(
   // 4-6. Change status, remove cached matches and create exactly one review atomically.
   const now = new Date();
   const marked = await db.$transaction(async (tx) => {
+    await lockRatingUserTasks(tx, user.id);
     const updated = await tx.groupMembership.updateMany({
       where: {
         id: membership.id,
@@ -85,6 +103,10 @@ export async function handleGroupMemberLeft(
       },
     });
     if (updated.count === 0) return false;
+    const workspace = await tx.workspace.findUnique({ where: { qqGroupId: groupId }, select: { id: true } });
+    if (workspace) await tx.workspaceMember.updateMany({
+      where: { workspaceId: workspace.id, userId: user.id }, data: { leftAt: now },
+    });
 
     await tx.matchSnapshot.deleteMany({
       where: {
@@ -108,6 +130,7 @@ export async function handleGroupMemberLeft(
       },
     });
 
+    await syncMembershipGroupCardsInTransaction(tx, user.id, { groupId, left: true });
     return true;
   });
 

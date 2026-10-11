@@ -1,110 +1,48 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { napcatClient } from "@/server/bot/clients/napcat.client";
-import { createLogger } from "@/lib/logger";
+import { apiHandler, parseJsonRequest } from "@/lib/api-handler";
 import {
-  buildGroupCardForProfile,
-  normalizeNicknameInput,
-} from "@/lib/group-card";
+  getGroupCardSyncView,
+  NicknameRevisionConflictError,
+  queueGroupCardSyncInTransaction,
+} from "@/server/bot/group-card-sync.service";
 
-const log = createLogger("api:nickname");
-
-/**
- * POST /api/account/nickname
- *
- * Change the user's nickname portion of the group card.
- * The full group card is composed as: age-address-nickname
- * Age and address are derived from the user's profile.
- *
- * Body: { nickname: string }
- */
-export async function POST(req: NextRequest) {
+/** Save the website nickname and durable QQ delivery work in one transaction. */
+export const POST = apiHandler(async (req) => {
   const session = await requireAuth();
 
-  const body = await req.json();
-  const { nickname } = body;
-
-  if (!nickname || typeof nickname !== "string") {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "请输入昵称" } },
-      { status: 422 }
-    );
+  const body = await parseJsonRequest<{ nickname?: unknown; baseNicknameRevision?: unknown }>(req);
+  if (typeof body.nickname !== "string" ||
+      (body.baseNicknameRevision !== undefined &&
+        (!Number.isSafeInteger(body.baseNicknameRevision) || Number(body.baseNicknameRevision) < 0))) {
+    return NextResponse.json({ error: {
+      code: "VALIDATION_ERROR", message: "请输入昵称并刷新当前昵称版本",
+    } }, { status: 422 });
   }
-
-  const trimmed = normalizeNicknameInput(nickname);
-
-  if (trimmed.length === 0 || trimmed.length > 30) {
-    return NextResponse.json(
-      { error: { code: "VALIDATION_ERROR", message: "昵称长度需在 1-30 个字符之间" } },
-      { status: 422 }
-    );
-  }
-
-  // Fetch user's profile for age and city
-  const profile = await db.profile.findUnique({
-    where: { userId: session.id },
-    select: { birthDate: true, provinceCode: true, cityCode: true },
-  });
-
-  // Build the full group card: age-city-nickname
-  const groupCard = buildGroupCardForProfile(trimmed, profile);
-
-  // 1. Update AuthIdentity nickname (store just the nickname part)
-  await db.authIdentity.updateMany({
-    where: { userId: session.id },
-    data: { nickname: trimmed },
-  });
-
-  // 2. Sync to QQ group card via NapCat (non-critical)
-  let groupSynced = false;
-  if (session.qqNumber) {
-    try {
-      // Find the user's group membership to get the groupId
-      const membership = await db.groupMembership.findUnique({
-        where: { userId: session.id },
-        select: { groupId: true },
-      });
-
-      if (membership && membership.groupId && membership.groupId !== "default") {
-        await napcatClient.setGroupCard(
-          membership.groupId,
-          session.qqNumber,
-          groupCard
-        );
-        groupSynced = true;
-        log.info(
-          { qqNumber: session.qqNumber, groupId: membership.groupId, groupCard },
-          "Group card synced"
-        );
-      }
-    } catch (err) {
-      // Log but don't fail the request — group card sync is best-effort
-      log.warn(
-        { err, qqNumber: session.qqNumber },
-        "Failed to sync group card (non-critical)"
-      );
+  try {
+    const result = await db.$transaction((tx) => queueGroupCardSyncInTransaction(tx, session.id, {
+      nickname: body.nickname as string,
+      baseNicknameRevision: body.baseNicknameRevision as number | undefined,
+      source: "website_nickname",
+      force: true,
+    }));
+    const { nickname, nicknameRevision, groupCardSync } = await getGroupCardSyncView(session.id);
+    return NextResponse.json({ data: {
+      nickname,
+      nicknameRevision,
+      groupCard: groupCardSync.groups[0]?.desiredCard ?? result.desiredCard,
+      groupSynced: groupCardSync.status === "synced",
+      groupCardSync,
+      message: groupCardSync.status === "synced" ? "网站昵称已保存，QQ 群名片已确认同步" : "网站昵称已保存，QQ 群名片等待同步",
+    } });
+  } catch (cause) {
+    if (cause instanceof NicknameRevisionConflictError) {
+      return NextResponse.json({ error: {
+        code: "NICKNAME_CONFLICT", message: "昵称已在其他页面或 QQ 更新，请刷新后重试",
+        currentNickname: cause.currentNickname, currentRevision: cause.currentRevision,
+      } }, { status: 409 });
     }
+    throw cause;
   }
-
-  // 3. Also update BotIdentity if it exists
-  if (session.qqNumber) {
-    try {
-      await db.botIdentity.update({
-        where: { qqNumber: session.qqNumber },
-        data: { qqNickname: trimmed, groupCard },
-      });
-    } catch {
-      // BotIdentity may not exist — non-critical
-    }
-  }
-
-  return NextResponse.json({
-    data: {
-      nickname: trimmed,
-      groupCard,
-      groupSynced,
-      message: groupSynced ? "群名片已更新并同步" : "群名片已更新",
-    },
-  });
-}
+});

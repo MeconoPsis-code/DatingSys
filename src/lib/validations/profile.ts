@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { Attribute, LocationType, PhotoMatchPref, ProfileStatus } from "@prisma/client";
 import { MBTI_TYPES } from "@/data/mbti";
+import { calculateAge } from "@/lib/group-card";
 import {
   HEIGHT_MAX_CM,
   HEIGHT_MIN_CM,
@@ -33,16 +34,6 @@ export const PHOTO_REVOKE_REPUBLISH_COOLDOWN_MS =
   PHOTO_REVOKE_REPUBLISH_COOLDOWN_HOURS * 60 * 60 * 1000;
 
 // ── Helper: age from DOB ────────────────────────────────
-
-function ageFromDate(date: Date): number {
-  const today = new Date();
-  let age = today.getFullYear() - date.getFullYear();
-  const monthDiff = today.getMonth() - date.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < date.getDate())) {
-    age--;
-  }
-  return age;
-}
 
 // ── Profile Schema ──────────────────────────────────────
 
@@ -117,7 +108,7 @@ export const profileSchema = z
   .refine(
     (d) => {
       if (d.status === "ACTIVE") {
-        return ageFromDate(d.birthDate) >= MIN_AGE;
+        return calculateAge(d.birthDate) >= MIN_AGE;
       }
       return true;
     },

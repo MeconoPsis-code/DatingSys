@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getGroupCardSyncView } from "@/server/bot/group-card-sync.service";
 
 /**
  * GET /api/auth/me
@@ -51,6 +52,7 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
   });
 
+  const nicknameView = await getGroupCardSyncView(session.id);
   return NextResponse.json(
     {
       data: {
@@ -58,7 +60,9 @@ export async function GET() {
         role: session.role,
         status: session.status,
         qqNumber: session.qqNumber,
-        nickname: session.nickname,
+        nickname: nicknameView.nickname,
+        nicknameRevision: nicknameView.nicknameRevision,
+        groupCardSync: nicknameView.groupCardSync,
         avatarUrl: session.avatarUrl,
         membershipStatus: session.membershipStatus,
         activePenalties,

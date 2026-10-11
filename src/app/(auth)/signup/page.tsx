@@ -14,8 +14,10 @@ import { AlertModal } from "@/components/ui/alert-modal";
 import { ConfirmModal } from "@/components/ui/confirm-modal";
 import {
   buildGroupCardForProfile,
+  calculateAge,
   normalizeNicknameInput,
 } from "@/lib/group-card";
+import { loadNicknameEditSnapshot, readNicknameEditConflict } from "@/components/profile/nickname-edit-snapshot";
 import {
   HEIGHT_DEFAULT_CM,
   HEIGHT_MAX_CM,
@@ -125,18 +127,7 @@ const PUBLISH_CONFIRM_TEXT = "确认提交并发布我的资料";
 const PUBLISH_CONFIRM_DESCRIPTION = "提交后 7 天内不能修改，请确认所有信息无误。";
 
 function isUnder18(birthYear: number, birthMonth: number, birthDay: number): boolean {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1; // 1-indexed
-  const day = today.getDate();
-
-  const age = year - birthYear;
-  if (age < 18) return true;
-  if (age > 18) return false;
-
-  if (month < birthMonth) return true;
-  if (month > birthMonth) return false;
-  return day < birthDay;
+  return calculateAge(`${birthYear}-${String(birthMonth).padStart(2, "0")}-${String(birthDay).padStart(2, "0")}`) < 18;
 }
 
 function resolveSelectedAttribute(
@@ -174,6 +165,9 @@ export default function SignupPage() {
 
   // Step 3 state — profile form
   const [profile, setProfile] = useState<ProfileFormState>(INITIAL_PROFILE);
+  const [nicknameRevision, setNicknameRevision] = useState<number | undefined>();
+  const [canonicalNickname, setCanonicalNickname] = useState("");
+  const nicknamePreview = profile.nickname.trim() === canonicalNickname ? canonicalNickname : normalizeNicknameInput(profile.nickname);
 
   // Photo state
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
@@ -186,7 +180,6 @@ export default function SignupPage() {
   const [showAgeAlert, setShowAgeAlert] = useState(false);
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [previewingProfile, setPreviewingProfile] = useState(false);
-
   // Computed cities
   const cities = useMemo(
     () => (profile.provinceCode ? getCities(profile.provinceCode) : []),
@@ -276,12 +269,17 @@ export default function SignupPage() {
         body: JSON.stringify({ qqNumber, passcode }),
       });
 
-      const data = await readApiJson<{ data?: { nickname?: string } }>(
+      const data = await readApiJson<{ data?: { nickname?: string; groupCardSync?: { nicknameRevision: number } } }>(
         res,
         "设置密码失败",
       );
 
-      const nickname = normalizeNicknameInput(data.data?.nickname || "");
+      const snapshot = typeof data.data?.groupCardSync?.nicknameRevision === "number"
+        ? { nickname: data.data.nickname || "", nicknameRevision: data.data.groupCardSync.nicknameRevision }
+        : await loadNicknameEditSnapshot();
+      const nickname = snapshot.nickname;
+      setNicknameRevision(snapshot.nicknameRevision);
+      setCanonicalNickname(snapshot.nickname.trim());
       if (nickname) {
         setProfile((prev) => ({ ...prev, nickname }));
       }
@@ -298,7 +296,8 @@ export default function SignupPage() {
 
   /* ── Step 3: Validate & submit profile ── */
   function validateProfile(): string | null {
-    const nickname = normalizeNicknameInput(profile.nickname);
+    if (nicknameRevision === undefined) return "无法确认当前昵称版本，请刷新后重试。";
+    const nickname = nicknamePreview;
     if (!nickname) return "请输入昵称";
     if (nickname.length > 30) return "昵称不能超过30个字符";
     if (!profile.birthYear || !profile.birthMonth || !profile.birthDay) return "请选择出生日期";
@@ -320,17 +319,7 @@ export default function SignupPage() {
     if (!resolveSelectedAttribute(profile.attribute, profile.isSide, profile.isOther)) return "请选择属性";
 
     // Age >= 18
-    const bd = new Date(
-      Number(profile.birthYear),
-      Number(profile.birthMonth) - 1,
-      Number(profile.birthDay)
-    );
-    const today = new Date();
-    let age = today.getFullYear() - bd.getFullYear();
-    const monthDiff = today.getMonth() - bd.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bd.getDate())) {
-      age--;
-    }
+    const age = calculateAge(`${profile.birthYear}-${String(profile.birthMonth).padStart(2, "0")}-${String(profile.birthDay).padStart(2, "0")}`);
     if (age < 18) return "必须年满 18 岁";
 
     // Preference ranges
@@ -366,7 +355,8 @@ export default function SignupPage() {
     );
 
     const body = {
-      nickname: normalizeNicknameInput(profile.nickname),
+      nickname: profile.nickname.trim(),
+      baseNicknameRevision: nicknameRevision,
       profile: {
         birthDate,
         heightCm: Number(profile.heightCm),
@@ -407,6 +397,17 @@ export default function SignupPage() {
         body: JSON.stringify(body),
       });
 
+      const conflict = await readNicknameEditConflict(res);
+      if (conflict) {
+        setProfile((previous) => ({ ...previous, nickname: conflict.nickname }));
+        setNicknameRevision(conflict.nicknameRevision);
+        setCanonicalNickname(conflict.nickname.trim());
+        setPreviewingProfile(false);
+        setPublishConfirmOpen(false);
+        setError("QQ 昵称已更新，已载入当前昵称。其他资料已保留，请确认昵称后重新提交。");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
       await readApiJson<unknown>(res, "保存资料失败");
 
       const refreshRes = await fetch("/api/auth/refresh", { method: "POST", cache: "no-store" });
@@ -637,7 +638,7 @@ export default function SignupPage() {
             <ProfileSubmitPreview
               data={{
                 ...profile,
-                nickname: normalizeNicknameInput(profile.nickname),
+                nickname: nicknamePreview,
                 photos,
               }}
               submitting={loading}
@@ -651,6 +652,7 @@ export default function SignupPage() {
           ) : (
             <ProfileFormSection
               profile={profile}
+              nicknamePreview={nicknamePreview}
               cities={cities}
               birthDays={birthDays}
               loading={loading}
@@ -727,6 +729,7 @@ export default function SignupPage() {
 
 function ProfileFormSection({
   profile,
+  nicknamePreview,
   cities,
   birthDays,
   loading,
@@ -742,6 +745,7 @@ function ProfileFormSection({
   onSubmit,
 }: {
   profile: ProfileFormState;
+  nicknamePreview: string;
   cities: { code: string; name: string }[];
   birthDays: number[];
   loading: boolean;
@@ -757,7 +761,6 @@ function ProfileFormSection({
   onSubmit: () => void;
 }) {
   const [showClearPhotosConfirm, setShowClearPhotosConfirm] = useState(false);
-  const nicknamePreview = normalizeNicknameInput(profile.nickname);
   const groupCardPreview = useMemo(() => {
     if (!nicknamePreview) return "";
     if (!profile.birthYear || !profile.birthMonth || !profile.birthDay || !profile.provinceCode) {

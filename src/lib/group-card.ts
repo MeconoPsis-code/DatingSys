@@ -1,4 +1,4 @@
-import { getProvinceName } from "@/data/regions";
+import { getProvinceName, PROVINCES } from "@/data/regions";
 
 export interface ParsedGroupCard {
   age: number;
@@ -12,9 +12,10 @@ type GroupCardProfile = {
 };
 
 const CANONICAL_SEPARATOR = "-";
-const SEPARATOR_PATTERN = /[-‐‑‒–—―－|｜]/u;
+const VALID_PROVINCE_CODES = new Set(PROVINCES.map((province) => province.code));
+const SEPARATOR_PATTERN = /[-‐‑‒–—―－|｜/／]/u;
 const GROUP_CARD_PATTERN =
-  /^\s*(\d{1,3})\s*[-‐‑‒–—―－|｜]\s*([^‐‑‒–—―－|｜-]+?)\s*[-‐‑‒–—―－|｜]\s*(.+?)\s*$/u;
+  /^\s*(\d{1,4})\s*[-‐‑‒–—―－|｜/／]\s*([^‐‑‒–—―－|｜/／-]+?)\s*[-‐‑‒–—―－|｜/／]\s*(.*?)\s*$/u;
 
 export function normalizeGroupCardProvince(provinceName: string): string {
   const strippedPrefix = provinceName
@@ -32,14 +33,16 @@ export function getGroupCardProvinceName(provinceCode: string): string {
   return normalizeGroupCardProvince(getProvinceName(provinceCode));
 }
 
-export function calculateAge(birthDate: Date | string): number {
+export function calculateAge(birthDate: Date | string, now: Date = new Date()): number {
   const bd = birthDate instanceof Date ? birthDate : new Date(birthDate);
   if (Number.isNaN(bd.getTime())) return 0;
 
-  const today = new Date();
-  let age = today.getFullYear() - bd.getFullYear();
-  const monthDiff = today.getMonth() - bd.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bd.getDate())) {
+  // Birth dates are calendar dates stored at UTC midnight. Shanghai is UTC+8.
+  // Using UTC accessors after the fixed offset is independent of host/browser TZ.
+  const today = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  let age = today.getUTCFullYear() - bd.getUTCFullYear();
+  const monthDiff = today.getUTCMonth() - bd.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < bd.getUTCDate())) {
     age--;
   }
   return age;
@@ -63,15 +66,15 @@ export function parseGroupCard(card: string): ParsedGroupCard | null {
 }
 
 export function normalizeNicknameInput(input: string): string {
-  let nickname = input.trim();
+  // Structural recognition is separate from validation of age/province. Invalid
+  // QQ prefixes are corrected from the website rather than stored as a nickname.
+  // Only strip one prefix: the nickname itself may look like a group card.
+  const match = input.trim().match(GROUP_CARD_PATTERN);
+  return match ? match[3].trim() : input.trim();
+}
 
-  for (let i = 0; i < 5; i++) {
-    const parsed = parseGroupCard(nickname);
-    if (!parsed) break;
-    nickname = parsed.nickname.trim();
-  }
-
-  return nickname;
+export function isValidGroupCardNickname(nickname: string): boolean {
+  return nickname.trim().length > 0 && nickname.length <= 30;
 }
 
 export function formatGroupCard(
@@ -80,22 +83,21 @@ export function formatGroupCard(
   nickname: string,
   separator = CANONICAL_SEPARATOR,
 ): string {
-  const normalizedNickname = normalizeNicknameInput(nickname);
+  const normalizedNickname = nickname.trim();
   return [age, normalizeGroupCardProvince(province), normalizedNickname].join(separator);
 }
 
 export function buildGroupCardForProfile(
   nickname: string,
   profile: GroupCardProfile | null,
+  now: Date = new Date(),
 ): string {
-  const normalizedNickname = normalizeNicknameInput(nickname);
-  if (!profile || !normalizedNickname) return normalizedNickname;
+  const normalizedNickname = nickname.trim();
+  // Photo uploads create a temporary main row with province 000000 before the
+  // user saves real profile data. Its placeholder birthday is not QQ authority.
+  if (!profile || !normalizedNickname || !VALID_PROVINCE_CODES.has(profile.provinceCode)) return normalizedNickname;
 
-  return formatGroupCard(
-    calculateAge(profile.birthDate),
-    getGroupCardProvinceName(profile.provinceCode),
-    normalizedNickname,
-  );
+  return [calculateAge(profile.birthDate, now), getGroupCardProvinceName(profile.provinceCode), normalizedNickname].join(CANONICAL_SEPARATOR);
 }
 
 export function hasGroupCardSeparator(value: string): boolean {

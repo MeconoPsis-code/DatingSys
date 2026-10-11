@@ -10,6 +10,9 @@ import {
 import { generateAndStoreCode, isRateLimited } from "@/lib/verification";
 import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { normalizeNicknameInput } from "@/lib/group-card";
+import { workspaceForGroup } from "@/lib/workspace-auth";
+import { lockRatingUserTasks } from "@/lib/rating-profile-sync";
+import { syncMembershipGroupCardsInTransaction } from "@/server/bot/group-card-sync.service";
 
 /**
  * POST /api/auth/bot-signup
@@ -46,6 +49,19 @@ export async function POST(req: NextRequest) {
   });
 
   if (existingUser && existingUser.passwordHash) {
+      const workspace = await workspaceForGroup(String(groupId));
+      if (existingUser.status === "ACTIVE" && workspace) {
+        await db.$transaction(async (tx) => {
+          await lockRatingUserTasks(tx, existingUser.id);
+          await tx.workspaceMember.upsert({
+            where: { workspaceId_userId: { workspaceId: workspace.id, userId: existingUser.id } },
+            create: { workspaceId: workspace.id, userId: existingUser.id, role: "MEMBER" },
+            update: { leftAt: null, joinedAt: new Date() },
+          });
+          await syncMembershipGroupCardsInTransaction(tx, existingUser.id);
+        });
+      }
+
     return NextResponse.json({
       data: { status: "already_registered", message: "该QQ号已注册，请直接登录" },
     });

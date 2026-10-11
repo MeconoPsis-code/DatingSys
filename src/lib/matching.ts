@@ -5,6 +5,8 @@
  * No database calls — inputs must be pre-loaded.
  */
 
+import { calculateAge as ageFromDate } from "@/lib/group-card";
+
 // ── Types ───────────────────────────────────────────────
 
 export interface CandidateProfile {
@@ -46,16 +48,6 @@ const TOTAL_ACCEPTANCE_CRITERIA = 4;
 const MIN_PARTIAL_MATCH_CRITERIA_FOR_ONE_WAY = 2;
 
 // ── Helpers ─────────────────────────────────────────────
-
-function ageFromDate(birthDate: Date, referenceDate?: Date): number {
-  const today = referenceDate ?? new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
-  return age;
-}
 
 export function getEffectiveAttributes(
   profile: Pick<CandidateProfile, "attribute" | "isSide" | "isOther">

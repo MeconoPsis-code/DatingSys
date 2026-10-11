@@ -9,6 +9,7 @@ import { handleGroupMemberLeft } from '@/server/bot/group-member-left.handler';
 import { handleGroupCardChanged } from '@/server/bot/group-card-changed.handler';
 import { napcatClient } from '@/server/bot/clients/napcat.client';
 import { redis } from '@/lib/redis';
+import { workspaceForGroup, isWorkspaceOperational } from '@/lib/workspace-auth';
 import { createLogger } from '@/lib/logger';
 import type { OneBotRawEvent } from '@/server/bot/bot.types';
 
@@ -23,7 +24,7 @@ const DEDUP_TTL = 300;
  * Receives OneBot v11 events from NapCat via HTTP POST.
  * Validates authentication, normalizes events, and dispatches to handlers.
  *
- * IMPORTANT: Always returns 200 to avoid NapCat retry storms.
+ * Card notices are acknowledged only after durable inbox persistence.
  */
 export async function POST(req: NextRequest) {
   // 1. Read raw body (needed for both HMAC verification and JSON parsing)
@@ -76,50 +77,40 @@ export async function POST(req: NextRequest) {
   // 4. Normalize event
   const normalized = normalizeEvent(rawEvent);
 
-  // 4b. Log raw event (group_card_changed doesn't have eventId on the event)
-  if (normalized.type !== 'ignored' && normalized.type !== 'group_card_changed') {
-    await logBotEvent({
-      eventId: normalized.event.eventId,
-      platform: 'napcat',
-      eventType: normalized.type,
-      groupId: normalized.event.groupId,
-      qqNumber: normalized.event.qqNumber,
-      messageText:
-        normalized.type === 'group_message'
-          ? normalized.event.messageText
-          : undefined,
-      rawPayload: rawEvent,
-    });
-  }
-
-  // 5. Handle ignored events
   if (normalized.type === 'ignored') {
     return NextResponse.json({ status: 'ok' });
   }
-
-  // 6. Deduplication check (group_card_changed uses groupId+qqNumber+cardNew)
-  let eventId: string;
-  if (normalized.type === 'group_card_changed') {
-    const { createHash } = await import('crypto');
-    const e = normalized.event;
-    eventId = 'card_' + createHash('sha256')
-      .update(`${e.groupId}:${e.qqNumber}:${e.cardNew}:${rawEvent.time}`)
-      .digest('hex')
-      .slice(0, 16);
-  } else {
-    eventId = normalized.event.eventId;
+  const groupId = normalized.event.groupId;
+  if (!isTargetGroup(groupId)) {
+    log.debug({ groupId }, 'Non-target group, ignoring');
+    return NextResponse.json({ status: 'ok' });
   }
+  // Card notices must be committed before acknowledging. Other events retain
+  // the existing target-group dispatch and Redis dedup behavior.
+  if (normalized.type === 'group_card_changed') {
+    try {
+      const workspace = await workspaceForGroup(groupId);
+      if (!workspace || !isWorkspaceOperational(workspace) || !workspace.botEnabled) {
+        return NextResponse.json({ status: 'ok' });
+      }
+      await handleGroupCardChanged(normalized.event, napcatClient, workspace.id);
+      return NextResponse.json({ status: 'ok' });
+    } catch (err) {
+      log.error({ err, eventId: normalized.event.eventId }, 'Failed to persist group card notice');
+      return NextResponse.json({ error: 'Card notice persistence unavailable' }, { status: 503 });
+    }
+  }
+  await logBotEvent({
+    eventId: normalized.event.eventId, platform: 'napcat', eventType: normalized.type,
+    groupId, qqNumber: normalized.event.qqNumber,
+    messageText: normalized.type === 'group_message' ? normalized.event.messageText : undefined,
+    rawPayload: rawEvent,
+  });
+  const eventId = normalized.event.eventId;
   const dedupKey = `bot:dedup:${eventId}`;
   const isDuplicate = await redis.set(dedupKey, '1', 'EX', DEDUP_TTL, 'NX');
   if (isDuplicate === null) {
     log.debug({ eventId }, 'Duplicate event, skipping');
-    return NextResponse.json({ status: 'ok' });
-  }
-
-  // 7. Check target group
-  const groupId = normalized.event.groupId;
-  if (!isTargetGroup(groupId)) {
-    log.debug({ groupId }, 'Non-target group, ignoring');
     return NextResponse.json({ status: 'ok' });
   }
 
@@ -141,9 +132,6 @@ export async function POST(req: NextRequest) {
         break;
       case 'group_member_left':
         await handleGroupMemberLeft(normalized.event);
-        break;
-      case 'group_card_changed':
-        await handleGroupCardChanged(normalized.event, napcatClient);
         break;
     }
   } catch (err) {

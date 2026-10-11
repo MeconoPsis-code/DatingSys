@@ -22,6 +22,7 @@ import {
   WEIGHT_MIN_KG,
 } from "@/lib/profile-limits";
 import { formatBmi } from "@/lib/bmi";
+import { calculateAge } from "@/lib/group-card";
 import {
   getBirthDayOptions,
   isValidCalendarDate,
@@ -166,18 +167,7 @@ const YEARS = range(1960, 2010).reverse();
 const MONTHS = range(1, 12);
 
 function isUnder18(birthYear: number, birthMonth: number, birthDay: number): boolean {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth() + 1; // 1-indexed
-  const day = today.getDate();
-
-  const age = year - birthYear;
-  if (age < 18) return true;
-  if (age > 18) return false;
-
-  if (month < birthMonth) return true;
-  if (month > birthMonth) return false;
-  return day < birthDay;
+  return calculateAge(`${birthYear}-${String(birthMonth).padStart(2, "0")}-${String(birthDay).padStart(2, "0")}`) < 18;
 }
 
 function resolveSelectedAttribute(
@@ -245,9 +235,9 @@ export default function ProfileEditPage() {
       const bd = new Date(profileSrc.birthDate as string);
       setForm((prev) => ({
         ...prev,
-        birthYear: String(bd.getFullYear()),
-        birthMonth: String(bd.getMonth() + 1),
-        birthDay: String(bd.getDate()),
+        birthYear: String(bd.getUTCFullYear()),
+        birthMonth: String(bd.getUTCMonth() + 1),
+        birthDay: String(bd.getUTCDate()),
         heightCm: String(profileSrc.heightCm),
         weightKg: String(profileSrc.weightKg),
         provinceCode: (profileSrc.provinceCode as string) || "",
@@ -422,17 +412,7 @@ export default function ProfileEditPage() {
     if (!resolveSelectedAttribute(form.attribute, form.isSide, form.isOther)) return "请选择属性";
 
     // Age >= 18 (only validated for ACTIVE status)
-    const bd = new Date(
-      Number(form.birthYear),
-      Number(form.birthMonth) - 1,
-      Number(form.birthDay)
-    );
-    const today = new Date();
-    let age = today.getFullYear() - bd.getFullYear();
-    const monthDiff = today.getMonth() - bd.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bd.getDate())) {
-      age--;
-    }
+    const age = calculateAge(`${form.birthYear}-${String(form.birthMonth).padStart(2, "0")}-${String(form.birthDay).padStart(2, "0")}`);
     if (status === "ACTIVE" && age < 18) return "必须年满 18 岁";
 
     // Preference ranges

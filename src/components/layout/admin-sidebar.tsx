@@ -28,6 +28,15 @@ const links = [
     ),
   },
   {
+    label: "群名片同步",
+    href: "/group-card-sync",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-5 w-5">
+        <path d="M20 7h-6m6 0-3-3m3 3-3 3M4 17h6m-6 0 3 3m-3-3 3-3M7 7a6 6 0 0 1 10-3M17 17a6 6 0 0 1-10 3" />
+      </svg>
+    ),
+  },
+  {
     label: "群认证",
     href: "/membership",
     icon: (

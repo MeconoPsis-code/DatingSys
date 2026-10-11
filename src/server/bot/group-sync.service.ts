@@ -20,6 +20,9 @@ import {
   GROUP_MEMBERSHIP_SYNC_INTERVAL_SECONDS,
 } from '@/lib/group-membership-sync';
 
+import { syncMembershipGroupCardsInTransaction } from './group-card-sync.service';
+import { lockRatingUserTasks } from '@/lib/rating-profile-sync';
+
 const log = createLogger('bot:group-sync');
 
 /** Redis key for tracking last sync timestamp */
@@ -179,7 +182,27 @@ export async function syncGroupMembers(
       result.alreadyPending.push(qqNumber);
     }
 
-    if (action === 'NONE') continue;
+    if (action === 'NONE') {
+      // Keep actual sync membership aligned without altering legacy review decisions.
+      if (!isInGroup) {
+        try {
+          await db.$transaction(async (tx) => {
+            await lockRatingUserTasks(tx, membership.user!.id);
+            const workspace = await tx.workspace.findUnique({ where: { qqGroupId: groupId }, select: { id: true } });
+            if (!workspace) return;
+            const repaired = await tx.workspaceMember.updateMany({
+              where: { workspaceId: workspace.id, userId: membership.user!.id, leftAt: null },
+              data: { leftAt: new Date() },
+            });
+            if (repaired.count) await syncMembershipGroupCardsInTransaction(tx, membership.user!.id, { groupId, left: true });
+          });
+        } catch (err) {
+          result.errors.push(`${qqNumber}: ${err instanceof Error ? err.message : 'Membership repair failed'}`);
+          log.error({ err, qqNumber }, 'Failed to repair stale sync membership');
+        }
+      }
+      continue;
+    }
 
     try {
       if (action === 'RESTORE') {
@@ -242,6 +265,7 @@ async function markMembershipLeft({
 }): Promise<boolean> {
   const now = new Date();
   const marked = await db.$transaction(async (tx) => {
+    await lockRatingUserTasks(tx, userId);
     const updated = await tx.groupMembership.updateMany({
       where: {
         id: membershipId,
@@ -255,6 +279,10 @@ async function markMembershipLeft({
       },
     });
     if (updated.count === 0) return false;
+    const workspace = await tx.workspace.findUnique({ where: { qqGroupId: groupId }, select: { id: true } });
+    if (workspace) await tx.workspaceMember.updateMany({
+      where: { workspaceId: workspace.id, userId }, data: { leftAt: now },
+    });
 
     await tx.matchSnapshot.deleteMany({
       where: {
@@ -279,6 +307,7 @@ async function markMembershipLeft({
       },
     });
 
+    await syncMembershipGroupCardsInTransaction(tx, userId, { groupId, left: true });
     return true;
   });
 
@@ -309,6 +338,7 @@ async function restoreMembership({
 }): Promise<boolean> {
   const now = new Date();
   const restored = await db.$transaction(async (tx) => {
+    await lockRatingUserTasks(tx, userId);
     const updated = await tx.groupMembership.updateMany({
       where: {
         id: membershipId,
@@ -330,6 +360,12 @@ async function restoreMembership({
       },
     });
     if (updated.count === 0) return false;
+    const workspace = await tx.workspace.findUnique({ where: { qqGroupId: groupId }, select: { id: true } });
+    if (workspace) await tx.workspaceMember.upsert({
+      where: { workspaceId_userId: { workspaceId: workspace.id, userId } },
+      create: { workspaceId: workspace.id, userId, role: "MEMBER" },
+      update: { leftAt: null, joinedAt: now },
+    });
 
     await tx.adminReview.updateMany({
       where: {
@@ -344,6 +380,7 @@ async function restoreMembership({
       },
     });
 
+    await syncMembershipGroupCardsInTransaction(tx, userId, { groupId, left: false });
     return true;
   });
 

@@ -40,6 +40,7 @@ const ADMIN_PATHS = [
   "/reports",
   "/announcements-admin",
   "/audit",
+  "/group-card-sync",
   "/api/admin",
 ];
 

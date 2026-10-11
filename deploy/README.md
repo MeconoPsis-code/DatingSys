@@ -502,3 +502,20 @@ If a CDN or load balancer is introduced later, do not simply change
 `X-Forwarded-For` to `$proxy_add_x_forwarded_for`. First configure Nginx
 `real_ip` with the provider's authenticated proxy ranges; otherwise client IPs
 in audit logs become forgeable.
+
+## Group card nickname synchronization rollout
+
+The durable group-card synchronization worker starts inside the existing single
+Next.js instance. Its default `GROUP_CARD_SYNC_MODE=observe` collects observations
+without applying QQ nickname inputs or writing QQ cards. Deploy the additive
+Prisma migrations before enabling `active`; use `GROUP_CARD_SYNC_USER_IDS` for a
+small user-based rollout so all of each selected user's groups remain one batch.
+
+The release includes the existing workspace foundation migration required by the
+sync state foreign keys. Its additional tables do not enable billing, CDK,
+portal, matching, or workspace permission features in this release.
+
+See [`docs/group-card-sync.md`](../docs/group-card-sync.md) for the read-only
+`repair:group-card-sync` difference report, fresh-value apply command, baseline
+initialization, validation and rollback. `GROUP_CARD_SYNC_MODE=off` stops the new
+synchronization work while keeping its inbox, outbox and uncertain write records.

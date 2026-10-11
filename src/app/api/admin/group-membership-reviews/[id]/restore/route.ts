@@ -5,6 +5,8 @@ import { logAudit } from '@/lib/audit';
 import { error } from '@/lib/api-response';
 import { MembershipStatus } from '@prisma/client';
 import { createLogger } from '@/lib/logger';
+import { lockRatingUserTasks } from '@/lib/rating-profile-sync';
+import { syncMembershipGroupCardsInTransaction } from '@/server/bot/group-card-sync.service';
 
 const log = createLogger('admin:group-review-restore');
 
@@ -34,9 +36,11 @@ export async function POST(
 
     const now = new Date();
 
+    await db.$transaction(async (tx) => {
+      if (review.userId) await lockRatingUserTasks(tx, review.userId);
     // Restore user's group membership to the canonical usable status.
     if (review.userId) {
-      await db.groupMembership.updateMany({
+      await tx.groupMembership.updateMany({
         where: {
           userId: review.userId,
           status: MembershipStatus.LEFT_PENDING_REVIEW,
@@ -56,7 +60,7 @@ export async function POST(
     }
 
     // Update review to resolved
-    await db.adminReview.update({
+    await tx.adminReview.update({
       where: { id },
       data: {
         status: 'resolved',
@@ -64,6 +68,21 @@ export async function POST(
         handledBy: session.id,
         handledAt: now,
       },
+    });
+
+
+      if (review.userId) {
+        const membership = await tx.groupMembership.findUnique({ where: { userId: review.userId }, select: { groupId: true, status: true } });
+        const workspace = membership ? await tx.workspace.findUnique({ where: { qqGroupId: membership.groupId }, select: { id: true } }) : null;
+        if (membership?.status === MembershipStatus.VERIFIED) {
+        if (workspace) await tx.workspaceMember.upsert({
+          where: { workspaceId_userId: { workspaceId: workspace.id, userId: review.userId } },
+          create: { workspaceId: workspace.id, userId: review.userId, role: "MEMBER" },
+          update: { leftAt: null, joinedAt: new Date() },
+        });
+        }
+        await syncMembershipGroupCardsInTransaction(tx, review.userId);
+      }
     });
 
     await logAudit({

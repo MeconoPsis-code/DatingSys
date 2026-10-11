@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { GroupCardSyncStatusCard, hasPendingGroupCardSync } from "@/components/profile/group-card-sync-status";
+import { useGroupCardRefresh } from "@/components/profile/use-group-card-refresh";
+import type { GroupCardSyncSummary } from "@/lib/group-card-sync";
 import {
   buildGroupCardForProfile,
   normalizeNicknameInput,
@@ -24,6 +27,8 @@ interface MeData {
   status: string;
   qqNumber: string | null;
   nickname: string | null;
+  nicknameRevision?: number;
+  groupCardSync?: GroupCardSyncSummary;
   avatarUrl: string | null;
   membershipStatus: string | null;
   membershipExpiresAt: string | null;
@@ -235,45 +240,59 @@ function buildGroupCard(nickname: string, profile: MeData["profile"]): string {
 
 function ChangeNicknameModal({
   currentNickname,
+  nicknameRevision,
   profile,
   onClose,
   onSuccess,
+  onRefresh,
 }: {
   currentNickname: string;
+  nicknameRevision: number | undefined;
   profile: MeData["profile"];
   onClose: () => void;
-  onSuccess: (newNickname: string) => void;
+  onSuccess: (message: string) => Promise<void>;
+  onRefresh: () => Promise<MeData | null>;
 }) {
-  const currentNicknameOnly = normalizeNicknameInput(currentNickname);
+  const currentNicknameOnly = currentNickname.trim();
   const [nickname, setNickname] = useState(currentNicknameOnly);
+  const [baseRevision, setBaseRevision] = useState(nicknameRevision);
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   // Live preview of the full group card
   const groupCardPreview = useMemo(
-    () => buildGroupCard(nickname.trim(), profile),
-    [nickname, profile]
+    () => buildGroupCard(nickname.trim() === currentNicknameOnly ? currentNicknameOnly : normalizeNicknameInput(nickname), profile),
+    [nickname, profile, currentNicknameOnly]
   );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const trimmed = normalizeNicknameInput(nickname);
+    const trimmed = nickname.trim() === currentNicknameOnly ? currentNicknameOnly : normalizeNicknameInput(nickname);
     if (!trimmed) return setMsg({ text: "请输入昵称", ok: false });
     if (trimmed.length > 30) return setMsg({ text: "昵称不能超过30个字符", ok: false });
-    if (trimmed === currentNicknameOnly) return setMsg({ text: "昵称未变更", ok: false });
-
     setSubmitting(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/account/nickname", {
+      const unchanged = trimmed === currentNicknameOnly;
+      const res = await fetch(unchanged ? "/api/account/group-card-sync" : "/api/account/nickname", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname: trimmed }),
+        body: JSON.stringify(unchanged ? {} : { nickname: nickname.trim(), baseNicknameRevision: baseRevision }),
       });
       const data = await res.json();
+      if (res.status === 409) {
+        if (typeof data.error?.currentNickname === "string") setNickname(data.error.currentNickname);
+        if (typeof data.error?.currentRevision === "number") setBaseRevision(data.error.currentRevision);
+        const latest = await onRefresh().catch(() => null);
+        if (latest) {
+          setNickname(latest.nickname || "");
+          setBaseRevision(latest.nicknameRevision ?? latest.groupCardSync?.nicknameRevision);
+        }
+        setMsg({ text: "昵称已在另一端更新，已载入当前昵称。请确认后重新保存。", ok: false });
+        return;
+      }
       if (!res.ok) throw new Error(data.error?.message || "操作失败");
-      setMsg({ text: data.data.message, ok: true });
-      setTimeout(() => onSuccess(trimmed), 800);
+      await onSuccess(data.data?.message || (unchanged ? "已请求重新同步，等待 QQ 确认。" : "网站已保存，QQ 正在同步。"));
     } catch (err) {
       setMsg({ text: err instanceof Error ? err.message : "操作失败", ok: false });
     } finally {
@@ -295,12 +314,13 @@ function ChangeNicknameModal({
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
-          修改群名片
+          修改昵称
         </h3>
 
         <div className="mb-3">
-          <label className="mb-1.5 block text-sm text-[hsl(var(--muted-foreground))]">昵称（仅可修改此部分）</label>
+          <label htmlFor="group-card-nickname" className="mb-1.5 block text-sm text-[hsl(var(--muted-foreground))]">昵称（仅可修改此部分）</label>
           <input
+            id="group-card-nickname"
             type="text"
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
@@ -312,14 +332,14 @@ function ChangeNicknameModal({
 
         {/* Live preview */}
         <div className="mb-4 rounded-lg bg-[hsl(var(--secondary))] px-3 py-2">
-          <span className="text-xs text-[hsl(var(--muted-foreground))]">群名片预览：</span>
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">网站期望名片：</span>
           <span className="ml-1 text-sm font-semibold text-[hsl(var(--primary))]">
             {groupCardPreview || "—"}
           </span>
         </div>
 
         <p className="mb-3 text-[11px] text-[hsl(var(--muted-foreground))]">
-          群名片格式为「年龄-城市-昵称」，年龄和城市从你的个人资料自动获取
+          群名片格式为「年龄-省份-昵称」，年龄和省份从网站资料获取。网站保存后会等待 QQ 确认；昵称未变化也可以重新同步。
         </p>
 
         {msg && (
@@ -454,6 +474,45 @@ export default function MePage() {
   const [rankingSaving, setRankingSaving] = useState(false);
   const [rankingMsg, setRankingMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [rankingCooldownNow, setRankingCooldownNow] = useState(() => new Date());
+  const [accountNotice, setAccountNotice] = useState("");
+  const [refreshError, setRefreshError] = useState("");
+  const meRequestRef = useRef<Promise<MeData | null> | null>(null);
+  const mountedRef = useRef(true);
+
+  const refreshMe = useCallback((): Promise<MeData | null> => {
+    if (meRequestRef.current) return meRequestRef.current;
+    const request = (async () => {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        if (res.status === 401) {
+          router.push("/login");
+          return null;
+        }
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error?.message || "账户数据刷新失败，请稍后重试。");
+        if (mountedRef.current) {
+          setMe(payload.data);
+          setRefreshError("");
+        }
+        return payload.data as MeData;
+      } catch (cause) {
+        if (mountedRef.current) setRefreshError(cause instanceof Error ? cause.message : "账户数据刷新失败，请稍后重试。");
+        throw cause;
+      } finally {
+        if (mountedRef.current) setLoading(false);
+        meRequestRef.current = null;
+      }
+    })();
+    meRequestRef.current = request;
+    return request;
+  }, [router]);
+
+  useGroupCardRefresh({
+    enabled: me !== null,
+    pending: hasPendingGroupCardSync(me?.groupCardSync),
+    cardRevision: me?.groupCardSync?.cardRevision,
+    refresh: refreshMe,
+  });
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -525,28 +584,28 @@ export default function MePage() {
   }
 
   useEffect(() => {
-    async function fetchMe() {
-      try {
-        const res = await fetch("/api/auth/me");
-        if (!res.ok) {
-          router.push("/login");
-          return;
-        }
-        const data = await res.json();
-        setMe(data.data);
-      } catch {
-        router.push("/login");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchMe();
+    mountedRef.current = true;
+    void refreshMe().catch(() => undefined);
     const notificationTimerId = window.setTimeout(() => {
       fetchNotifications();
     }, 0);
 
-    return () => window.clearTimeout(notificationTimerId);
-  }, [router, fetchNotifications]);
+    return () => {
+      mountedRef.current = false;
+      window.clearTimeout(notificationTimerId);
+    };
+  }, [refreshMe, fetchNotifications]);
+
+  async function retryGroupCardSync(workspaceId?: string) {
+    const response = await fetch("/api/account/group-card-sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(workspaceId ? { workspaceId } : {}),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error?.message || "重新同步失败，请稍后重试。");
+    await refreshMe();
+  }
 
   useEffect(() => {
     if (!me?.ratingProfile?.rankingOptInUpdatedAt) return;
@@ -651,7 +710,7 @@ export default function MePage() {
     );
   }
 
-  if (!me) return null;
+  if (!me) return <div className="rounded-xl border border-[hsl(var(--border))] p-5"><p role="alert" className="text-sm text-red-600">{refreshError || "账户数据暂不可用。"}</p><button type="button" onClick={() => void refreshMe().catch(() => undefined)} className="mt-3 text-sm text-brand-blue">重新加载</button></div>;
 
   const isSuperAdmin = me.role === "SUPER_ADMIN";
   const statusInfo = STATUS_INFO[me.status];
@@ -684,6 +743,8 @@ export default function MePage() {
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
+      {accountNotice ? <p role="status" className="rounded-lg bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600">{accountNotice}</p> : null}
+      {refreshError ? <p role="alert" className="rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-600">{refreshError}</p> : null}
       {/* Warning / Ban Notices */}
       {me.activePenalties && me.activePenalties.length > 0 && (
         <div className="space-y-3">
@@ -755,10 +816,10 @@ export default function MePage() {
         <div className={`flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#1677ff] to-[#0958d9] text-2xl font-bold text-white shadow-lg shadow-brand-blue/25 ${me.avatarUrl ? "hidden" : ""}`}>
           {(me.nickname || me.qqNumber || "?").charAt(0).toUpperCase()}
         </div>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold text-[hsl(var(--foreground))]">
-              {buildGroupCard(me.nickname || "", me.profile) || "未设置群名片"}
+            <h1 className="min-w-0 break-words text-lg font-bold text-[hsl(var(--foreground))]">
+              {me.nickname || "未设置昵称"}
             </h1>
             <button
               type="button"
@@ -780,6 +841,12 @@ export default function MePage() {
           </div>
         </div>
       </div>
+
+      <GroupCardSyncStatusCard
+        summary={me.groupCardSync}
+        desiredCard={buildGroupCard(me.nickname || "", me.profile)}
+        onRetry={retryGroupCardSync}
+      />
 
       {/* Account Info */}
       <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
@@ -804,8 +871,8 @@ export default function MePage() {
               </svg>
             </div>
           }
-          label="群名片"
-          value={buildGroupCard(me.nickname || "", me.profile) || "未设置"}
+          label="网站昵称"
+          value={me.nickname || "未设置"}
         />
         <InfoRow
           icon={
@@ -1147,10 +1214,13 @@ export default function MePage() {
       {showChangeNickname && (
         <ChangeNicknameModal
           currentNickname={me.nickname || ""}
+          nicknameRevision={me.nicknameRevision ?? me.groupCardSync?.nicknameRevision}
           profile={me.profile}
           onClose={() => setShowChangeNickname(false)}
-          onSuccess={(newNickname) => {
-            setMe({ ...me, nickname: newNickname });
+          onRefresh={refreshMe}
+          onSuccess={async (message) => {
+            setAccountNotice(message);
+            await refreshMe().catch(() => undefined);
             setShowChangeNickname(false);
           }}
         />

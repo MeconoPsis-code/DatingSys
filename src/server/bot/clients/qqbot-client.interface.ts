@@ -8,6 +8,9 @@
 
 import type { GroupMemberInfo, QQUserInfo, BotMessage } from '../bot.types';
 
+export interface BotRequestOptions { retry?: boolean }
+export interface GroupMemberQueryOptions extends BotRequestOptions { noCache?: boolean }
+
 /**
  * Abstract QQ Bot client interface.
  *
@@ -26,7 +29,11 @@ export interface QQBotClient {
   getGroupMemberInfo(
     groupId: string,
     qqNumber: string,
+    options?: GroupMemberQueryOptions,
   ): Promise<GroupMemberInfo>;
+
+  /** QQ login health, independent of the HTTP process/container health. */
+  getStatus(options?: BotRequestOptions): Promise<{ online: boolean; good: boolean }>;
 
   /**
    * 获取陌生人 / 用户信息（无需同群）
@@ -47,6 +54,7 @@ export interface QQBotClient {
     groupId: string,
     qqNumber: string,
     card: string,
+    options?: BotRequestOptions,
   ): Promise<void>;
 
   /**
@@ -71,5 +79,5 @@ export interface QQBotClient {
    * @param groupId - 群号
    * @returns 群成员信息数组
    */
-  getGroupMemberList(groupId: string): Promise<GroupMemberInfo[]>;
+  getGroupMemberList(groupId: string, options?: GroupMemberQueryOptions): Promise<GroupMemberInfo[]>;
 }

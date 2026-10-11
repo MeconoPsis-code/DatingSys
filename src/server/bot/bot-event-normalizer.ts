@@ -133,8 +133,13 @@ export function normalizeEvent(raw: OneBotRawEvent): NormalizedEvent {
       }
 
       if (notice.notice_type === 'group_card') {
-        const cardNew = (notice as Record<string, unknown>).card_new as string || '';
-        const cardOld = (notice as Record<string, unknown>).card_old as string || '';
+        const rawCardNew = (notice as Record<string, unknown>).card_new;
+        const rawCardOld = (notice as Record<string, unknown>).card_old;
+        if (typeof rawCardNew !== 'string') {
+          return { type: 'ignored', reason: 'Invalid group card notice' };
+        }
+        const cardNew = rawCardNew;
+        const cardOld = typeof rawCardOld === 'string' ? rawCardOld : '';
 
         log.debug(
           { eventId, groupId: notice.group_id, userId: notice.user_id, cardOld, cardNew },
@@ -144,10 +149,15 @@ export function normalizeEvent(raw: OneBotRawEvent): NormalizedEvent {
         return {
           type: 'group_card_changed',
           event: {
+            eventId,
             groupId: String(notice.group_id),
             qqNumber: String(notice.user_id),
             cardNew,
             cardOld,
+            timestamp: notice.time,
+            selfId: String(notice.self_id),
+            operatorId: notice.operator_id ? String(notice.operator_id) : undefined,
+            rawEvent: raw,
           },
         };
       }
@@ -177,6 +187,19 @@ export function normalizeEvent(raw: OneBotRawEvent): NormalizedEvent {
 function generateEventId(raw: OneBotRawEvent): string {
   const msgId = (raw as Record<string, unknown>).message_id;
   if (msgId) return `ob11_msg_${msgId}`;
+
+  if (raw.post_type === 'notice' && (raw as Record<string, unknown>).notice_type === 'group_card') {
+    const notice = raw as Record<string, unknown>;
+    const cardHash = crypto.createHash('sha256').update(JSON.stringify({
+      selfId: raw.self_id,
+      groupId: notice.group_id,
+      userId: notice.user_id,
+      cardOld: notice.card_old,
+      cardNew: notice.card_new,
+      timestamp: raw.time,
+    })).digest('hex');
+    return `ob11_card_${cardHash}`;
+  }
 
   const hash = crypto
     .createHash('sha256')

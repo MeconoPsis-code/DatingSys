@@ -10,10 +10,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "ts-node --project tsconfig.test.json tests/date-input.test.ts && ts-node --project tsconfig.test.json tests/scoring-timeline.test.ts && ts-node --project tsconfig.test.json tests/group-membership-sync.test.ts && ts-node --project tsconfig.test.json tests/rating-profile-sync.test.ts && ts-node --project tsconfig.test.json tests/profile-draft.test.ts && ts-node --project tsconfig.test.json tests/rating-task-revision.test.ts && ts-node --project tsconfig.test.json tests/api-client.test.ts && ts-node --project tsconfig.test.json tests/image-proxy.test.ts && ts-node --project tsconfig.test.json tests/image-processing.test.ts && ts-node --project tsconfig.test.json tests/redis-connection.test.ts",
+    "test": "ts-node --project tsconfig.test.json tests/date-input.test.ts && ts-node --project tsconfig.test.json tests/scoring-timeline.test.ts && ts-node --project tsconfig.test.json tests/group-membership-sync.test.ts && ts-node --project tsconfig.test.json tests/rating-profile-sync.test.ts && ts-node --project tsconfig.test.json tests/profile-draft.test.ts && ts-node --project tsconfig.test.json tests/rating-task-revision.test.ts && ts-node --project tsconfig.test.json tests/api-client.test.ts && ts-node --project tsconfig.test.json tests/image-proxy.test.ts && ts-node --project tsconfig.test.json tests/image-processing.test.ts && ts-node --project tsconfig.test.json tests/redis-connection.test.ts && ts-node --project tsconfig.test.json -r ./scripts/register-path-alias.cjs tests/group-card.test.ts && ts-node --project tsconfig.test.json -r ./scripts/register-path-alias.cjs tests/group-card-events.test.ts && ts-node --project tsconfig.test.json -r ./scripts/register-path-alias.cjs tests/group-card-client.test.ts && ts-node --project tsconfig.test.json -r ./scripts/register-path-alias.cjs tests/group-card-coordinator.test.ts && ts-node --project tsconfig.test.json -r ./scripts/register-path-alias.cjs tests/group-card-sync.postgres.test.ts && ts-node --project tsconfig.test.json -r ./scripts/register-path-alias.cjs tests/group-card-api.test.ts",
     "repair:unpublished-rating-tasks": "ts-node --project tsconfig.test.json -r ./scripts/register-path-alias.cjs scripts/repair-unpublished-rating-tasks.ts",
     "lint": "eslint",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:group-card:postgres": "ts-node --project tsconfig.test.json -r ./scripts/register-path-alias.cjs tests/group-card-sync.postgres.test.ts",
+    "repair:group-card-sync": "ts-node --project tsconfig.test.json -r ./scripts/register-path-alias.cjs scripts/repair-group-card-sync.ts"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"

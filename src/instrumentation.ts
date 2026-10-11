@@ -15,5 +15,9 @@ export async function register() {
       '@/server/bot/group-sync.scheduler'
     );
     startGroupSyncScheduler();
+    const { startGroupCardSyncScheduler } = await import(
+      '@/server/bot/group-card-sync.scheduler'
+    );
+    startGroupCardSyncScheduler();
   }
 }

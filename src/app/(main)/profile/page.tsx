@@ -77,9 +77,9 @@ function getAttrLabel(attr: Attribute, customText?: string | null): string {
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
-  const y = d.getFullYear();
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
   return `${y}年${String(m).padStart(2, "0")}月${String(day).padStart(2, "0")}日`;
 }
 

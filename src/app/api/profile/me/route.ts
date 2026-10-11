@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import { createSession } from "@/lib/session";
@@ -11,9 +12,12 @@ import {
 import { success, error } from "@/lib/api-response";
 import { Attribute, Prisma } from "@prisma/client";
 import { notify } from "@/lib/notifications";
-import { napcatClient } from "@/server/bot/clients/napcat.client";
-import { buildGroupCardForProfile, normalizeNicknameInput } from "@/lib/group-card";
-import { createLogger } from "@/lib/logger";
+import {
+  getGroupCardSyncSummary,
+  getGroupCardSyncView,
+  NicknameRevisionConflictError,
+  queueGroupCardSyncInTransaction,
+} from "@/server/bot/group-card-sync.service";
 import { commitExpiredActions } from "@/lib/scoring-revocation";
 import {
   discardUnfinishedRatingTasksForPublish,
@@ -32,8 +36,6 @@ import {
 import { getDataDeleteCooldown } from "@/lib/user-cooldowns";
 import { apiHandler } from "@/lib/api-handler";
 import { createProfilePublishScoringBatch, hasSamePhotoKeySet } from "@/lib/scoring";
-
-const log = createLogger("api:profile-me");
 
 /* ── Helpers ─────────────────────────────────────────── */
 
@@ -179,7 +181,8 @@ export const GET = apiHandler(async () => {
 
   const hasPhotos = (user?.profile?.photos?.length ?? 0) > 0;
 
-  return success({
+  const nicknameView = await getGroupCardSyncView(session.id);
+  const response = success({
     profile: user?.profile ?? null,
     preference: user?.preference ?? null,
     cooldowns,
@@ -193,7 +196,10 @@ export const GET = apiHandler(async () => {
           rankingOptInUpdatedAt: user.ratingProfile.rankingOptInUpdatedAt,
         }
       : null,
+    ...nicknameView,
   });
+  response.headers.set("Cache-Control", "no-store");
+  return response;
 });
 
 /**
@@ -203,6 +209,7 @@ export const GET = apiHandler(async () => {
  * Enforces cooldown rules. Auto-creates rating task for photo users.
  */
 export const PUT = apiHandler(async (req) => {
+  try {
   const session = await requireAuth();
   const isSuperAdmin = session.role === "SUPER_ADMIN";
 
@@ -232,12 +239,15 @@ export const PUT = apiHandler(async (req) => {
     profileData.isSide,
     profileData.isOther
   );
-  const requestedNickname =
-    typeof nicknameInput === "string" ? normalizeNicknameInput(nicknameInput) : null;
+
+  if (body.baseNicknameRevision !== undefined &&
+      (!Number.isSafeInteger(body.baseNicknameRevision) || Number(body.baseNicknameRevision) < 0)) {
+    return error("VALIDATION_ERROR", "昵称版本无效，请刷新后重试", 422);
+  }
 
   if (
     typeof nicknameInput === "string" &&
-    (!requestedNickname || requestedNickname.length > 30)
+    (!nicknameInput.trim() || nicknameInput.length > 30)
   ) {
     return error("VALIDATION_ERROR", "昵称长度需在 1-30 个字符之间", 422);
   }
@@ -326,6 +336,7 @@ export const PUT = apiHandler(async (req) => {
       profile: savedProfile,
       preference: await db.preference.findUnique({ where: { userId: session.id } }),
       draftSaved: true,
+      groupCardSync: await getGroupCardSyncSummary(session.id),
     });
   }
 
@@ -596,6 +607,12 @@ export const PUT = apiHandler(async (req) => {
         }
       }
 
+      await queueGroupCardSyncInTransaction(tx, session.id, {
+        ...(typeof nicknameInput === "string" ? { nickname: nicknameInput } : {}),
+        baseNicknameRevision: body.baseNicknameRevision as number | undefined,
+        source: "website_profile",
+      });
+
       return {
         profile: updatedProfile,
         preference: updatedPreference,
@@ -622,63 +639,6 @@ export const PUT = apiHandler(async (req) => {
     await notify.scoringQueued(session.id, queueAhead, queuedRatingTask.timeline);
   }
 
-  // 7. Sync QQ group card in "age-city-nickname" format
-  if (session.qqNumber) {
-    try {
-      // Get user's nickname from AuthIdentity
-      const identity = await db.authIdentity.findFirst({
-        where: { userId: session.id },
-        select: { nickname: true },
-      });
-
-      const nickname =
-        requestedNickname ?? normalizeNicknameInput(identity?.nickname || "");
-
-      if (nickname) {
-        const groupCard = buildGroupCardForProfile(nickname, profileData);
-
-        await db.authIdentity.updateMany({
-          where: { userId: session.id },
-          data: { nickname },
-        });
-
-        // Find group membership
-        const membership = await db.groupMembership.findUnique({
-          where: { userId: session.id },
-          select: { groupId: true },
-        });
-
-        if (membership && membership.groupId && membership.groupId !== "default") {
-          await napcatClient.setGroupCard(
-            membership.groupId,
-            session.qqNumber,
-            groupCard
-          );
-          log.info(
-            { qqNumber: session.qqNumber, groupCard },
-            "Group card synced after profile update"
-          );
-        }
-
-        // Update BotIdentity
-        try {
-          await db.botIdentity.update({
-            where: { qqNumber: session.qqNumber },
-            data: { qqNickname: nickname, groupCard },
-          });
-        } catch {
-          // BotIdentity may not exist — non-critical
-        }
-      }
-    } catch (err) {
-      // Group card sync is best-effort, don't fail the request
-      log.warn(
-        { err, qqNumber: session.qqNumber },
-        "Failed to sync group card after profile update"
-      );
-    }
-  }
-
   // 8. Audit log
   await logAudit({
     actorId: session.id,
@@ -695,7 +655,16 @@ export const PUT = apiHandler(async (req) => {
     sessionId: session.sessionId,
   });
 
-  return success({ profile, preference });
+  return success({ profile, preference, groupCardSync: await getGroupCardSyncSummary(session.id) });
+  } catch (cause) {
+    if (cause instanceof NicknameRevisionConflictError) {
+      return NextResponse.json({ error: {
+        code: "NICKNAME_CONFLICT", message: "昵称已在其他页面或 QQ 更新，请刷新后重试",
+        currentNickname: cause.currentNickname, currentRevision: cause.currentRevision,
+      } }, { status: 409 });
+    }
+    throw cause;
+  }
 });
 
 /**

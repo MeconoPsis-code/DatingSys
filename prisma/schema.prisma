@@ -130,6 +130,18 @@ enum AnnouncementStatus {
   ARCHIVED
 }
 
+enum WorkspaceStatus {
+  ACTIVE
+  PAUSED
+  DELETED
+}
+
+enum WorkspaceRole {
+  MEMBER
+  ADMIN
+  OWNER
+}
+
 // ─── Models ───────────────────────────────────────────
 
 /// Core user account — every person in the system has exactly one User record
@@ -143,9 +155,14 @@ model User {
   lastProfileClearedAt DateTime? // tracks 30-day publish cooldown after clear
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
+  sourceWorkspaceId    String?
 
   // Relations
   authIdentities  AuthIdentity[]
+  nicknameSync    UserNicknameSync?
+  groupCardSyncStates GroupCardSyncState[]
+  groupCardSyncInbox GroupCardSyncInbox[]
+  groupCardWriteAttempts GroupCardWriteAttempt[]
   groupMembership GroupMembership?
   profile         Profile?
   preference      Preference?
@@ -181,6 +198,15 @@ model User {
 
   // Announcements
   announcements Announcement[] @relation("AnnouncementAuthor")
+
+  sourceWorkspace  Workspace?          @relation("WorkspaceSourceUsers", fields: [sourceWorkspaceId], references: [id], onDelete: SetNull)
+  workspaceMembers WorkspaceMember[]
+  notificationChannels NotificationChannel[]
+  entitlements UserEntitlement[]
+  redeemedCdks CDK[] @relation("CdkRedeemer")
+  botPushLogs BotPushLog[]
+  supportLogs SupportLog[]
+  workspaceLogs WorkspaceLog[]
 
   @@map("users")
 }
@@ -406,6 +432,7 @@ model MatchSnapshot {
   score           Float? // relevance score for sorting
   computedAt      DateTime  @default(now())
   mutualMatchedAt DateTime?
+  notifiedAt      DateTime?
 
   user   User @relation("MatchUser", fields: [userId], references: [id])
   target User @relation("MatchTarget", fields: [targetUserId], references: [id])
@@ -450,13 +477,16 @@ model Report {
   handledAt          DateTime?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+  workspaceId        String?
 
   reporter User  @relation("Reporter", fields: [reporterId], references: [id])
   target   User  @relation("ReportTarget", fields: [targetUserId], references: [id])
   handler  User? @relation("ReportHandler", fields: [handledBy], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([targetUserId])
+  @@index([workspaceId, status])
   @@map("reports")
 }
 
@@ -489,12 +519,15 @@ model AuditLog {
   ip          String?
   userAgent   String?
   createdAt   DateTime @default(now())
+  workspaceId String?
 
   actor User? @relation(fields: [actorUserId], references: [id])
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([actorUserId])
   @@index([action])
   @@index([createdAt])
+  @@index([workspaceId, createdAt])
   @@map("audit_logs")
 }
 
@@ -574,16 +607,20 @@ model AdminReview {
   resolution String? // 'restored' | 'confirmed_left' | 'purged' | etc.
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  workspaceId String?
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([type])
   @@index([userId])
   @@index([status])
+  @@index([workspaceId, status])
   @@map("admin_reviews")
 }
 
 /// System notifications for users
 model Notification {
   id        String   @id @default(cuid())
+  dedupeKey String?  @unique @db.VarChar(128)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String // SCORING_COMPLETE | VIEW_REQUEST_RECEIVED | VIEW_REQUEST_APPROVED | VIEW_REQUEST_REJECTED | PENALTY_WARNING | SYSTEM
@@ -591,9 +628,14 @@ model Notification {
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+  workspaceId String?
+  category String?
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  botPushLogs BotPushLog[]
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
+  @@index([workspaceId, createdAt])
   @@map("notifications")
 }
 
@@ -609,10 +651,294 @@ model Announcement {
   authorId    String?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
+  workspaceId String?
 
   author User? @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([status, pinned, publishedAt])
   @@index([createdAt])
+  @@index([workspaceId, status])
   @@map("announcements")
+}
+
+/// Operational boundary. Match candidates and scoring remain global.
+model Workspace {
+  id          String          @id @default(cuid())
+  slug        String          @unique
+  name        String          @db.VarChar(120)
+  qqGroupId   String          @unique
+  logoUrl     String?
+  description String?
+  contactName String?
+  botEnabled  Boolean         @default(true)
+  botConfig   Json?
+  status      WorkspaceStatus @default(ACTIVE)
+  expiresAt   DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  members       WorkspaceMember[]
+  groupCardSyncStates GroupCardSyncState[]
+  sourceUsers   User[]            @relation("WorkspaceSourceUsers")
+  reports       Report[]
+  announcements Announcement[]
+  notifications Notification[]
+  botPushLogs   BotPushLog[]
+  logs          WorkspaceLog[]
+  adminReviews  AdminReview[]
+  auditLogs     AuditLog[]
+
+  @@index([status, expiresAt])
+  @@map("workspaces")
+}
+
+/// Durable per-person version and execution lease. Nicknames remain in AuthIdentity.
+model UserNicknameSync {
+  userId String @id
+  nicknameRevision Int @default(0)
+  cardRevision Int @default(0)
+  nicknameChangedAt DateTime?
+  nicknameSource String?
+  nicknameSourceGroupId String?
+  profileFingerprint String?
+  initializedAt DateTime?
+  nextWorkAt DateTime?
+  leaseToken String?
+  leaseUntil DateTime?
+  manualRetryAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([nextWorkAt, leaseUntil])
+  @@map("user_nickname_sync")
+}
+
+/// Coalescing outbox: the latest desired version for one user's actual QQ group.
+model GroupCardSyncState {
+  id String @id @default(cuid())
+  userId String
+  workspaceId String
+  qqNumber String
+  groupId String
+  desiredCard String
+  desiredNicknameRevision Int @default(0)
+  desiredCardRevision Int @default(0)
+  observedCard String?
+  observedAt DateTime?
+  observedSeq Int @default(0)
+  resolvedObservedCard String?
+  resolvedObservationSeq Int @default(0)
+  resolvedAt DateTime?
+  confirmedCard String?
+  confirmedRevision Int?
+  status String @default("pending")
+  pendingSince DateTime?
+  attemptCount Int @default(0)
+  nextAttemptAt DateTime?
+  lastErrorCode String?
+  lastError String?
+  syncedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  @@unique([userId, groupId])
+  @@index([workspaceId, status])
+  @@index([status, nextAttemptAt])
+  @@index([userId, status])
+  @@map("group_card_sync_states")
+}
+
+/// Receiving a webhook is not completing it: ACK only after this inbox commit.
+model GroupCardSyncInbox {
+  id String @id @default(cuid())
+  eventKey String @unique
+  userId String?
+  groupId String
+  qqNumber String
+  selfId String
+  cardOld String
+  cardNew String
+  occurredAt DateTime?
+  receivedAt DateTime @default(now())
+  rawPayload Json
+  status String @default("pending")
+  attemptCount Int @default(0)
+  nextAttemptAt DateTime?
+  outcome String?
+  error String?
+  finishedAt DateTime?
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([userId, status, nextAttemptAt])
+  @@index([status, finishedAt])
+  @@index([groupId, receivedAt])
+  @@map("group_card_sync_inbox")
+}
+
+/// Persist intent before sending an irreversible external request.
+model GroupCardWriteAttempt {
+  id String @id @default(cuid())
+  userId String
+  groupId String
+  qqNumber String
+  nicknameRevision Int
+  cardRevision Int
+  targetCard String
+  fromObservedCard String?
+  baselineObservationSeq Int
+  leaseToken String
+  status String @default("prepared")
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+  readAfter String?
+  errorCode String?
+  error String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, groupId, startedAt])
+  @@index([status, completedAt])
+  @@map("group_card_write_attempts")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+  leftAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId, role])
+  @@map("workspace_members")
+}
+
+model SupportPackage {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(120)
+  description String?
+  priceLabel  String?
+  benefits    Json
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cdks CDK[]
+  logs SupportLog[]
+
+  @@map("support_packages")
+}
+
+model CDK {
+  id         String   @id @default(cuid())
+  codeHash   String   @unique
+  packageId  String
+  expiresAt  DateTime?
+  redeemedBy String?
+  redeemedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  supportPackage SupportPackage @relation(fields: [packageId], references: [id])
+  redeemer       User?          @relation("CdkRedeemer", fields: [redeemedBy], references: [id], onDelete: SetNull)
+  entitlements   UserEntitlement[]
+  logs           SupportLog[]
+
+  @@index([packageId, redeemedAt])
+  @@map("cdks")
+}
+
+model UserEntitlement {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String
+  quantity    Int       @default(1)
+  expiresAt   DateTime?
+  sourceCdkId String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceCdk CDK? @relation(fields: [sourceCdkId], references: [id], onDelete: SetNull)
+
+  @@index([userId, type, expiresAt])
+  @@map("user_entitlements")
+}
+
+model NotificationChannel {
+  id        String   @id @default(cuid())
+  userId    String
+  channel   String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channel])
+  @@map("notification_channels")
+}
+
+model BotPushLog {
+  id             String   @id @default(cuid())
+  notificationId String?
+  workspaceId    String?
+  userId         String
+  channel        String
+  status         String
+  errorMessage   String?
+  createdAt      DateTime @default(now())
+
+  notification Notification? @relation(fields: [notificationId], references: [id], onDelete: SetNull)
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
+  @@map("bot_push_logs")
+}
+
+model SupportLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  cdkId     String?
+  packageId String?
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  cdk     CDK?            @relation(fields: [cdkId], references: [id], onDelete: SetNull)
+  supportPackage SupportPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("support_logs")
+}
+
+model WorkspaceLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  actorUserId String?
+  action      String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor     User?     @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@map("workspace_logs")
+}
+
+model SystemConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("system_configs")
 }

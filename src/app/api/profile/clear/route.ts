@@ -4,6 +4,7 @@ import { logAudit, AUDIT_ACTIONS, getClientIp } from "@/lib/audit";
 import { success, error } from "@/lib/api-response";
 import { CLEAR_COOLDOWN_DAYS } from "@/lib/validations/profile";
 import { lockRatingUserTasks } from "@/lib/rating-profile-sync";
+import { getGroupCardSyncSummary, queueGroupCardSyncInTransaction } from "@/server/bot/group-card-sync.service";
 
 /**
  * POST /api/profile/clear
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
       where: { id: session.id },
       data: { lastProfileClearedAt: isSuperAdmin ? null : new Date() },
     });
+    await queueGroupCardSyncInTransaction(tx, session.id, { source: "website_profile_clear" });
   });
 
   // 3. Audit log
@@ -50,6 +52,7 @@ export async function POST(req: Request) {
   });
 
   return success({
+    groupCardSync: await getGroupCardSyncSummary(session.id),
     message: isSuperAdmin
       ? "资料已清空。超级管理员账号不受重新发布冷却限制。"
       : `资料已清空。${CLEAR_COOLDOWN_DAYS} 天内无法重新发布。`,

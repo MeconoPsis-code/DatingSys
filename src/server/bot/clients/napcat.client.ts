@@ -8,13 +8,13 @@
  * - 陌生人信息查询
  * - 群名片设置
  *
- * 内置 1 次自动重试（仅针对网络错误和 5xx 响应），所有调用均通过
+ * 查询默认内置 1 次自动重试；名片写入及协调器请求由持久化任务决定重试，所有调用均通过
  * pino 记录请求 / 响应日志。
  */
 
 import { createLogger } from '@/lib/logger';
 import { BOT_CONFIG } from '../bot.config';
-import type { QQBotClient } from './qqbot-client.interface';
+import type { BotRequestOptions, GroupMemberQueryOptions, QQBotClient } from './qqbot-client.interface';
 import type {
   BotMessage,
   GroupMemberInfo,
@@ -111,6 +111,7 @@ class NapCatClient implements QQBotClient {
   async getGroupMemberInfo(
     groupId: string,
     qqNumber: string,
+    options: GroupMemberQueryOptions = {},
   ): Promise<GroupMemberInfo> {
     const resp = await this.callApi<{
       group_id: number;
@@ -124,7 +125,8 @@ class NapCatClient implements QQBotClient {
     }>('get_group_member_info', {
       group_id: Number(groupId),
       user_id: Number(qqNumber),
-    });
+      no_cache: options.noCache ?? true,
+    }, options);
 
     return {
       groupId: String(resp.data.group_id),
@@ -136,6 +138,11 @@ class NapCatClient implements QQBotClient {
       joinTime: resp.data.join_time,
       lastSentTime: resp.data.last_sent_time,
     };
+  }
+
+  async getStatus(options: BotRequestOptions = {}): Promise<{ online: boolean; good: boolean }> {
+    const resp = await this.callApi<{ online: boolean; good?: boolean }>('get_status', {}, options);
+    return { online: resp.data.online === true, good: resp.data.good !== false };
   }
 
   /** @inheritdoc */
@@ -163,12 +170,15 @@ class NapCatClient implements QQBotClient {
     groupId: string,
     qqNumber: string,
     card: string,
+    options: BotRequestOptions = {},
   ): Promise<void> {
+    // A timed-out write may already have succeeded. Read it back before deciding
+    // whether to send another modification; never blindly replay the request.
     await this.callApi('set_group_card', {
       group_id: Number(groupId),
       user_id: Number(qqNumber),
       card,
-    });
+    }, { retry: options.retry ?? false });
   }
 
   /** @inheritdoc */
@@ -194,7 +204,7 @@ class NapCatClient implements QQBotClient {
   }
 
   /** @inheritdoc */
-  async getGroupMemberList(groupId: string): Promise<GroupMemberInfo[]> {
+  async getGroupMemberList(groupId: string, options: GroupMemberQueryOptions = {}): Promise<GroupMemberInfo[]> {
     const resp = await this.callApi<Array<{
       group_id: number;
       user_id: number;
@@ -205,7 +215,8 @@ class NapCatClient implements QQBotClient {
       last_sent_time: number;
     }>>('get_group_member_list', {
       group_id: Number(groupId),
-    });
+      no_cache: options.noCache ?? true,
+    }, options);
 
     return resp.data.map((m) => ({
       groupId: String(m.group_id),
@@ -239,6 +250,7 @@ class NapCatClient implements QQBotClient {
   private async callApi<T = unknown>(
     action: string,
     params: Record<string, unknown>,
+    options: BotRequestOptions = {},
   ): Promise<OneBotResponse<T>> {
     const url = `${this.baseUrl}/${action}`;
     const headers: Record<string, string> = {
@@ -249,12 +261,13 @@ class NapCatClient implements QQBotClient {
     }
 
     let lastError: unknown;
+    const maxRetries = options.retry === false ? 0 : this.maxRetries;
 
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const isRetry = attempt > 0;
       if (isRetry) {
         log.warn(
-          { action, attempt, maxRetries: this.maxRetries },
+          { action, attempt, maxRetries },
           'Retrying NapCat API call',
         );
         await this.sleep(this.retryDelayMs);
@@ -288,8 +301,8 @@ class NapCatClient implements QQBotClient {
           );
           if (isTransientError(lastError, response.status)) {
             log.warn(
-              { action, status: response.status },
-              'NapCat returned 5xx, will retry',
+              { action, status: response.status, willRetry: attempt < maxRetries },
+              'NapCat returned 5xx',
             );
             continue;
           }
@@ -345,12 +358,12 @@ class NapCatClient implements QQBotClient {
 
     // All retries exhausted
     log.error(
-      { action, attempts: this.maxRetries + 1 },
+      { action, attempts: maxRetries + 1 },
       'NapCat API call failed after all retries',
     );
     throw lastError instanceof Error
       ? lastError
-      : new Error(`NapCat API ${action} failed after ${this.maxRetries + 1} attempts`);
+      : new Error(`NapCat API ${action} failed after ${maxRetries + 1} attempts`);
   }
 
   /**
