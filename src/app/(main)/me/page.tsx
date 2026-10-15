@@ -339,7 +339,7 @@ function ChangeNicknameModal({
         </div>
 
         <p className="mb-3 text-[11px] text-[hsl(var(--muted-foreground))]">
-          群名片格式为「年龄-省份-昵称」，年龄和省份从网站资料获取。网站保存后会等待 QQ 确认；昵称未变化也可以重新同步。
+          群名片格式为「年龄-省(城市)-昵称」，年龄和地区从网站资料获取；海外仅显示国家，直辖市仅显示市名。网站保存后会等待 QQ 确认；昵称未变化也可以重新同步。
         </p>
 
         {msg && (

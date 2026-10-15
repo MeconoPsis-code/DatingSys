@@ -85,7 +85,7 @@ export function GroupCardSyncStatusCard({
           {summary ? GROUP_CARD_SYNC_LABELS[summary.status] : "同步状态暂不可用"}
         </span>
         </div>
-        <CardDescription style={{ color: "hsl(var(--muted-foreground))" }}>年龄和省份取自网站资料；昵称可在网站或 QQ 修改，并同步到参与的群。</CardDescription>
+        <CardDescription style={{ color: "hsl(var(--muted-foreground))" }}>年龄和地区取自网站资料；昵称可在网站或 QQ 修改，并同步到参与的群。</CardDescription>
       </CardHeader>
       <CardContent>
       <dl className="text-sm">

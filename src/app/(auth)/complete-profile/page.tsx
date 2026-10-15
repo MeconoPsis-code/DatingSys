@@ -524,6 +524,7 @@ function ProfileFormSection({
     return buildGroupCardForProfile(nicknamePreview, {
       birthDate: `${profile.birthYear}-${String(profile.birthMonth).padStart(2, "0")}-${String(profile.birthDay).padStart(2, "0")}`,
       provinceCode: profile.provinceCode,
+      cityCode: profile.cityCode,
     });
   }, [
     nicknamePreview,
@@ -531,6 +532,7 @@ function ProfileFormSection({
     profile.birthMonth,
     profile.birthDay,
     profile.provinceCode,
+    profile.cityCode,
   ]);
   return (
     <div className="flex flex-col gap-5">

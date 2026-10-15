@@ -71,7 +71,7 @@ const workspaceOperational = (workspace: { status: string; expiresAt: Date | nul
 async function loadPreview(db: Database, userId: string, now: Date) {
   return db.$transaction(async (tx) => {
     const user = await tx.user.findUniqueOrThrow({ where: { id: userId }, include: {
-      profile: { select: { birthDate: true, provinceCode: true } },
+      profile: { select: { birthDate: true, provinceCode: true, cityCode: true } },
       authIdentities: { select: { provider: true, nickname: true }, orderBy: { createdAt: "asc" } },
       workspaceMembers: { where: { leftAt: null }, include: { workspace: true } },
     } });
@@ -85,10 +85,17 @@ async function loadPreview(db: Database, userId: string, now: Date) {
     ]);
     const nickname = user.authIdentities.find((identity) => identity.provider === "qq_bot")?.nickname ?? user.authIdentities[0]?.nickname ?? "";
     const expectedCard = buildGroupCardForProfile(nickname, user.profile, now);
-    const fingerprint = JSON.stringify([user.profile?.birthDate.toISOString().slice(0, 10) ?? null, user.profile?.provinceCode ?? null, expectedCard]);
+    let previousDesiredCard: string | null = null;
+    if (control?.profileFingerprint) {
+      try {
+        const fingerprint: unknown = JSON.parse(control.profileFingerprint);
+        if (Array.isArray(fingerprint) && typeof fingerprint[2] === "string") previousDesiredCard = fingerprint[2];
+      } catch { /* Match the queue's new-target behavior for an invalid baseline. */ }
+    }
     // --apply queues a forced target first; preview that same generation without
     // mutating the current control or manufacturing an initialized baseline.
-    const cardRevision = (control?.cardRevision ?? 0) + (control?.profileFingerprint === fingerprint ? 0 : 1);
+    // A refreshed profile fingerprint alone does not change the rendered card.
+    const cardRevision = (control?.cardRevision ?? 0) + (previousDesiredCard === expectedCard ? 0 : 1);
     const open = typeof setting?.value === "boolean" ? setting.value : true;
     const attempts = [...new Map([...pendingAttempts, ...recentAttempts].map((attempt) => [attempt.id, attempt])).values()];
     const snapshot: SyncUserSnapshot = {

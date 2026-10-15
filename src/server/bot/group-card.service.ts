@@ -2,13 +2,14 @@
  * @file group-card.service.ts
  * @description 群名片校验与同步服务
  *
- * 标准群名片格式：`年龄-省份-昵称`（如 `20-云南-Harry`）。
+ * 标准群名片格式：`年龄-省(城市)-昵称`（如 `20-云南(昆明)-Harry`）。
+ * 海外仅显示国家，直辖市仅显示市名；兼容历史仅省份格式。
  * 校验兼容历史竖线和斜杠格式；统一同步服务始终生成连字符格式。
  *
  * 校验规则：
  * 1. 格式必须含年龄、省份、昵称三部分，昵称内部可保留分隔符
  * 2. 年龄为合法整数，>= minAge（默认 18），<= maxAge（默认 100）
- * 3. 省份须在 PROVINCES 派生的短名列表中
+ * 3. 地区须在地区数据派生的省市组合、国家或历史省份短名列表中
  * 4. 昵称不得为空，且不得包含手机号、微信号、QQ 号等敏感信息
  *
  * @module server/bot/group-card.service
@@ -16,10 +17,11 @@
 
 import type { GroupCardCheckResult, ParsedGroupCard } from './bot.types';
 import { BOT_CONFIG } from './bot.config';
-import { PROVINCES } from '@/data/regions';
+import { getCities, PROVINCES } from '@/data/regions';
 import { createLogger } from '@/lib/logger';
 import {
   formatGroupCard,
+  getGroupCardRegionName,
   normalizeGroupCardProvince,
   parseGroupCard as parseFlexibleGroupCard,
 } from '@/lib/group-card';
@@ -41,6 +43,13 @@ const log = createLogger('bot:group-card');
 export const VALID_PROVINCES: string[] = PROVINCES.map((p) => {
   return normalizeGroupCardProvince(p.name);
 }).filter((n) => n.length > 0);
+
+const VALID_REGIONS = new Set([
+  ...VALID_PROVINCES,
+  ...PROVINCES.flatMap((province) => getCities(province.code).map((city) =>
+    getGroupCardRegionName(province.code, city.code),
+  )),
+]);
 
 // ── Sensitive Pattern Detection ─────────────────────────
 
@@ -120,8 +129,8 @@ export function validateGroupCard(
     return { result: 'invalid_age', parsed };
   }
 
-  // 3. 省份校验：短名必须在合法列表内
-  if (!VALID_PROVINCES.includes(parsed.province)) {
+  // 3. 地区校验：兼容旧省份短名，并验证真实省市组合及国家。
+  if (!VALID_REGIONS.has(parsed.province)) {
     log.debug({ card, province: parsed.province }, 'Group card province invalid');
     return { result: 'invalid_province', parsed };
   }

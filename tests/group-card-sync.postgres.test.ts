@@ -311,6 +311,77 @@ dbTest("canonical nickname resembling a card prefix survives a same-value profil
   assert.equal(after.groupCardSync.groups[0].desiredCard, before.groupCardSync.groups[0].desiredCard);
 });
 
+dbTest("same-province city edits create a new card version and confirm every group without renaming", async () => {
+  const f = await fixture("25-北京-X", 2);
+  await f.coordinator.processUser(f.user.id);
+  const before = await f.view();
+  assert.equal(before.groupCardSync.status, "synced");
+  assert.match(before.groupCardSync.groups[0].desiredCard, /-云南\(昆明\)-25-北京-X$/);
+
+  await db.$transaction(async (tx) => {
+    await lockRatingUserTasks(tx, f.user.id);
+    await tx.profile.update({ where: { userId: f.user.id }, data: { cityCode: "530300" } });
+    await service.queueGroupCardSyncInTransaction(tx, f.user.id, { source: "website_profile" });
+  });
+  const queued = await f.view();
+  assert.equal(queued.nickname, "25-北京-X");
+  assert.equal(queued.nicknameRevision, before.nicknameRevision);
+  assert.equal(queued.groupCardSync.cardRevision, before.groupCardSync.cardRevision + 1);
+  assert.equal(queued.groupCardSync.status, "pending");
+  assert.ok(queued.groupCardSync.groups.every((group) => /-云南\(曲靖\)-25-北京-X$/.test(group.desiredCard)));
+  assert.ok(queued.groupCardSync.groups.every((group) => group.confirmedCard === f.card));
+
+  await f.coordinator.processUser(f.user.id);
+  const confirmed = await f.view();
+  assert.equal(confirmed.nickname, "25-北京-X");
+  assert.equal(confirmed.nicknameRevision, before.nicknameRevision);
+  assert.equal(confirmed.groupCardSync.status, "synced");
+  assert.ok(confirmed.groupCardSync.groups.every((group) => group.confirmedCard === group.desiredCard));
+  assert.ok([...f.cards.values()].every((card) => /-云南\(曲靖\)-25-北京-X$/.test(card)));
+  assert.ok((await db.authIdentity.findMany({ where: { userId: f.user.id } })).every((identity) => identity.nickname === "25-北京-X"));
+});
+
+dbTest("legacy province-only baselines upgrade to city cards without changing the nickname revision", async () => {
+  const f = await fixture("Before", 2);
+  const legacyCard = f.card.replace("云南(昆明)", "云南");
+  const control = await db.userNicknameSync.findUniqueOrThrow({ where: { userId: f.user.id } });
+  await db.userNicknameSync.update({ where: { userId: f.user.id }, data: {
+    profileFingerprint: JSON.stringify(["2000-01-01", "530000", legacyCard]),
+  } });
+  await db.groupCardSyncState.updateMany({ where: { userId: f.user.id }, data: {
+    desiredCard: legacyCard, observedCard: legacyCard, resolvedObservedCard: legacyCard,
+    confirmedCard: legacyCard, confirmedRevision: control.cardRevision, status: "synced",
+  } });
+  for (const workspace of f.workspaces) f.cards.set(workspace.qqGroupId, legacyCard);
+
+  await service.queueGroupCardSync(f.user.id, { source: "profile_refresh" });
+  const queued = await f.view();
+  assert.equal(queued.nickname, "Before");
+  assert.equal(queued.nicknameRevision, control.nicknameRevision);
+  assert.equal(queued.groupCardSync.cardRevision, control.cardRevision + 1);
+  assert.ok(queued.groupCardSync.groups.every((group) => group.desiredCard === f.card));
+  await f.coordinator.processUser(f.user.id);
+  assert.equal((await f.view()).groupCardSync.status, "synced");
+  assert.ok([...f.cards.values()].every((card) => card === f.card));
+});
+
+dbTest("QQ city-card rename accepts only the nickname and retains the website region across groups", async () => {
+  const f = await fixture("Before", 2);
+  const source = f.workspaces[0];
+  const qqCard = "99-浙江(杭州)-FromQQ";
+  f.cards.set(source.qqGroupId, qqCard);
+  await service.acceptGroupCardEvent({
+    groupId: source.qqGroupId, qqNumber: f.user.qqNumber!, cardOld: f.card, cardNew: qqCard,
+    selfId: "robot", timestamp: Math.floor(Date.now() / 1000),
+  }, source.id);
+  await f.coordinator.processUser(f.user.id);
+  const view = await f.view();
+  assert.equal(view.nickname, "FromQQ");
+  assert.equal(view.groupCardSync.status, "synced");
+  assert.ok([...f.cards.values()].every((card) => /-云南\(昆明\)-FromQQ$/.test(card)));
+  assert.ok(view.groupCardSync.groups.every((group) => group.confirmedCard === group.desiredCard));
+});
+
 dbTest("birth date changes that keep the current age only refresh the fingerprint", async () => {
   const f = await fixture();
   const before = await db.userNicknameSync.findUniqueOrThrow({ where: { userId: f.user.id } });

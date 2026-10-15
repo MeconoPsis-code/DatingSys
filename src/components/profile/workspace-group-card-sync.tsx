@@ -104,7 +104,7 @@ export function WorkspaceGroupCardSync() {
     <Card style={GROUP_CARD_PANEL_STYLE}>
       <CardHeader>
         <CardTitle>群名片同步</CardTitle>
-        <CardDescription>查看本群差异、最后读回证据及失败原因。年龄和省份以网站资料为准，昵称双向同步。</CardDescription>
+        <CardDescription>查看本群差异、最后读回证据及失败原因。年龄和地区以网站资料为准，昵称双向同步。</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-wrap gap-2">

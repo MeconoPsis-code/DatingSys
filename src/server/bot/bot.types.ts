@@ -224,7 +224,7 @@ export type GroupMembershipStatus =
 /** 退群方式 */
 export type LeaveType = 'leave' | 'kick' | 'unknown';
 
-/** 解析后的群名片结构（格式：年龄｜省份｜昵称） */
+/** 解析后的群名片结构（格式：年龄-省(城市)-昵称；海外为国家，直辖市为市名） */
 export interface ParsedGroupCard {
   /** 年龄 */
   age: number;

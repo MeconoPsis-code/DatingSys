@@ -1,4 +1,4 @@
-import { getProvinceName, PROVINCES } from "@/data/regions";
+import { getCities, getProvinceName, isOverseas, PROVINCES } from "@/data/regions";
 
 export interface ParsedGroupCard {
   age: number;
@@ -9,10 +9,12 @@ export interface ParsedGroupCard {
 type GroupCardProfile = {
   birthDate: Date | string;
   provinceCode: string;
+  cityCode?: string | null;
 };
 
 const CANONICAL_SEPARATOR = "-";
 const VALID_PROVINCE_CODES = new Set(PROVINCES.map((province) => province.code));
+const MUNICIPALITY_CODES = new Set(["110000", "120000", "310000", "500000"]);
 const SEPARATOR_PATTERN = /[-‐‑‒–—―－|｜/／]/u;
 const GROUP_CARD_PATTERN =
   /^\s*(\d{1,4})\s*[-‐‑‒–—―－|｜/／]\s*([^‐‑‒–—―－|｜/／-]+?)\s*[-‐‑‒–—―－|｜/／]\s*(.*?)\s*$/u;
@@ -31,6 +33,26 @@ export function normalizeGroupCardProvince(provinceName: string): string {
 
 export function getGroupCardProvinceName(provinceCode: string): string {
   return normalizeGroupCardProvince(getProvinceName(provinceCode));
+}
+
+export function getGroupCardRegionName(provinceCode: string, cityCode?: string | null): string {
+  const province = getGroupCardProvinceName(provinceCode);
+  if (MUNICIPALITY_CODES.has(provinceCode)) return province;
+
+  // Look up within the selected province so stale or mismatched city codes do
+  // not leak raw codes or attach an unrelated city to a valid province.
+  const city = getCities(provinceCode).find((candidate) => candidate.code === cityCode);
+  if (!city) return province;
+
+  if (isOverseas(provinceCode)) {
+    // Overseas "cities" are countries; strip their flag without altering the
+    // country name or adding a redundant 海外(...) prefix.
+    return city.name.replace(/^[^\u4e00-\u9fffA-Za-z0-9]+/u, "").trim();
+  }
+
+  const cityName = city.name.replace(/市$/u, "");
+  if ((provinceCode === "810000" || provinceCode === "820000") && cityName === province) return province;
+  return `${province}(${cityName})`;
 }
 
 export function calculateAge(birthDate: Date | string, now: Date = new Date()): number {
@@ -97,7 +119,7 @@ export function buildGroupCardForProfile(
   // user saves real profile data. Its placeholder birthday is not QQ authority.
   if (!profile || !normalizedNickname || !VALID_PROVINCE_CODES.has(profile.provinceCode)) return normalizedNickname;
 
-  return [calculateAge(profile.birthDate, now), getGroupCardProvinceName(profile.provinceCode), normalizedNickname].join(CANONICAL_SEPARATOR);
+  return [calculateAge(profile.birthDate, now), getGroupCardRegionName(profile.provinceCode, profile.cityCode), normalizedNickname].join(CANONICAL_SEPARATOR);
 }
 
 export function hasGroupCardSeparator(value: string): boolean {

@@ -31,7 +31,7 @@ const operational = (w: { status: string; expiresAt: Date | null; botEnabled: bo
 const loadUser = (tx: Tx, userId: string) => tx.user.findUnique({
   where: { id: userId },
   include: {
-    profile: { select: { birthDate: true, provinceCode: true } },
+    profile: { select: { birthDate: true, provinceCode: true, cityCode: true } },
     authIdentities: { select: { id: true, provider: true, nickname: true }, orderBy: { createdAt: "asc" } },
     workspaceMembers: { where: { leftAt: null }, include: { workspace: true } },
   },
@@ -69,7 +69,7 @@ export async function queueGroupCardSyncInTransaction(tx: Tx, userId: string, op
     throw new AppError("VALIDATION_ERROR", "账号尚未绑定昵称身份");
   }
   const desiredCard = buildGroupCardForProfile(nickname ?? "", user.profile, now);
-  const fingerprint = JSON.stringify([user.profile?.birthDate.toISOString().slice(0, 10) ?? null, user.profile?.provinceCode ?? null, desiredCard]);
+  const fingerprint = JSON.stringify([user.profile?.birthDate.toISOString().slice(0, 10) ?? null, user.profile?.provinceCode ?? null, desiredCard, user.profile?.cityCode ?? null]);
   const nicknameChanged = nickname !== previousNickname;
   let previousDesiredCard: string | null = null;
   if (control.profileFingerprint) {

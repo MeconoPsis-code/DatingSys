@@ -9,9 +9,9 @@ module.exports = async function run({ chromium, base, qaDir }) {
     workspaceId: id,
     workspaceName: id === "official" ? "官方群" : "合作群",
     groupId: id === "official" ? "100001" : "100002",
-    desiredCard: "27-云南-网站小明",
-    observedCard: "26-云南-旧小明",
-    confirmedCard: "26-云南-旧小明",
+    desiredCard: "27-云南(昆明)-网站小明",
+    observedCard: "26-云南(昆明)-旧小明",
+    confirmedCard: "26-云南(昆明)-旧小明",
     lastVerifiedAt: "2026-10-10T08:00:00.000Z",
     status,
     reason: status === "failed" ? "机器人缺少修改名片权限" : null,
@@ -260,9 +260,9 @@ module.exports = async function run({ chromium, base, qaDir }) {
         groups: me.groupCardSync.groups.map((group) => ({
           ...group,
           status: "synced",
-          desiredCard: "27-云南-QQ回到页面",
-          observedCard: "27-云南-QQ回到页面",
-          confirmedCard: "27-云南-QQ回到页面",
+          desiredCard: "27-云南(昆明)-QQ回到页面",
+          observedCard: "27-云南(昆明)-QQ回到页面",
+          confirmedCard: "27-云南(昆明)-QQ回到页面",
           lastVerifiedAt: "2026-10-11T04:00:00.000Z",
           reason: null,
         })),
@@ -308,7 +308,7 @@ module.exports = async function run({ chromium, base, qaDir }) {
       await page.getByLabel("昵称（仅可修改此部分）").inputValue(),
       "25-云南-X"
     );
-    await page.locator("form").getByText("27-云南-25-云南-X", { exact: true }).waitFor();
+    await page.locator("form").getByText("27-云南(昆明)-25-云南-X", { exact: true }).waitFor();
     await page.getByRole("button", { name: "保存", exact: true }).click();
     await page.getByRole("heading", { name: "25-云南-X", exact: true }).waitFor();
     assert.equal(nicknamePosts.length, 2);
