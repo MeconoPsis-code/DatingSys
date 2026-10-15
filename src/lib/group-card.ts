@@ -13,6 +13,8 @@ type GroupCardProfile = {
 };
 
 const CANONICAL_SEPARATOR = "-";
+export const QQ_GROUP_CARD_MAX_BYTES = 60;
+const GROUP_CARD_ENCODER = new TextEncoder();
 const VALID_PROVINCE_CODES = new Set(PROVINCES.map((province) => province.code));
 const MUNICIPALITY_CODES = new Set(["110000", "120000", "310000", "500000"]);
 const SEPARATOR_PATTERN = /[-‐‑‒–—―－|｜/／]/u;
@@ -99,6 +101,21 @@ export function isValidGroupCardNickname(nickname: string): boolean {
   return nickname.trim().length > 0 && nickname.length <= 30;
 }
 
+export function truncateGroupCardUtf8(value: string, maxBytes = QQ_GROUP_CARD_MAX_BYTES): string {
+  let bytes = 0;
+  let end = 0;
+  // QQ can truncate the UTF-8 payload even when the nickname fits the website's
+  // character limit. Keep whole code points in the display card; the canonical
+  // website nickname remains untouched.
+  for (const character of value) {
+    const nextBytes = GROUP_CARD_ENCODER.encode(character).byteLength;
+    if (bytes + nextBytes > maxBytes) break;
+    bytes += nextBytes;
+    end += character.length;
+  }
+  return value.slice(0, end);
+}
+
 export function formatGroupCard(
   age: number,
   province: string,
@@ -106,7 +123,7 @@ export function formatGroupCard(
   separator = CANONICAL_SEPARATOR,
 ): string {
   const normalizedNickname = nickname.trim();
-  return [age, normalizeGroupCardProvince(province), normalizedNickname].join(separator);
+  return truncateGroupCardUtf8([age, normalizeGroupCardProvince(province), normalizedNickname].join(separator));
 }
 
 export function buildGroupCardForProfile(
@@ -117,9 +134,9 @@ export function buildGroupCardForProfile(
   const normalizedNickname = nickname.trim();
   // Photo uploads create a temporary main row with province 000000 before the
   // user saves real profile data. Its placeholder birthday is not QQ authority.
-  if (!profile || !normalizedNickname || !VALID_PROVINCE_CODES.has(profile.provinceCode)) return normalizedNickname;
+  if (!profile || !normalizedNickname || !VALID_PROVINCE_CODES.has(profile.provinceCode)) return truncateGroupCardUtf8(normalizedNickname);
 
-  return [calculateAge(profile.birthDate, now), getGroupCardRegionName(profile.provinceCode, profile.cityCode), normalizedNickname].join(CANONICAL_SEPARATOR);
+  return formatGroupCard(calculateAge(profile.birthDate, now), getGroupCardRegionName(profile.provinceCode, profile.cityCode), normalizedNickname);
 }
 
 export function hasGroupCardSeparator(value: string): boolean {

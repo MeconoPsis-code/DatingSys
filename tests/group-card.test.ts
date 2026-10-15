@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildGroupCardForProfile, calculateAge, formatGroupCard, getGroupCardRegionName, normalizeNicknameInput, parseGroupCard } from "../src/lib/group-card";
+import { buildGroupCardForProfile, calculateAge, formatGroupCard, getGroupCardRegionName, isValidGroupCardNickname, normalizeNicknameInput, parseGroupCard, QQ_GROUP_CARD_MAX_BYTES, truncateGroupCardUtf8 } from "../src/lib/group-card";
 import { OVERSEAS_CODE } from "../src/data/regions";
 import { aggregateGroupCardSyncStatus, groupCardRetryDelay, groupCardSyncMode } from "../src/lib/group-card-sync";
 import { profileSchema } from "../src/lib/validations/profile";
@@ -22,6 +22,43 @@ test("canonical nickname that looks like a card is never stripped during formatt
   assert.equal(buildGroupCardForProfile("25-北京-X", { birthDate: "2000-01-01", provinceCode: "530000" }, new Date("2026-10-11T00:00:00Z")), "26-云南-25-北京-X");
   assert.equal(buildGroupCardForProfile("25-北京-X", null), "25-北京-X");
   assert.equal(buildGroupCardForProfile("小明", { birthDate: "2000-01-01", provinceCode: "000000" }), "小明");
+});
+test("QQ display limit uses UTF-8 bytes and never splits a Unicode code point", () => {
+  assert.equal(QQ_GROUP_CARD_MAX_BYTES, 60);
+  for (const value of ["a".repeat(60), "a".repeat(53) + "中😀", "中".repeat(20)]) {
+    assert.equal(Buffer.byteLength(value, "utf8"), 60);
+    assert.equal(truncateGroupCardUtf8(value), value);
+  }
+  assert.equal(truncateGroupCardUtf8("a".repeat(61)), "a".repeat(60));
+  assert.equal(truncateGroupCardUtf8("a".repeat(58) + "中tail"), "a".repeat(58));
+  assert.equal(truncateGroupCardUtf8("a".repeat(59) + "😀tail"), "a".repeat(59));
+  assert.equal(truncateGroupCardUtf8("a".repeat(56) + "😀tail"), "a".repeat(56) + "😀");
+  assert.equal(truncateGroupCardUtf8("😀".repeat(16)), "😀".repeat(15));
+});
+test("all QQ card formatters shorten only the display while preserving the full canonical nickname", () => {
+  const nickname = "明".repeat(30);
+  const profile = { birthDate: "2000-01-01", provinceCode: "530000", cityCode: "530100" };
+  const now = new Date("2026-10-11T00:00:00Z");
+  assert.equal(isValidGroupCardNickname(nickname), true);
+  assert.equal(buildGroupCardForProfile(nickname, profile, now), "26-云南(昆明)-" + "明".repeat(14));
+  assert.equal(formatGroupCard(26, "云南(昆明)", nickname), "26-云南(昆明)-" + "明".repeat(14));
+  assert.equal(formatGroupCard(26, "云南省", nickname), "26-云南-" + "明".repeat(16));
+  assert.equal(buildGroupCardForProfile(nickname, null), "明".repeat(20));
+  assert.equal(buildGroupCardForProfile(nickname, { ...profile, provinceCode: "000000" }), "明".repeat(20));
+  assert.equal(normalizeNicknameInput(nickname), nickname);
+  assert.equal(nickname, "明".repeat(30));
+  const emojiCard = buildGroupCardForProfile("😀".repeat(15), profile, now);
+  assert.equal(emojiCard, "26-云南(昆明)-" + "😀".repeat(10));
+  assert.equal(Buffer.byteLength(emojiCard, "utf8"), 58);
+  assert.equal(emojiCard.includes("\uFFFD"), false);
+});
+test("long autonomous prefecture names remain complete when QQ display nicknames need shortening", () => {
+  const card = buildGroupCardForProfile("😀".repeat(10), {
+    birthDate: "1906-01-01", provinceCode: "650000", cityCode: "653000",
+  }, new Date("2026-10-11T00:00:00Z"));
+  assert.equal(card, "120-新疆(克孜勒苏柯尔克孜自治州)-" + "😀".repeat(3));
+  assert.equal(Buffer.byteLength(card, "utf8"), 58);
+  assert.deepEqual(parseGroupCard(card), { age: 120, province: "新疆(克孜勒苏柯尔克孜自治州)", nickname: "😀".repeat(3) });
 });
 test("profile group cards include provincial cities and retain autonomous region names", () => {
   const now = new Date("2026-10-11T00:00:00Z");

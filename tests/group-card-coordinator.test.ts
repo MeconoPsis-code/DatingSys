@@ -153,6 +153,48 @@ function fixture(snapshot = user(), mode: GroupCardSyncMode = "active") {
   };
 }
 
+test("exact byte-limited QQ rendering never becomes a website rename on its first observation", () => {
+  const snapshot = user([group("official", { desiredCard: "25-云南(昆明)-这是完整昵称😊的显示部" })]);
+  snapshot.nickname = "这是完整昵称😊的显示部分以及网站独有尾部";
+  snapshot.initializedAt = null;
+  const decision = decideGroupCardNickname(snapshot, [{
+    groupId: "official", card: snapshot.groups[0].desiredCard, observedAt: initialTime,
+  }]);
+  assert.equal(decision.nickname, undefined);
+  assert.equal(decision.observations[0].outcome, "already_current");
+  assert.equal(snapshot.attempts.length, 0);
+  assert.equal(snapshot.groups[0].resolvedObservedCard, null);
+});
+
+test("fresh self callback for an exact limited rendering preserves the complete website nickname", () => {
+  const snapshot = user([group("official", { desiredCard: "25-云南(昆明)-这是完整昵称😊的显示部" })]);
+  snapshot.nickname = "这是完整昵称😊的显示部分以及网站独有尾部";
+  snapshot.inbox = [{ id: "self-rendering", groupId: "official", cardNew: snapshot.groups[0].desiredCard,
+    cardOld: "25-云南-旧名", occurredAt: initialTime, receivedAt: initialTime }];
+  const decision = decideGroupCardNickname(snapshot, [{
+    groupId: "official", card: snapshot.groups[0].desiredCard, observedAt: initialTime,
+  }]);
+  assert.equal(decision.nickname, undefined);
+  assert.equal(decision.observations[0].outcome, "already_current");
+  assert.deepEqual(decision.inboxOutcomes, [{ id: "self-rendering", outcome: "already_current" }]);
+});
+
+test("an exact limited rendering cannot outrank another group's genuine QQ rename", () => {
+  const snapshot = user([
+    group("source", { desiredCard: "25-云南(昆明)-这是完整昵称😊的显示部" }),
+    group("official", { desiredCard: "25-云南(昆明)-这是完整昵称😊的显示部" }),
+  ]);
+  snapshot.nickname = "这是完整昵称😊的显示部分以及网站独有尾部";
+  snapshot.sourceWorkspaceId = "workspace-source";
+  const decision = decideGroupCardNickname(snapshot, [
+    { groupId: "source", card: snapshot.groups[0].desiredCard, observedAt: initialTime },
+    { groupId: "official", card: "25-云南(昆明)-这是", observedAt: initialTime },
+  ]);
+  assert.equal(decision.nickname, "这是");
+  assert.equal(decision.sourceGroupId, "official");
+  assert.equal(decision.observations[0].outcome, "already_current");
+});
+
 test("unknown conflicts choose source group once, then failed propagation cannot ping-pong", async () => {
   const snapshot = user([group("official"), group("source")]);
   snapshot.sourceWorkspaceId = "workspace-source";

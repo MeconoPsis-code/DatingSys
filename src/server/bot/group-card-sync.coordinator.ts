@@ -90,7 +90,9 @@ export function decideGroupCardNickname(
     const knownOldBaseline = !freshEvent && group.confirmedCard === observation.card &&
       group.confirmedRevision !== null && group.confirmedRevision < snapshot.cardRevision;
     const joinedExistingUser = snapshot.initializedAt !== null && group.resolvedObservedCard === null && !freshEvent;
-    if (parsed.nickname === snapshot.nickname) outcome = "already_current";
+    // QQ may display only a byte-limited prefix of the canonical website nickname.
+    // Its exact desired rendering is already current, including on first observation.
+    if (observation.card === group.desiredCard || parsed.nickname === snapshot.nickname) outcome = "already_current";
     else if (ownWrite) outcome = "self_write";
     else if (knownLoser || knownOldBaseline) outcome = "resolved_baseline";
     else if (staleEvent) outcome = "stale_event";

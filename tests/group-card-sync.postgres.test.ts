@@ -382,6 +382,76 @@ dbTest("QQ city-card rename accepts only the nickname and retains the website re
   assert.ok(view.groupCardSync.groups.every((group) => group.confirmedCard === group.desiredCard));
 });
 
+dbTest("limited QQ rendering preserves the complete website nickname through first read, self callback and restarted reconciliation", async () => {
+  const nickname = "这是😊一个保留完整网站名称的中文昵称测试";
+  const f = await fixture(nickname, 2);
+  assert.ok(Buffer.byteLength(f.card, "utf8") <= 60);
+  assert.ok(!f.card.endsWith(nickname), "the QQ display must actually truncate this canonical nickname");
+  assert.match(f.card, /-云南\(昆明\)-这是😊/);
+  const original = await f.view();
+  const botIdentity = await db.botIdentity.create({ data: {
+    userId: f.user.id, qqNumber: f.user.qqNumber!, qqEmail: `${f.user.qqNumber}@qq.com`,
+    groupId: f.workspaces[0].qqGroupId, registeredFromGroupId: f.workspaces[0].qqGroupId,
+    qqNickname: nickname, groupCard: f.card, groupCardSyncStatus: "pending_sync",
+  } });
+  // No resolved baseline or historical write can mask an accidental first-read rename.
+  await db.userNicknameSync.update({ where: { userId: f.user.id }, data: { initializedAt: null } });
+  await db.groupCardSyncState.updateMany({ where: { userId: f.user.id }, data: {
+    observedCard: null, resolvedObservedCard: null, observedSeq: 0, resolvedObservationSeq: 0, resolvedAt: null,
+  } });
+  assert.equal(await db.groupCardWriteAttempt.count({ where: { userId: f.user.id } }), 0);
+
+  const assertCanonical = async () => {
+    const view = await f.view();
+    assert.equal(view.nickname, nickname);
+    assert.equal(view.nicknameRevision, original.nicknameRevision);
+    assert.equal(view.groupCardSync.status, "synced");
+    assert.ok(view.groupCardSync.groups.every((group) => group.desiredCard === f.card && group.confirmedCard === f.card));
+    assert.ok((await db.authIdentity.findMany({ where: { userId: f.user.id } })).every((identity) => identity.nickname === nickname));
+    assert.equal((await db.botIdentity.findUniqueOrThrow({ where: { id: botIdentity.id } })).qqNickname, nickname);
+  };
+  await f.coordinator.processUser(f.user.id);
+  await assertCanonical();
+  assert.equal(f.writes.length, 0, "an already matching limited display requires no QQ write");
+
+  await service.acceptGroupCardEvent({
+    groupId: f.workspaces[0].qqGroupId, qqNumber: f.user.qqNumber!,
+    cardOld: "25-云南-旧名", cardNew: f.card, selfId: "robot", timestamp: Math.floor(Date.now() / 1000),
+  }, f.workspaces[0].id);
+  await f.coordinator.processUser(f.user.id);
+  await assertCanonical();
+  const callback = await db.groupCardSyncInbox.findFirstOrThrow({ where: { userId: f.user.id } });
+  assert.equal(callback.outcome, "already_current");
+  assert.equal(callback.status, "processed");
+
+  for (let pass = 0; pass < 2; pass++) {
+    for (const workspace of f.workspaces) {
+      await service.groupCardSyncRepository.scheduleReconciliation(workspace.id, [{ qqNumber: f.user.qqNumber!, card: f.card }], new Date());
+    }
+    const restarted = createGroupCardSyncCoordinator({ repository: service.groupCardSyncRepository, client: f.client, mode: () => "active" });
+    await restarted.processUser(f.user.id);
+    await assertCanonical();
+  }
+
+  // A different manual short nickname remains a genuine edit, even if it is a
+  // prefix of the complete canonical nickname. Do not suppress arbitrary prefixes.
+  const shortNickname = "这是";
+  const manualCard = buildGroupCardForProfile(shortNickname, f.user.profile);
+  f.cards.set(f.workspaces[0].qqGroupId, manualCard);
+  await service.acceptGroupCardEvent({
+    groupId: f.workspaces[0].qqGroupId, qqNumber: f.user.qqNumber!, cardOld: f.card, cardNew: manualCard,
+    selfId: "robot", timestamp: Math.floor(Date.now() / 1000),
+  }, f.workspaces[0].id);
+  await f.coordinator.processUser(f.user.id);
+  const renamed = await f.view();
+  assert.equal(renamed.nickname, shortNickname);
+  assert.equal(renamed.nicknameRevision, original.nicknameRevision + 1);
+  assert.equal(renamed.groupCardSync.status, "synced");
+  assert.ok([...f.cards.values()].every((card) => card === manualCard));
+  assert.ok((await db.authIdentity.findMany({ where: { userId: f.user.id } })).every((identity) => identity.nickname === shortNickname));
+  assert.equal((await db.botIdentity.findUniqueOrThrow({ where: { id: botIdentity.id } })).qqNickname, shortNickname);
+});
+
 dbTest("birth date changes that keep the current age only refresh the fingerprint", async () => {
   const f = await fixture();
   const before = await db.userNicknameSync.findUniqueOrThrow({ where: { userId: f.user.id } });
